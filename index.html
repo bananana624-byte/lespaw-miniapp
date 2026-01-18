@@ -11,43 +11,61 @@
 <body>
   <header class="top">
     <div class="brand">
-      LesPaw
-      <span class="sub">фандомная атрибутика • тёплая стая</span>
+      <div class="brand-title">LesPaw</div>
+      <div class="brand-sub">фандомная атрибутика • тёплая стая</div>
     </div>
   </header>
 
   <main class="wrap">
-    <section class="card card-compact">
+    <section class="panel">
       <input id="globalSearch" class="input" placeholder="Поиск по фандомам и товарам…" />
-      <div class="row row-compact">
-        <button id="btnCategories" class="btn btn-compact">Категории</button>
-        <button id="btnInfo" class="btn btn-compact">Важная инфо</button>
-        <button id="btnReviews" class="btn btn-compact">Отзывы</button>
-        <button id="btnExamples" class="btn btn-compact">Примеры покрытий</button>
+      <div class="menu">
+        <button id="btnCategories" class="chip">Категории</button>
+        <button id="btnInfo" class="chip">Важная инфо</button>
+        <button id="btnReviews" class="chip">Отзывы</button>
+        <button id="btnExamples" class="chip">Примеры покрытий</button>
       </div>
     </section>
 
-    <section id="view" class="card"></section>
+    <section id="view" class="panel"></section>
   </main>
 
-  <!-- нижняя навигация -->
-  <nav class="bottom-nav">
-    <button class="nav-btn" id="navBack" aria-label="Назад">
-      <span class="nav-ico">←</span>
+  <!-- Bottom Nav -->
+  <nav class="bottom" aria-label="Навигация">
+    <button class="navbtn" id="navBack" aria-label="Назад">
+      <span class="ico" aria-hidden="true">
+        <!-- chevron-left -->
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
     </button>
 
-    <button class="nav-btn" id="navFav" aria-label="Избранное">
-      <span class="nav-ico">❤</span>
+    <button class="navbtn" id="navFav" aria-label="Избранное">
+      <span class="ico" aria-hidden="true">
+        <!-- heart -->
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 21s-7-4.6-9.2-9C1 8 3.2 5.5 6 5.5c1.7 0 3.2 1 4 2.1.8-1.1 2.3-2.1 4-2.1 2.8 0 5 2.5 3.2 6.5C19 16.4 12 21 12 21z"
+                stroke="currentColor" stroke-width="2.0" stroke-linejoin="round"/>
+        </svg>
+      </span>
       <span class="badge" id="favCount" style="display:none">0</span>
     </button>
 
-    <button class="nav-btn" id="navCart" aria-label="Корзина">
-      <span class="nav-ico">🛒</span>
+    <button class="navbtn" id="navCart" aria-label="Корзина">
+      <span class="ico" aria-hidden="true">
+        <!-- cart -->
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M6.5 6h15l-1.4 7.5H8.2L6.5 6z" stroke="currentColor" stroke-width="2.0" stroke-linejoin="round"/>
+          <path d="M6.5 6L5.7 3.8H3" stroke="currentColor" stroke-width="2.0" stroke-linecap="round"/>
+          <path d="M9 20a1 1 0 100-2 1 1 0 000 2zM18 20a1 1 0 100-2 1 1 0 000 2z" fill="currentColor"/>
+        </svg>
+      </span>
       <span class="badge" id="cartCount" style="display:none">0</span>
     </button>
   </nav>
 
   <!-- cache-bust -->
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>
