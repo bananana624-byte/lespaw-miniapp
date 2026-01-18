@@ -54,7 +54,7 @@ body{
   position:absolute;
   left:14px;
   top:10px;
-  opacity:.0;
+  opacity:.0; /* просто чтобы не мешало, можно убрать */
 }
 .brand .sub{
   font-size: 12px;
@@ -127,6 +127,7 @@ hr{
   user-select:none;
 }
 
+/* ярко “горит” при нажатии */
 .btn:active{
   transform: scale(.985);
   border-color: rgba(99,230,255,.50);
@@ -136,6 +137,7 @@ hr{
   filter: brightness(1.10);
 }
 
+/* активная кнопка/таб (горит постоянно) */
 .btn.is-active{
   border-color: rgba(184,107,255,.55);
   box-shadow:
@@ -170,56 +172,74 @@ hr{
   border-radius: 14px;
 }
 
-/* =========================
-   Мини-товары с картинкой
-   ========================= */
-.prod-mini{
-  display:flex;
-  gap:12px;
-  align-items:center;
+/* ==========================
+   Мини-карточки товаров (внутри фандома)
+   ========================== */
+.prod-grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
-.thumb-mini{
-  width:72px;
-  height:72px;
-  flex: 0 0 72px;
-  border-radius: 14px;
+@media (min-width: 740px){
+  .prod-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.prod-card{
+  border-radius: 16px;
   border: 1px solid rgba(255,255,255,.14);
   background: rgba(8,9,18,.45);
   overflow:hidden;
+  cursor:pointer;
+  transition: transform .06s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
   display:flex;
-  align-items:center;
-  justify-content:center;
-}
-.thumb-mini img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
-}
-.thumb-mini .ph{
-  font-size: 22px;
-  opacity: .85;
-}
-.prod-mini .text{
-  min-width: 0;
-}
-.prod-mini .title{
-  font-weight: 900;
-  line-height: 1.2;
-  word-break: break-word;
-}
-.prod-mini .meta{
-  margin-top:6px;
-  color:var(--muted);
-  font-size:13px;
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
+  flex-direction: column;
+  min-height: 210px;
 }
 
-/* =========================
-   Toast
-   ========================= */
+.prod-card:hover{
+  border-color: rgba(99,230,255,.22);
+  box-shadow: 0 16px 26px rgba(0,0,0,.28);
+}
+
+.prod-card:active{
+  transform: scale(.995);
+  border-color: rgba(99,230,255,.28);
+  box-shadow:
+    0 0 0 3px rgba(99,230,255,.10),
+    0 0 18px rgba(184,107,255,.18);
+  filter: brightness(1.04);
+}
+
+.prod-img{
+  width:100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display:block;
+  background: rgba(255,255,255,.04);
+}
+
+.prod-body{
+  padding: 10px 10px 12px;
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+  flex:1;
+}
+
+.prod-title{
+  font-weight: 900;
+  line-height: 1.15;
+  font-size: 14px;
+}
+
+.prod-meta{
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.25;
+  margin-top:auto;
+}
+
+/* тосты */
 .toast{
   position: fixed;
   left: 50%;
