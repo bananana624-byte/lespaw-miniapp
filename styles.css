@@ -13,7 +13,6 @@
 
   --shadow: 0 16px 46px rgba(0,0,0,.45);
   --r: 18px;
-  --r2: 999px;
 }
 
 *{box-sizing:border-box}
@@ -44,21 +43,24 @@ body{
 
 .brand{
   display:flex;
-  align-items:center;
-  gap:10px;
+  flex-direction: column;
+  gap:2px;
   font-weight: 900;
   letter-spacing: .3px;
-}
-.brand .sub{
-  display:block;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  margin-top: 2px;
+  line-height: 1.05;
 }
 .brand::before{
   content:"🪐";
-  filter: drop-shadow(0 0 12px rgba(184,107,255,.45));
+  position:absolute;
+  left:14px;
+  top:10px;
+  opacity:.0; /* просто чтобы не мешало, можно убрать */
+}
+.brand .sub{
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  opacity: .95;
 }
 
 .top-spacer{flex:1}
@@ -125,7 +127,7 @@ hr{
   user-select:none;
 }
 
-/* “горит при нажатии” */
+/* ярко “горит” при нажатии */
 .btn:active{
   transform: scale(.985);
   border-color: rgba(99,230,255,.50);
@@ -135,7 +137,7 @@ hr{
   filter: brightness(1.10);
 }
 
-/* активная вкладка/кнопка (горит постоянно) */
+/* активная кнопка/таб (горит постоянно) */
 .btn.is-active{
   border-color: rgba(184,107,255,.55);
   box-shadow:
@@ -161,7 +163,16 @@ hr{
 }
 .item:active{transform: scale(.995);}
 
-/* мини-тост уведомления */
+.item .title{font-weight: 900;}
+.item .meta{margin-top:4px; color:var(--muted); font-size:13px;}
+
+.thumb{
+  width:100%;
+  display:block;
+  border-radius: 14px;
+}
+
+/* тосты */
 .toast{
   position: fixed;
   left: 50%;
