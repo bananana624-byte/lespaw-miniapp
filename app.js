@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js (UX версия с нижней навигацией + мини-карточки товаров 2 в ряд)
+// LesPaw Mini App — app.js (современный UI + рабочие кнопки + мини-карточки 2 в ряд)
 
 // =====================
 // НАСТРОЙКИ (твои CSV)
@@ -30,7 +30,6 @@ const view = document.getElementById("view");
 const navBack = document.getElementById("navBack");
 const navFav  = document.getElementById("navFav");
 const navCart = document.getElementById("navCart");
-
 const favCountEl  = document.getElementById("favCount");
 const cartCountEl = document.getElementById("cartCount");
 
@@ -80,14 +79,14 @@ function toast(msg, kind = "") {
 }
 
 // =====================
-// Navigation (страницы + назад внизу)
+// Navigation
 // =====================
-let navStack = [];           // хранит предыдущие страницы
-let currentPageFn = null;    // что сейчас показано
+let navStack = [];
+let currentPageFn = null;
 
 function syncBackButton() {
   const disabled = navStack.length === 0;
-  navBack.classList.toggle("is-disabled", disabled);
+  navBack.disabled = disabled;
 }
 
 function openPage(renderFn) {
@@ -111,8 +110,6 @@ function goBack() {
   syncBackButton();
   currentPageFn();
 }
-
-navBack.onclick = () => goBack();
 
 // =====================
 // Data
@@ -141,15 +138,9 @@ function parseCSV(text) {
     if (inQuotes) {
       if (c === '"') {
         const next = s[i + 1];
-        if (next === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += c;
-      }
+        if (next === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else field += c;
     } else {
       if (c === '"') inQuotes = true;
       else if (c === ",") { row.push(field); field = ""; }
@@ -216,7 +207,6 @@ function updateCartBadge(){
   cartCountEl.style.display = show ? "" : "none";
   cartCountEl.classList.toggle("glow", show);
 }
-
 function updateFavBadge(){
   const n = fav.length;
   favCountEl.textContent = String(n);
@@ -246,21 +236,21 @@ async function init(){
     updateFavBadge();
     syncBackButton();
 
-    // нижняя навигация
-    navCart.onclick = () => openPage(renderCart);
-    navFav.onclick  = () => openPage(renderFavorites);
+    // НАВИГАЦИЯ — через addEventListener (чтобы точно работало)
+    navBack.addEventListener("click", goBack);
+    navCart.addEventListener("click", () => openPage(renderCart));
+    navFav.addEventListener("click", () => openPage(renderFavorites));
 
-    // верхние кнопки меню
-    btnCategories.onclick = () => goHome();
-    btnInfo.onclick = () => openPage(renderInfo);
-    btnReviews.onclick = () => openPage(renderReviews);
-    btnExamples.onclick = () => openExamples();
+    btnCategories.addEventListener("click", goHome);
+    btnInfo.addEventListener("click", () => openPage(renderInfo));
+    btnReviews.addEventListener("click", () => openPage(renderReviews));
+    btnExamples.addEventListener("click", openExamples);
 
-    globalSearch.oninput = (e) => {
+    globalSearch.addEventListener("input", (e) => {
       const q = e.target.value || "";
       if(q.trim()) openPage(() => renderSearch(q));
       else goHome();
-    };
+    });
 
     goHome();
   } catch(e){
@@ -285,18 +275,19 @@ function renderFandomTypes(){
     <div class="small">Выбери тип фандома</div>
     <hr>
     <div class="list">
-      ${FANDOM_TYPES.map(t => `<div class="item" data-type="${t}">
-        <div class="title">${t}</div>
-      </div>`).join("")}
+      ${FANDOM_TYPES.map(t => `
+        <div class="item" data-type="${t}">
+          <div class="title">${t}</div>
+        </div>
+      `).join("")}
     </div>
   `;
 
   view.querySelectorAll("[data-type]").forEach(el => {
-    el.onclick = () => openPage(() => renderFandomList(el.dataset.type));
+    el.addEventListener("click", () => openPage(() => renderFandomList(el.dataset.type)));
   });
 }
 
-// ⚠️ Поиск внутри категории УБРАН — как ты просила
 function renderFandomList(type){
   const list = fandoms
     .filter(f => truthy(f.is_active))
@@ -310,19 +301,23 @@ function renderFandomList(type){
     <div class="h2">${type}</div>
     <div class="small">Выбери фандом</div>
     <hr>
-    <div class="list" id="fandomList">
-      ${letters.map(f => `<div class="item" data-id="${f.fandom_id}">
-        <div class="title">${f.fandom_name}</div>
-      </div>`).join("")}
+    <div class="list">
+      ${letters.map(f => `
+        <div class="item" data-id="${f.fandom_id}">
+          <div class="title">${f.fandom_name}</div>
+        </div>
+      `).join("")}
       ${digits.length ? `<div class="small">0–9</div>` : ""}
-      ${digits.map(f => `<div class="item" data-id="${f.fandom_id}">
-        <div class="title">${f.fandom_name}</div>
-      </div>`).join("")}
+      ${digits.map(f => `
+        <div class="item" data-id="${f.fandom_id}">
+          <div class="title">${f.fandom_name}</div>
+        </div>
+      `).join("")}
     </div>
   `;
 
   view.querySelectorAll("[data-id]").forEach(el => {
-    el.onclick = () => openPage(() => renderFandomPage(el.dataset.id));
+    el.addEventListener("click", () => openPage(() => renderFandomPage(el.dataset.id)));
   });
 }
 
@@ -336,7 +331,7 @@ function renderFandomPage(fandomId){
   view.innerHTML = `
     <div class="h2">${f?.fandom_name || "Фандом"}</div>
     <div class="row" id="tabs">
-      ${typeTabs.map(t => `<button class="btn btn-compact" data-t="${t}">${tabNames[t]}</button>`).join("")}
+      ${typeTabs.map(t => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
     </div>
     <div class="small">Товары этого фандома</div>
     <hr>
@@ -346,15 +341,14 @@ function renderFandomPage(fandomId){
   let currentTab = "all";
 
   function setActiveTab(){
-    document.querySelectorAll("#tabs .btn").forEach(b => {
+    view.querySelectorAll("#tabs .btn").forEach(b => {
       b.classList.toggle("is-active", b.dataset.t === currentTab);
     });
   }
 
   function renderGrid(){
     const filtered = all.filter(p => currentTab === "all" ? true : p.product_type === currentTab);
-
-    const grid = document.getElementById("prodGrid");
+    const grid = view.querySelector("#prodGrid");
 
     if(!filtered.length){
       grid.innerHTML = `<div class="small">Пока нет товаров.</div>`;
@@ -380,16 +374,16 @@ function renderFandomPage(fandomId){
     }).join("");
 
     grid.querySelectorAll("[data-id]").forEach(el => {
-      el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+      el.addEventListener("click", () => openPage(() => renderProduct(el.dataset.id)));
     });
   }
 
-  document.querySelectorAll("#tabs .btn").forEach(btn => {
-    btn.onclick = () => {
+  view.querySelectorAll("#tabs .btn").forEach(btn => {
+    btn.addEventListener("click", () => {
       currentTab = btn.dataset.t;
       setActiveTab();
       renderGrid();
-    };
+    });
   });
 
   setActiveTab();
@@ -481,25 +475,25 @@ function renderProduct(productId){
     `;
 
     if(isSticker && enableBase){
-      document.getElementById("baseStd").onclick = () => { selBase="standard"; render(); };
-      document.getElementById("baseHolo").onclick = () => { selBase="holo_base"; render(); };
+      document.getElementById("baseStd").addEventListener("click", () => { selBase="standard"; render(); });
+      document.getElementById("baseHolo").addEventListener("click", () => { selBase="holo_base"; render(); });
     }
 
     if(isSticker && enableOverlay){
       view.querySelectorAll("[data-ov]").forEach(b => {
-        b.onclick = () => { selOverlay = b.dataset.ov; render(); };
+        b.addEventListener("click", () => { selOverlay = b.dataset.ov; render(); });
       });
-      document.getElementById("btnExamples2").onclick = () => openExamples();
+      document.getElementById("btnExamples2").addEventListener("click", openExamples);
     }
 
-    document.getElementById("btnFav").onclick = () => {
+    document.getElementById("btnFav").addEventListener("click", () => {
       const next = fav.includes(productId) ? fav.filter(x => x !== productId) : [...fav, productId];
       setFav(next);
       toast(!favOn ? "Добавлено в избранное ✨" : "Убрано из избранного", "good");
       render();
-    };
+    });
 
-    document.getElementById("btnAdd").onclick = () => {
+    document.getElementById("btnAdd").addEventListener("click", () => {
       const key = `${productId}::${selBase}::${selOverlay}`;
       const existing = cart.find(it => `${it.productId}::${it.base}::${it.overlay}` === key);
 
@@ -510,7 +504,7 @@ function renderProduct(productId){
         setCart([...cart, { productId, qty: 1, base: selBase, overlay: selOverlay }]);
       }
       toast("Добавлено в корзину ✨", "good");
-    };
+    });
   }
 
   render();
@@ -580,29 +574,29 @@ function renderCart(){
     <button class="btn" id="checkout">Оформить заказ</button>
   `;
 
-  view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
+  view.querySelectorAll("[data-dec]").forEach(b => b.addEventListener("click", () => {
     const i = Number(b.dataset.dec);
     const it = cart[i];
     it.qty = Math.max(1, (Number(it.qty)||1) - 1);
     setCart([...cart]);
     renderCart();
-  });
+  }));
 
-  view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => {
+  view.querySelectorAll("[data-inc]").forEach(b => b.addEventListener("click", () => {
     const i = Number(b.dataset.inc);
     const it = cart[i];
     it.qty = (Number(it.qty)||1) + 1;
     setCart([...cart]);
     renderCart();
-  });
+  }));
 
-  view.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+  view.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
     const i = Number(b.dataset.del);
     setCart(cart.filter((_,idx)=>idx!==i));
     renderCart();
-  });
+  }));
 
-  document.getElementById("checkout").onclick = () => openPage(() => renderCheckout(total));
+  document.getElementById("checkout").addEventListener("click", () => openPage(() => renderCheckout(total)));
 }
 
 function renderCheckout(total){
@@ -638,7 +632,7 @@ function renderCheckout(total){
     <button class="btn" id="send">Перейти к менеджерке</button>
   `;
 
-  document.getElementById("send").onclick = () => {
+  document.getElementById("send").addEventListener("click", () => {
     const agree = document.getElementById("agree").checked;
     const fio = document.getElementById("fio").value.trim();
     const phone = document.getElementById("phone").value.trim();
@@ -692,7 +686,7 @@ function renderCheckout(total){
     const orderText = lines.join("\n");
     const url = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(orderText)}`;
     tg?.openTelegramLink(url);
-  };
+  });
 }
 
 function renderFavorites(){
@@ -719,7 +713,7 @@ function renderFavorites(){
   `;
 
   view.querySelectorAll("[data-id]").forEach(el => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+    el.addEventListener("click", () => openPage(() => renderProduct(el.dataset.id)));
   });
 }
 
@@ -746,7 +740,7 @@ function renderReviews(){
     <hr>
     <button class="btn" id="openReviews">Открыть отзывы</button>
   `;
-  document.getElementById("openReviews").onclick = () => tg?.openTelegramLink("https://t.me/LesPaw/114");
+  document.getElementById("openReviews").addEventListener("click", () => tg?.openTelegramLink("https://t.me/LesPaw/114"));
 }
 
 function openExamples(){
@@ -754,7 +748,6 @@ function openExamples(){
   tg?.openTelegramLink(url);
 }
 
-// Поиск ТОЛЬКО сверху: фандомы + товары (по названию/описанию/тегам/типу)
 function renderSearch(q){
   const query = (q||"").toLowerCase().trim();
 
@@ -798,9 +791,9 @@ function renderSearch(q){
   `;
 
   view.querySelectorAll("[data-fid]").forEach(el => {
-    el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid));
+    el.addEventListener("click", () => openPage(() => renderFandomPage(el.dataset.fid)));
   });
   view.querySelectorAll("[data-pid]").forEach(el => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.pid));
+    el.addEventListener("click", () => openPage(() => renderProduct(el.dataset.pid)));
   });
 }
