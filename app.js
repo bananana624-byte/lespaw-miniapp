@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js (финальная версия под твой UX)
+// LesPaw Mini App — app.js (UX версия с нижней навигацией + мини-карточки товаров 2 в ряд)
 
 // =====================
 // НАСТРОЙКИ (твои CSV)
@@ -26,11 +26,13 @@ tg?.expand();
 // DOM
 // =====================
 const view = document.getElementById("view");
-const cartCount = document.getElementById("cartCount");
 
-const btnBack = document.getElementById("btnBack");
-const btnFavTop = document.getElementById("btnFavTop");
-const btnCartTop = document.getElementById("btnCartTop");
+const navBack = document.getElementById("navBack");
+const navFav  = document.getElementById("navFav");
+const navCart = document.getElementById("navCart");
+
+const favCountEl  = document.getElementById("favCount");
+const cartCountEl = document.getElementById("cartCount");
 
 const btnCategories = document.getElementById("btnCategories");
 const btnInfo = document.getElementById("btnInfo");
@@ -78,13 +80,14 @@ function toast(msg, kind = "") {
 }
 
 // =====================
-// Navigation (страницы + назад сверху)
+// Navigation (страницы + назад внизу)
 // =====================
 let navStack = [];           // хранит предыдущие страницы
 let currentPageFn = null;    // что сейчас показано
 
 function syncBackButton() {
-  btnBack.style.display = navStack.length ? "" : "none";
+  const disabled = navStack.length === 0;
+  navBack.classList.toggle("is-disabled", disabled);
 }
 
 function openPage(renderFn) {
@@ -102,13 +105,14 @@ function goHome() {
 }
 
 function goBack() {
+  if (!navStack.length) return;
   const prev = navStack.pop();
   currentPageFn = prev || renderFandomTypes;
   syncBackButton();
   currentPageFn();
 }
 
-btnBack.onclick = () => goBack();
+navBack.onclick = () => goBack();
 
 // =====================
 // Data
@@ -207,10 +211,18 @@ function getProductById(id){ return products.find(p => p.id === id); }
 
 function updateCartBadge(){
   const totalQty = cart.reduce((sum, it) => sum + (Number(it.qty)||0), 0);
-  cartCount.textContent = String(totalQty);
+  cartCountEl.textContent = String(totalQty);
+  const show = totalQty > 0;
+  cartCountEl.style.display = show ? "" : "none";
+  cartCountEl.classList.toggle("glow", show);
 }
+
 function updateFavBadge(){
-  btnFavTop.textContent = `Избранное (${fav.length})`;
+  const n = fav.length;
+  favCountEl.textContent = String(n);
+  const show = n > 0;
+  favCountEl.style.display = show ? "" : "none";
+  favCountEl.classList.toggle("glow", show);
 }
 
 // =====================
@@ -232,12 +244,13 @@ async function init(){
 
     updateCartBadge();
     updateFavBadge();
+    syncBackButton();
 
-    // top actions
-    btnCartTop.onclick = () => openPage(renderCart);
-    btnFavTop.onclick = () => openPage(renderFavorites);
+    // нижняя навигация
+    navCart.onclick = () => openPage(renderCart);
+    navFav.onclick  = () => openPage(renderFavorites);
 
-    // header buttons
+    // верхние кнопки меню
     btnCategories.onclick = () => goHome();
     btnInfo.onclick = () => openPage(renderInfo);
     btnReviews.onclick = () => openPage(renderReviews);
@@ -323,7 +336,7 @@ function renderFandomPage(fandomId){
   view.innerHTML = `
     <div class="h2">${f?.fandom_name || "Фандом"}</div>
     <div class="row" id="tabs">
-      ${typeTabs.map(t => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
+      ${typeTabs.map(t => `<button class="btn btn-compact" data-t="${t}">${tabNames[t]}</button>`).join("")}
     </div>
     <div class="small">Товары этого фандома</div>
     <hr>
@@ -467,13 +480,11 @@ function renderProduct(productId){
       </div>
     `;
 
-    // sticker base
     if(isSticker && enableBase){
       document.getElementById("baseStd").onclick = () => { selBase="standard"; render(); };
       document.getElementById("baseHolo").onclick = () => { selBase="holo_base"; render(); };
     }
 
-    // overlay
     if(isSticker && enableOverlay){
       view.querySelectorAll("[data-ov]").forEach(b => {
         b.onclick = () => { selOverlay = b.dataset.ov; render(); };
@@ -481,15 +492,13 @@ function renderProduct(productId){
       document.getElementById("btnExamples2").onclick = () => openExamples();
     }
 
-    // fav
     document.getElementById("btnFav").onclick = () => {
       const next = fav.includes(productId) ? fav.filter(x => x !== productId) : [...fav, productId];
       setFav(next);
-      toast(fav.includes(productId) ? "Добавлено в избранное ✨" : "Убрано из избранного", "good");
+      toast(!favOn ? "Добавлено в избранное ✨" : "Убрано из избранного", "good");
       render();
     };
 
-    // add to cart (НЕ открываем корзину)
     document.getElementById("btnAdd").onclick = () => {
       const key = `${productId}::${selBase}::${selOverlay}`;
       const existing = cart.find(it => `${it.productId}::${it.base}::${it.overlay}` === key);
