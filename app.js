@@ -1,7 +1,7 @@
-// LesPaw Mini App — app.js (под новый современный UI с нижней нав-панелью)
+// LesPaw Mini App — app.js (финальная версия под твой UX)
 
 // =====================
-// CSV ссылки (твои)
+// НАСТРОЙКИ (твои CSV)
 // =====================
 const CSV_FANDOMS_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=0&single=true&output=csv";
@@ -12,7 +12,7 @@ const CSV_PRODUCTS_URL =
 const CSV_SETTINGS_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=2041657059&single=true&output=csv";
 
-// менеджерка (без @)
+// менеджерка (ВАЖНО: без @)
 const MANAGER_USERNAME = "LesPaw_manager";
 
 // =====================
@@ -26,20 +26,23 @@ tg?.expand();
 // DOM
 // =====================
 const view = document.getElementById("view");
-const globalSearch = document.getElementById("globalSearch");
-
-const navBack = document.getElementById("navBack");
-const navFav = document.getElementById("navFav");
-const navCart = document.getElementById("navCart");
-
-const favCount = document.getElementById("favCount");
 const cartCount = document.getElementById("cartCount");
+
+const btnBack = document.getElementById("btnBack");
+const btnFavTop = document.getElementById("btnFavTop");
+const btnCartTop = document.getElementById("btnCartTop");
+
+const btnCategories = document.getElementById("btnCategories");
+const btnInfo = document.getElementById("btnInfo");
+const btnReviews = document.getElementById("btnReviews");
+const btnExamples = document.getElementById("btnExamples");
+const globalSearch = document.getElementById("globalSearch");
 
 // =====================
 // Storage
 // =====================
-const LS_CART = "lespaw_cart_v3";
-const LS_FAV = "lespaw_fav_v3";
+const LS_CART = "lespaw_cart_v2";
+const LS_FAV = "lespaw_fav_v2";
 
 function loadJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -52,10 +55,21 @@ function saveJSON(key, value) {
 let cart = loadJSON(LS_CART, []);
 let fav = loadJSON(LS_FAV, []);
 
+function setCart(next) {
+  cart = next;
+  saveJSON(LS_CART, cart);
+  updateCartBadge();
+}
+function setFav(next) {
+  fav = next;
+  saveJSON(LS_FAV, fav);
+  updateFavBadge();
+}
+
 // =====================
 // Toast
 // =====================
-function toast(msg, kind="") {
+function toast(msg, kind = "") {
   const el = document.createElement("div");
   el.className = `toast ${kind}`.trim();
   el.textContent = msg;
@@ -64,41 +78,37 @@ function toast(msg, kind="") {
 }
 
 // =====================
-// Navigation (страницы + назад снизу)
+// Navigation (страницы + назад сверху)
 // =====================
-const navStack = []; // хранит render-функции предыдущих страниц
+let navStack = [];           // хранит предыдущие страницы
+let currentPageFn = null;    // что сейчас показано
+
+function syncBackButton() {
+  btnBack.style.display = navStack.length ? "" : "none";
+}
 
 function openPage(renderFn) {
-  if (currentRender) navStack.push(currentRender);
-  currentRender = renderFn;
-  syncNav();
+  if (currentPageFn) navStack.push(currentPageFn);
+  currentPageFn = renderFn;
+  syncBackButton();
   renderFn();
+}
+
+function goHome() {
+  navStack = [];
+  currentPageFn = renderFandomTypes;
+  syncBackButton();
+  renderFandomTypes();
 }
 
 function goBack() {
   const prev = navStack.pop();
-  currentRender = prev || renderHome;
-  syncNav();
-  currentRender();
+  currentPageFn = prev || renderFandomTypes;
+  syncBackButton();
+  currentPageFn();
 }
 
-function resetToHome() {
-  navStack.length = 0;
-  currentRender = renderHome;
-  syncNav();
-  renderHome();
-}
-
-function syncNav() {
-  // back активен только если есть история
-  navBack.classList.toggle("is-active", navStack.length > 0);
-
-  // active state для fav/cart (если открыта соответствующая страница)
-  navFav.classList.toggle("is-active", currentRender === renderFavorites);
-  navCart.classList.toggle("is-active", currentRender === renderCart);
-}
-
-let currentRender = null;
+btnBack.onclick = () => goBack();
 
 // =====================
 // Data
@@ -112,7 +122,7 @@ let settings = {
 };
 
 // =====================
-// CSV parser
+// CSV parser (с кавычками/запятыми)
 // =====================
 function parseCSV(text) {
   const rows = [];
@@ -123,12 +133,19 @@ function parseCSV(text) {
   const s = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+
     if (inQuotes) {
       if (c === '"') {
         const next = s[i + 1];
-        if (next === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else field += c;
+        if (next === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
     } else {
       if (c === '"') inQuotes = true;
       else if (c === ",") { row.push(field); field = ""; }
@@ -153,7 +170,8 @@ function parseCSV(text) {
 async function fetchCSV(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`);
-  return parseCSV(await res.text());
+  const text = await res.text();
+  return parseCSV(text);
 }
 
 // =====================
@@ -176,41 +194,30 @@ const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
 
 function truthy(v){ return String(v||"").trim().toUpperCase() === "TRUE"; }
 function money(n){ return `${Number(n)||0} ₽`; }
-function splitList(s){ return (s||"").split(",").map(x=>x.trim()).filter(Boolean); }
-function isDigitStart(name){ return /^[0-9]/.test((name||"").trim()); }
+
+function splitList(s){
+  return (s || "").split(",").map(x => x.trim()).filter(Boolean);
+}
+function isDigitStart(name){
+  return /^[0-9]/.test((name||"").trim());
+}
 
 function getFandomById(id){ return fandoms.find(f => f.fandom_id === id); }
 function getProductById(id){ return products.find(p => p.id === id); }
 
-// badges
-function updateBadges() {
-  const favN = fav.length;
-  const cartN = cart.reduce((sum,it)=>sum + (Number(it.qty)||0), 0);
-
-  if (favN > 0) {
-    favCount.style.display = "";
-    favCount.textContent = String(favN);
-  } else {
-    favCount.style.display = "none";
-  }
-
-  if (cartN > 0) {
-    cartCount.style.display = "";
-    cartCount.textContent = String(cartN);
-  } else {
-    cartCount.style.display = "none";
-  }
+function updateCartBadge(){
+  const totalQty = cart.reduce((sum, it) => sum + (Number(it.qty)||0), 0);
+  cartCount.textContent = String(totalQty);
 }
-
-// cart helpers
-function setCart(next){ cart = next; saveJSON(LS_CART, cart); updateBadges(); }
-function setFav(next){ fav = next; saveJSON(LS_FAV, fav); updateBadges(); }
+function updateFavBadge(){
+  btnFavTop.textContent = `Избранное (${fav.length})`;
+}
 
 // =====================
 // Init
 // =====================
-async function init() {
-  try {
+async function init(){
+  try{
     fandoms = await fetchCSV(CSV_FANDOMS_URL);
     products = await fetchCSV(CSV_PRODUCTS_URL);
 
@@ -218,31 +225,38 @@ async function init() {
     s.forEach(row => {
       const k = row.key;
       const v = row.value;
-      if (!k) return;
-      if (k === "overlay_price_delta" || k === "holo_base_price_delta") settings[k] = Number(v);
+      if(!k) return;
+      if(k === "overlay_price_delta" || k === "holo_base_price_delta") settings[k] = Number(v);
       else settings[k] = v;
     });
 
-    updateBadges();
+    updateCartBadge();
+    updateFavBadge();
 
-    navBack.onclick = () => goBack();
-    navFav.onclick = () => openPage(renderFavorites);
-    navCart.onclick = () => openPage(renderCart);
+    // top actions
+    btnCartTop.onclick = () => openPage(renderCart);
+    btnFavTop.onclick = () => openPage(renderFavorites);
+
+    // header buttons
+    btnCategories.onclick = () => goHome();
+    btnInfo.onclick = () => openPage(renderInfo);
+    btnReviews.onclick = () => openPage(renderReviews);
+    btnExamples.onclick = () => openExamples();
 
     globalSearch.oninput = (e) => {
       const q = e.target.value || "";
-      if (q.trim()) openPage(() => renderSearch(q));
-      else resetToHome();
+      if(q.trim()) openPage(() => renderSearch(q));
+      else goHome();
     };
 
-    resetToHome();
-  } catch (e) {
+    goHome();
+  } catch(e){
     view.innerHTML = `
-      <div class="card">
-        <div class="h2">Ошибка загрузки данных</div>
-        <div class="small">${String(e)}</div>
-        <hr>
-        <div class="small">Проверь публикацию таблиц и CSV-ссылки.</div>
+      <div class="h2">Ошибка загрузки данных</div>
+      <div class="small">${String(e)}</div>
+      <hr>
+      <div class="small">
+        Проверь: опубликованы ли вкладки (Publish to web), и верные ли CSV ссылки.
       </div>
     `;
   }
@@ -250,69 +264,27 @@ async function init() {
 init();
 
 // =====================
-// HOME — плитки
+// Pages
 // =====================
-function renderHome() {
+function renderFandomTypes(){
   view.innerHTML = `
-    <div class="grid2">
-      <div class="tile" id="tCat">
-        <div class="tileTitle">Категории</div>
-        <div class="tileSub">Выбор фандома по типу</div>
-      </div>
-
-      <div class="tile" id="tInfo">
-        <div class="tileTitle">Важная информация</div>
-        <div class="tileSub">Оплата, сроки, доставка, возврат</div>
-      </div>
-
-      <div class="tile" id="tRev">
-        <div class="tileTitle">Отзывы</div>
-        <div class="tileSub">Пост с отзывами в Telegram</div>
-      </div>
-
-      <div class="tile" id="tEx">
-        <div class="tileTitle">Примеры покрытий</div>
-        <div class="tileSub">Как выглядит ламинация/голография</div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("tCat").onclick = () => openPage(renderFandomTypes);
-  document.getElementById("tInfo").onclick = () => openPage(renderInfo);
-  document.getElementById("tRev").onclick = () => openPage(renderReviews);
-  document.getElementById("tEx").onclick = () => openExamples();
-
-  syncNav();
-}
-
-// =====================
-// Категории фандомов
-// =====================
-function renderFandomTypes() {
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Категории</div>
-      <div class="small">Выбери тип фандома</div>
-      <hr>
-      <div class="list">
-        ${FANDOM_TYPES.map(t => `
-          <div class="item" data-type="${t}">
-            <div class="title">${t}</div>
-            <div class="meta">Открыть список фандомов</div>
-          </div>
-        `).join("")}
-      </div>
+    <div class="h2">Категории</div>
+    <div class="small">Выбери тип фандома</div>
+    <hr>
+    <div class="list">
+      ${FANDOM_TYPES.map(t => `<div class="item" data-type="${t}">
+        <div class="title">${t}</div>
+      </div>`).join("")}
     </div>
   `;
 
   view.querySelectorAll("[data-type]").forEach(el => {
     el.onclick = () => openPage(() => renderFandomList(el.dataset.type));
   });
-
-  syncNav();
 }
 
-function renderFandomList(type) {
+// ⚠️ Поиск внутри категории УБРАН — как ты просила
+function renderFandomList(type){
   const list = fandoms
     .filter(f => truthy(f.is_active))
     .filter(f => f.fandom_type === type)
@@ -322,38 +294,26 @@ function renderFandomList(type) {
   const digits  = list.filter(f =>  isDigitStart(f.fandom_name));
 
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">${type}</div>
-      <div class="small">Фандомы по алфавиту</div>
-      <hr>
-      <div class="list">
-        ${letters.map(f => `
-          <div class="item" data-id="${f.fandom_id}">
-            <div class="title">${f.fandom_name}</div>
-            <div class="meta">Открыть товары фандома</div>
-          </div>
-        `).join("")}
-
-        ${digits.length ? `<div class="small">0–9</div>` : ""}
-
-        ${digits.map(f => `
-          <div class="item" data-id="${f.fandom_id}">
-            <div class="title">${f.fandom_name}</div>
-            <div class="meta">Открыть товары фандома</div>
-          </div>
-        `).join("")}
-      </div>
+    <div class="h2">${type}</div>
+    <div class="small">Выбери фандом</div>
+    <hr>
+    <div class="list" id="fandomList">
+      ${letters.map(f => `<div class="item" data-id="${f.fandom_id}">
+        <div class="title">${f.fandom_name}</div>
+      </div>`).join("")}
+      ${digits.length ? `<div class="small">0–9</div>` : ""}
+      ${digits.map(f => `<div class="item" data-id="${f.fandom_id}">
+        <div class="title">${f.fandom_name}</div>
+      </div>`).join("")}
     </div>
   `;
 
   view.querySelectorAll("[data-id]").forEach(el => {
     el.onclick = () => openPage(() => renderFandomPage(el.dataset.id));
   });
-
-  syncNav();
 }
 
-function renderFandomPage(fandomId) {
+function renderFandomPage(fandomId){
   const f = getFandomById(fandomId);
   const all = products.filter(p => p.fandom_id === fandomId);
 
@@ -361,14 +321,13 @@ function renderFandomPage(fandomId) {
   const tabNames = { all:"Все", sticker:"Наклейки", pin:"Значки", poster:"Постеры", box:"Боксы" };
 
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">${f?.fandom_name || "Фандом"}</div>
-      <div class="row" id="tabs">
-        ${typeTabs.map(t => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
-      </div>
-      <hr>
-      <div class="list" id="prodList"></div>
+    <div class="h2">${f?.fandom_name || "Фандом"}</div>
+    <div class="row" id="tabs">
+      ${typeTabs.map(t => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
     </div>
+    <div class="small">Товары этого фандома</div>
+    <hr>
+    <div class="list" id="prodList"></div>
   `;
 
   let currentTab = "all";
@@ -381,8 +340,8 @@ function renderFandomPage(fandomId) {
 
   function renderList(){
     const filtered = all.filter(p => currentTab === "all" ? true : p.product_type === currentTab);
-    const prodList = document.getElementById("prodList");
 
+    const prodList = document.getElementById("prodList");
     prodList.innerHTML = filtered.length ? filtered.map(p => `
       <div class="item" data-id="${p.id}">
         <div class="title">${p.name}</div>
@@ -396,20 +355,20 @@ function renderFandomPage(fandomId) {
   }
 
   document.querySelectorAll("#tabs .btn").forEach(btn => {
-    btn.onclick = () => { currentTab = btn.dataset.t; setActiveTab(); renderList(); };
+    btn.onclick = () => {
+      currentTab = btn.dataset.t;
+      setActiveTab();
+      renderList();
+    };
   });
 
   setActiveTab();
   renderList();
-  syncNav();
 }
 
-// =====================
-// Товар
-// =====================
-function renderProduct(productId) {
+function renderProduct(productId){
   const p = getProductById(productId);
-  if (!p) return;
+  if(!p) return;
 
   const isSticker = p.product_type === "sticker";
   const enableBase = truthy(p.enable_print_base);
@@ -420,15 +379,14 @@ function renderProduct(productId) {
 
   function calcUnitPrice(){
     let total = Number(p.price)||0;
-    if (isSticker && enableBase && selBase === "holo_base") total += settings.holo_base_price_delta;
-    if (isSticker && enableOverlay && selOverlay !== "none") total += settings.overlay_price_delta;
+    if(isSticker && enableBase && selBase === "holo_base") total += settings.holo_base_price_delta;
+    if(isSticker && enableOverlay && selOverlay !== "none") total += settings.overlay_price_delta;
     return total;
   }
 
   function render(){
     const unit = calcUnitPrice();
     const imgs = splitList(p.images);
-    const favOn = fav.includes(productId);
 
     const gallery = imgs.length ? `
       <div class="list">
@@ -441,95 +399,97 @@ function renderProduct(productId) {
       <hr>
     ` : "";
 
+    const favOn = fav.includes(productId);
+
     view.innerHTML = `
-      <div class="card">
-        <div class="h2">${p.name}</div>
-        <div class="small"><b>${money(unit)}</b></div>
-        <hr>
+      <div class="h2">${p.name}</div>
+      <div class="small"><b>${money(unit)}</b></div>
+      <hr>
 
-        ${gallery}
+      ${gallery}
 
-        ${isSticker ? `
-          <div class="small"><b>Опции наклеек</b></div>
+      ${isSticker ? `
+        <div class="small"><b>Опции наклеек</b></div>
 
-          ${enableBase ? `
-            <div class="row">
-              <button class="btn ${selBase==="standard"?"is-active":""}" id="baseStd">Стандарт (+0)</button>
-              <button class="btn ${selBase==="holo_base"?"is-active":""}" id="baseHolo">Голографическая основа (+${settings.holo_base_price_delta})</button>
-            </div>
-          ` : ""}
-
-          ${enableOverlay ? `
-            <div class="row" id="ovRow" style="margin-top:10px;">
-              ${OVERLAY_OPTIONS.map(([id,label]) => `
-                <button class="btn ${selOverlay===id?"is-active":""}" data-ov="${id}">
-                  ${label}${id==="none" ? " (+0)" : ` (+${settings.overlay_price_delta})`}
-                </button>
-              `).join("")}
-            </div>
-
-            <div class="row" style="margin-top:10px;">
-              <button class="btn" id="btnExamples2">Примеры покрытий</button>
-            </div>
-          ` : ""}
-
-          <hr>
+        ${enableBase ? `
+          <div class="small">Основа печати:</div>
+          <div class="row">
+            <button class="btn ${selBase==="standard"?"is-active":""}" id="baseStd">Стандарт (+0)</button>
+            <button class="btn ${selBase==="holo_base"?"is-active":""}" id="baseHolo">Голографическая основа (+${settings.holo_base_price_delta})</button>
+          </div>
         ` : ""}
 
-        <div class="small"><b>Характеристики</b></div>
-        <div class="small">Размер: ${p.size || "—"}</div>
-        <div class="small">Материал: ${p.material || "—"} (${p.material_type || "—"})</div>
-        <hr>
+        ${enableOverlay ? `
+          <div class="small">Покрытие:</div>
+          <div class="row" id="ovRow">
+            ${OVERLAY_OPTIONS.map(([id,label]) => `
+              <button class="btn ${selOverlay===id?"is-active":""}" data-ov="${id}">
+                ${label}${id==="none" ? " (+0)" : ` (+${settings.overlay_price_delta})`}
+              </button>
+            `).join("")}
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="btnExamples2">Как выглядит?</button>
+          </div>
+        ` : ""}
 
-        <div class="small">${p.description_full || p.description_short || ""}</div>
         <hr>
+      ` : ""}
 
-        <div class="row">
-          <button class="btn ${favOn ? "is-active":""}" id="btnFav">${favOn ? "★ В избранном" : "☆ В избранное"}</button>
-          <button class="btn" id="btnAdd">Добавить в корзину</button>
-        </div>
+      <div class="small"><b>Характеристики</b></div>
+      <div class="small">Размер: ${p.size || "—"}</div>
+      <div class="small">Материал: ${p.material || "—"} (${p.material_type || "—"})</div>
+      <hr>
+
+      <div class="small">${p.description_full || p.description_short || ""}</div>
+      <hr>
+
+      <div class="row">
+        <button class="btn ${favOn ? "is-active":""}" id="btnFav">${favOn ? "★ В избранном" : "☆ В избранное"}</button>
+        <button class="btn" id="btnAdd">Добавить в корзину</button>
       </div>
     `;
 
-    if (isSticker && enableBase){
+    // sticker base
+    if(isSticker && enableBase){
       document.getElementById("baseStd").onclick = () => { selBase="standard"; render(); };
       document.getElementById("baseHolo").onclick = () => { selBase="holo_base"; render(); };
     }
 
-    if (isSticker && enableOverlay){
+    // overlay
+    if(isSticker && enableOverlay){
       view.querySelectorAll("[data-ov]").forEach(b => {
         b.onclick = () => { selOverlay = b.dataset.ov; render(); };
       });
       document.getElementById("btnExamples2").onclick = () => openExamples();
     }
 
+    // fav
     document.getElementById("btnFav").onclick = () => {
-      const next = fav.includes(productId) ? fav.filter(x=>x!==productId) : [...fav, productId];
+      const next = fav.includes(productId) ? fav.filter(x => x !== productId) : [...fav, productId];
       setFav(next);
-      toast(next.includes(productId) ? "Добавлено в избранное ✨" : "Убрано из избранного", "good");
+      toast(fav.includes(productId) ? "Добавлено в избранное ✨" : "Убрано из избранного", "good");
       render();
     };
 
+    // add to cart (НЕ открываем корзину)
     document.getElementById("btnAdd").onclick = () => {
       const key = `${productId}::${selBase}::${selOverlay}`;
       const existing = cart.find(it => `${it.productId}::${it.base}::${it.overlay}` === key);
 
-      if (existing) existing.qty = (Number(existing.qty)||1) + 1;
-      else cart.push({ productId, qty: 1, base: selBase, overlay: selOverlay });
-
-      setCart([...cart]);
+      if(existing){
+        existing.qty = (Number(existing.qty)||1) + 1;
+        setCart([...cart]);
+      }else{
+        setCart([...cart, { productId, qty: 1, base: selBase, overlay: selOverlay }]);
+      }
       toast("Добавлено в корзину ✨", "good");
     };
-
-    syncNav();
   }
 
   render();
 }
 
-// =====================
-// Корзина
-// =====================
 function calcUnitForCartItem(it){
   const p = getProductById(it.productId);
   if(!p) return 0;
@@ -537,8 +497,8 @@ function calcUnitForCartItem(it){
   const isSticker = p.product_type === "sticker";
   let unit = Number(p.price)||0;
 
-  if (isSticker && truthy(p.enable_print_base) && it.base==="holo_base") unit += settings.holo_base_price_delta;
-  if (isSticker && truthy(p.enable_overlay) && it.overlay!=="none") unit += settings.overlay_price_delta;
+  if(isSticker && truthy(p.enable_print_base) && it.base==="holo_base") unit += settings.holo_base_price_delta;
+  if(isSticker && truthy(p.enable_overlay) && it.overlay!=="none") unit += settings.overlay_price_delta;
 
   return unit;
 }
@@ -546,12 +506,9 @@ function calcUnitForCartItem(it){
 function renderCart(){
   if(!cart.length){
     view.innerHTML = `
-      <div class="card">
-        <div class="h2">Корзина</div>
-        <div class="small">Пока пусто.</div>
-      </div>
+      <div class="h2">Корзина</div>
+      <div class="small">Пока пусто.</div>
     `;
-    syncNav();
     return;
   }
 
@@ -589,14 +546,12 @@ function renderCart(){
   });
 
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">Корзина</div>
-      <div class="list">${rows.join("")}</div>
-      <hr>
-      <div class="small"><b>Итого: ${money(total)}</b></div>
-      <hr>
-      <button class="btn" id="checkout">Оформить заказ</button>
-    </div>
+    <div class="h2">Корзина</div>
+    <div class="list">${rows.join("")}</div>
+    <hr>
+    <div class="small"><b>Итого: ${money(total)}</b></div>
+    <hr>
+    <button class="btn" id="checkout">Оформить заказ</button>
   `;
 
   view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
@@ -622,45 +577,39 @@ function renderCart(){
   });
 
   document.getElementById("checkout").onclick = () => openPage(() => renderCheckout(total));
-  syncNav();
 }
 
-// =====================
-// Оформление
-// =====================
 function renderCheckout(total){
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">Оформление</div>
-      <div class="small">
-        ⚠️ После нажатия кнопки вас перебросит в Telegram-диалог с уже собранным текстом.
-        Пожалуйста, отправьте сообщение <b>без изменений</b>.
-      </div>
-      <hr>
-
-      <div class="small"><b>Важная информация</b></div>
-      <div class="small">
-        💳 Заказ собирается после <b>100% предоплаты</b> (Т-Банк).<br>
-        ⏳ Сборка и отправка — <b>4–5 дней</b>.<br>
-        📦 Доставка: Яндекс (ПВЗ) / 5post («Пятёрочка»).<br>
-        ❌ Возврат невозможен (под заказ).
-      </div>
-
-      <hr>
-      <label class="small"><input type="checkbox" id="agree" /> Я ознакомилась с важной информацией</label>
-      <hr>
-
-      <input class="input" id="fio" placeholder="ФИО *" />
-      <div style="height:8px"></div>
-      <input class="input" id="phone" placeholder="Номер телефона *" />
-      <div style="height:8px"></div>
-      <input class="input" id="pvz" placeholder="Адрес ПВЗ Яндекс / 5post *" />
-      <div style="height:8px"></div>
-      <input class="input" id="comment" placeholder="Комментарий (необязательно)" />
-
-      <hr>
-      <button class="btn" id="send">Перейти к менеджерке</button>
+    <div class="h2">Оформление</div>
+    <div class="small">
+      ⚠️ После нажатия кнопки вас перебросит в Telegram-диалог с уже собранным текстом.
+      Пожалуйста, отправьте сообщение <b>без изменений</b>.
     </div>
+    <hr>
+
+    <div class="small"><b>Важная информация</b></div>
+    <div class="small">
+      💳 Заказ собирается после <b>100% предоплаты</b> (Т-Банк).<br>
+      ⏳ Сборка и отправка — <b>4–5 дней</b>.<br>
+      📦 Доставка: Яндекс (ПВЗ) / 5post («Пятёрочка»).<br>
+      ❌ Возврат невозможен (под заказ).
+    </div>
+
+    <hr>
+    <label class="small"><input type="checkbox" id="agree" /> Я ознакомилась с важной информацией</label>
+    <hr>
+
+    <input class="input" id="fio" placeholder="ФИО *" />
+    <div style="height:8px"></div>
+    <input class="input" id="phone" placeholder="Номер телефона *" />
+    <div style="height:8px"></div>
+    <input class="input" id="pvz" placeholder="Адрес ПВЗ Яндекс / 5post *" />
+    <div style="height:8px"></div>
+    <input class="input" id="comment" placeholder="Комментарий (необязательно)" />
+
+    <hr>
+    <button class="btn" id="send">Перейти к менеджерке</button>
   `;
 
   document.getElementById("send").onclick = () => {
@@ -718,91 +667,60 @@ function renderCheckout(total){
     const url = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(orderText)}`;
     tg?.openTelegramLink(url);
   };
-
-  syncNav();
 }
 
-// =====================
-// Избранное
-// =====================
 function renderFavorites(){
   if(!fav.length){
     view.innerHTML = `
-      <div class="card">
-        <div class="h2">Избранное</div>
-        <div class="small">Пока ничего нет.</div>
-      </div>
+      <div class="h2">Избранное</div>
+      <div class="small">Пока ничего нет.</div>
     `;
-    syncNav();
     return;
   }
 
   const items = fav.map(pid => getProductById(pid)).filter(Boolean);
 
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">Избранное</div>
-      <div class="list">
-        ${items.map(p => `
-          <div class="item" data-id="${p.id}">
-            <div class="title">${p.name}</div>
-            <div class="meta">${money(p.price)} · ${p.product_type}</div>
-          </div>
-        `).join("")}
-      </div>
+    <div class="h2">Избранное</div>
+    <div class="list">
+      ${items.map(p => `
+        <div class="item" data-id="${p.id}">
+          <div class="title">${p.name}</div>
+          <div class="meta">${money(p.price)} · ${p.product_type}</div>
+        </div>
+      `).join("")}
     </div>
   `;
 
   view.querySelectorAll("[data-id]").forEach(el => {
     el.onclick = () => openPage(() => renderProduct(el.dataset.id));
   });
-
-  syncNav();
 }
 
-// =====================
-// Инфо / отзывы / примеры
-// =====================
 function renderInfo(){
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">Важная информация</div>
-      <div class="small">
-        💳 Заказ собирается после <b>100% предоплаты</b>. Оплата на карту Т-Банка.<br><br>
-
-        ⏳ Сборка и отправка — <b>4–5 дней</b>.<br>
-        🚚 Доставка — <b>5–15 дней</b> (в зависимости от города).<br><br>
-
-        📦 Доставка через Яндекс Доставку:<br>
-        — ПВЗ Яндекс<br>
-        — 5post в «Пятёрочке»<br><br>
-
-        💰 Стоимость доставки рассчитывается при оформлении.<br>
-        ⏳ Хранение в ПВЗ — <b>6 дней</b>.<br><br>
-
-        ❌ Возврат невозможен (изготовление под заказ).<br><br>
-
-        🖨 Печать струйная — цвета могут немного отличаться от экрана.<br>
-        ✂️ Наклейки нужно вырезать самостоятельно.<br><br>
-
-        Индивидуальный заказ: <b>@LesPaw_manager</b>
-      </div>
+    <div class="h2">Важная информация</div>
+    <div class="small">
+      💳 Заказ собирается после <b>100% предоплаты</b>. Оплата на карту Т-Банка.<br><br>
+      ⏳ Сборка и отправка — <b>4–5 дней</b>.<br>
+      🚚 Доставка — <b>5–15 дней</b> (по городу).<br><br>
+      📦 Доставка: Яндекс (ПВЗ) / 5post («Пятёрочка»).<br>
+      ⏳ Хранение в ПВЗ — <b>6 дней</b>.<br><br>
+      ❌ Возврат невозможен (под заказ).<br><br>
+      🖨 Печать струйная — цвета могут отличаться от экрана.<br>
+      ✂️ Наклейки нужно вырезать самостоятельно.
     </div>
   `;
-  syncNav();
 }
 
 function renderReviews(){
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">Отзывы</div>
-      <div class="small">Откроется пост с отзывами в Telegram.</div>
-      <hr>
-      <button class="btn" id="openReviews">Открыть отзывы</button>
-    </div>
+    <div class="h2">Отзывы</div>
+    <div class="small">Откроется пост с отзывами в Telegram.</div>
+    <hr>
+    <button class="btn" id="openReviews">Открыть отзывы</button>
   `;
   document.getElementById("openReviews").onclick = () => tg?.openTelegramLink("https://t.me/LesPaw/114");
-  syncNav();
 }
 
 function openExamples(){
@@ -810,9 +728,7 @@ function openExamples(){
   tg?.openTelegramLink(url);
 }
 
-// =====================
-// Поиск (только сверху)
-// =====================
+// Поиск ТОЛЬКО сверху: фандомы + товары (по названию/описанию/тегам/типу)
 function renderSearch(q){
   const query = (q||"").toLowerCase().trim();
 
@@ -830,35 +746,35 @@ function renderSearch(q){
     .slice(0, 30);
 
   view.innerHTML = `
-    <div class="card">
-      <div class="h2">Поиск: “${q}”</div>
+    <div class="h2">Поиск: “${q}”</div>
 
-      <div class="small"><b>Фандомы</b></div>
-      <div class="list">
-        ${fHits.length ? fHits.map(f => `
-          <div class="item" data-fid="${f.fandom_id}">
-            <div class="title">${f.fandom_name}</div>
-            <div class="meta">${f.fandom_type}</div>
-          </div>
-        `).join("") : `<div class="small">Ничего не найдено</div>`}
-      </div>
+    <div class="small"><b>Фандомы</b></div>
+    <div class="list">
+      ${fHits.length ? fHits.map(f => `
+        <div class="item" data-fid="${f.fandom_id}">
+          <div class="title">${f.fandom_name}</div>
+          <div class="meta">${f.fandom_type}</div>
+        </div>
+      `).join("") : `<div class="small">Ничего не найдено</div>`}
+    </div>
 
-      <hr>
+    <hr>
 
-      <div class="small"><b>Товары</b></div>
-      <div class="list">
-        ${pHits.length ? pHits.map(p => `
-          <div class="item" data-pid="${p.id}">
-            <div class="title">${p.name}</div>
-            <div class="meta">${money(p.price)} · ${p.product_type}</div>
-          </div>
-        `).join("") : `<div class="small">Ничего не найдено</div>`}
-      </div>
+    <div class="small"><b>Товары</b></div>
+    <div class="list">
+      ${pHits.length ? pHits.map(p => `
+        <div class="item" data-pid="${p.id}">
+          <div class="title">${p.name}</div>
+          <div class="meta">${money(p.price)} · ${p.product_type}</div>
+        </div>
+      `).join("") : `<div class="small">Ничего не найдено</div>`}
     </div>
   `;
 
-  view.querySelectorAll("[data-fid]").forEach(el => el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid)));
-  view.querySelectorAll("[data-pid]").forEach(el => el.onclick = () => openPage(() => renderProduct(el.dataset.pid)));
-
-  syncNav();
+  view.querySelectorAll("[data-fid]").forEach(el => {
+    el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid));
+  });
+  view.querySelectorAll("[data-pid]").forEach(el => {
+    el.onclick = () => openPage(() => renderProduct(el.dataset.pid));
+  });
 }
