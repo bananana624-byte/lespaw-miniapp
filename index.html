@@ -5,7 +5,290 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#120020" />
   <title>LesPaw · Фандомная Атрибутика</title>
-  <link rel="stylesheet" href="./styles.css" />
+
+  <style>
+    :root{
+      --bg1:#0b0016;
+      --bg3:#2a0a4f;
+
+      --card:#f3efe9;
+      --cardText:#111;
+      --muted:#5b49c9;
+
+      --navBtn:#f3efe9;
+      --navIcon:#1a0030;
+
+      --radius2:26px;
+      --shadow: 0 10px 26px rgba(0,0,0,.38);
+    }
+
+    *{ box-sizing:border-box; }
+    html, body { height:100%; }
+
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", sans-serif;
+      color:#fff;
+      background:
+        radial-gradient(1200px 600px at 35% -10%, rgba(200,120,255,.42), transparent 55%),
+        radial-gradient(900px 600px at 110% 55%, rgba(120,200,255,.22), transparent 55%),
+        linear-gradient(180deg, var(--bg3), var(--bg1));
+      overflow-x:hidden;
+    }
+
+    .app{
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      padding: 22px 18px 110px;
+      position:relative;
+    }
+
+    .bg-glow{
+      position:absolute;
+      inset:-40px;
+      background:
+        radial-gradient(520px 220px at 50% 10%, rgba(255,255,255,.18), transparent 60%),
+        radial-gradient(560px 260px at 50% 18%, rgba(170,110,255,.25), transparent 70%);
+      pointer-events:none;
+      filter: blur(2px);
+      opacity:.9;
+    }
+
+    .top{ position:relative; z-index:2; }
+
+    .title{
+      margin: 0 0 14px;
+      font-weight: 900;
+      letter-spacing: .3px;
+      line-height: 1.1;
+      text-shadow: 0 2px 14px rgba(0,0,0,.45);
+      font-size: clamp(18px, 4.7vw, 30px);
+      display:flex;
+      align-items:baseline;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .title .brand{ color:#fff; }
+    .title .dot{ opacity:.9; }
+    .title .subbrand{ color: rgba(255,255,255,.92); font-weight: 800; }
+
+    .search{
+      width:100%;
+      background: rgba(10,0,22,.65);
+      border: 1px solid rgba(255,255,255,.20);
+      border-radius: 18px;
+      padding: 10px 12px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 0 22px rgba(180,120,255,.30);
+    }
+
+    .search input{
+      flex:1;
+      border:none;
+      outline:none;
+      background:transparent;
+      color:#fff;
+      font-size: 16px;
+      padding: 2px 4px;
+    }
+    .search input::placeholder{ color: rgba(255,255,255,.62); }
+
+    .searchBtn{
+      width:40px;
+      height:40px;
+      display:grid;
+      place-items:center;
+      border:none;
+      outline:none;
+      cursor:pointer;
+      border-radius: 14px;
+      background: rgba(255,255,255,.10);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .searchBtn svg{ fill:#fff; opacity:.92; }
+    .searchBtn:active{ transform: translateY(1px); }
+
+    .main{
+      position:relative;
+      z-index:2;
+      margin-top: 16px;
+      flex:1;
+    }
+
+    .cards{
+      display:flex;
+      flex-direction:column;
+      gap: 18px;
+    }
+
+    .card{
+      appearance:none;
+      border: none;
+      width:100%;
+      text-align:left;
+      background: var(--card);
+      border-radius: var(--radius2);
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow), 0 0 22px rgba(180,120,255,.26);
+      cursor:pointer;
+      position:relative;
+    }
+
+    .card::before{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      border-radius: calc(var(--radius2) + 2px);
+      background: radial-gradient(100% 120% at 40% 0%, rgba(255,255,255,.55), transparent 55%);
+      opacity:.25;
+      pointer-events:none;
+    }
+
+    .cardTitle{
+      color: var(--cardText);
+      font-weight: 900;
+      letter-spacing: .6px;
+      font-size: 26px;
+      line-height: 1.02;
+      text-transform: uppercase;
+    }
+
+    .cardSubtitle{
+      margin-top: 6px;
+      color: var(--muted);
+      font-weight: 800;
+      letter-spacing: .3px;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    .card:active{ transform: translateY(1px); }
+
+    .decor{
+      position:absolute;
+      right: -10px;
+      bottom: 70px;
+      width: 260px;
+      height: 260px;
+      pointer-events:none;
+      opacity: .98;
+    }
+
+    .foxWrap{
+      position:absolute;
+      right: 0;
+      bottom: 0;
+      width: 240px;
+      height: 240px;
+      filter: drop-shadow(0 10px 26px rgba(0,0,0,.38));
+    }
+
+    .fox{ width:100%; height:100%; }
+
+    .hearts{
+      position:absolute;
+      right: 70px;
+      bottom: 180px;
+      width: 160px;
+      height: 110px;
+    }
+
+    .heart, .spark{
+      position:absolute;
+      filter: drop-shadow(0 8px 14px rgba(0,0,0,.35));
+      opacity:.95;
+    }
+
+    .heart{ font-size: 26px; }
+    .h1{ right: 0; top: 6px; transform: rotate(12deg); }
+    .h2{ right: 42px; top: 34px; transform: rotate(-8deg); font-size: 30px; }
+    .h3{ right: 16px; top: 58px; transform: rotate(8deg); font-size: 22px; opacity:.85; }
+
+    .spark{ font-size: 16px; opacity:.75; }
+    .s1{ right: 26px; top: 20px; }
+    .s2{ right: 78px; top: 64px; }
+
+    .bottomNav{
+      position: fixed;
+      left: 18px;
+      right: 18px;
+      bottom: max(18px, env(safe-area-inset-bottom));
+      display:flex;
+      justify-content: space-between;
+      gap: 18px;
+      z-index: 5;
+    }
+
+    .navBtn{
+      flex: 1;
+      height: 72px;
+      border: none;
+      border-radius: 22px;
+      background: var(--navBtn);
+      box-shadow: var(--shadow), 0 0 18px rgba(180,120,255,.26);
+      display:grid;
+      place-items:center;
+      position:relative;
+      cursor:pointer;
+    }
+
+    .navBtn svg{ fill: var(--navIcon); }
+    .navBtn:active{ transform: translateY(1px); }
+
+    .badge{
+      position:absolute;
+      top: 10px;
+      right: 12px;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 7px;
+      border-radius: 999px;
+      display:grid;
+      place-items:center;
+      font-size: 12px;
+      font-weight: 900;
+      color:#fff;
+      background: #b977ff;
+      box-shadow: 0 0 14px rgba(185,119,255,.85);
+    }
+
+    .badge.glow{
+      box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 0 18px rgba(185,119,255,.95);
+    }
+
+    .toast{
+      position: fixed;
+      left: 18px;
+      right: 18px;
+      bottom: calc(110px + env(safe-area-inset-bottom));
+      z-index: 6;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(10,0,22,.78);
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: 0 10px 26px rgba(0,0,0,.42), 0 0 18px rgba(180,120,255,.24);
+      backdrop-filter: blur(8px);
+      transform: translateY(12px);
+      opacity: 0;
+      pointer-events:none;
+      transition: opacity .18s ease, transform .18s ease;
+      font-weight: 700;
+    }
+
+    .toast.show{
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 360px){
+      .cardTitle{ font-size: 22px; }
+      .navBtn{ height: 64px; }
+      .decor{ width: 230px; height: 230px; }
+    }
+  </style>
 </head>
 
 <body>
@@ -20,13 +303,7 @@
       </h1>
 
       <div class="search" role="search" aria-label="Поиск">
-        <input
-          id="globalSearch"
-          type="search"
-          placeholder="Поиск по фандомам и товарам…"
-          autocomplete="off"
-          inputmode="search"
-        />
+        <input id="globalSearch" type="search" placeholder="Поиск по фандомам и товарам…" autocomplete="off" />
         <button id="searchBtn" class="searchBtn" type="button" aria-label="Искать">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
             <path d="M10.5 3a7.5 7.5 0 1 1 4.64 13.4l3.23 3.23a1 1 0 0 1-1.41 1.41l-3.23-3.23A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"></path>
@@ -58,7 +335,6 @@
         </button>
       </section>
 
-      <!-- Декор (лиса + сердечки) -->
       <aside class="decor" aria-hidden="true">
         <div class="hearts">
           <span class="heart h1">💜</span>
@@ -82,21 +358,15 @@
 
             <g filter="url(#glowFilter)">
               <path d="M52 110c0-52 38-88 88-88s88 36 88 88-38 96-88 96-88-44-88-96Z" fill="#2a1b2f"></path>
-
               <path d="M70 40l38 28-48 36Z" fill="#ff9f43"></path>
               <path d="M210 40l-38 28 48 36Z" fill="#ff9f43"></path>
-
               <path d="M82 54l20 14-24 18Z" fill="#ffe7d0" opacity="0.95"></path>
               <path d="M198 54l-20 14 24 18Z" fill="#ffe7d0" opacity="0.95"></path>
-
               <path d="M86 118c6 40 30 64 54 70 24-6 48-30 54-70-12-12-30-20-54-20s-42 8-54 20Z" fill="#ffe7d0"></path>
-
               <path d="M108 120c0 10-8 18-18 18s-18-8-18-18 8-18 18-18 18 8 18 18Z" fill="#2a1b2f"></path>
               <path d="M208 120c0 10-8 18-18 18s-18-8-18-18 8-18 18-18 18 8 18 18Z" fill="#2a1b2f"></path>
-
               <ellipse cx="92" cy="158" rx="16" ry="10" fill="#ff7dbb" opacity="0.55"></ellipse>
               <ellipse cx="188" cy="158" rx="16" ry="10" fill="#ff7dbb" opacity="0.55"></ellipse>
-
               <path d="M136 150c0 6-6 10-12 10s-12-4-12-10 6-10 12-10 12 4 12 10Z" fill="#2a1b2f"></path>
               <path d="M124 166c6 10 22 10 28 0" stroke="#2a1b2f" stroke-width="6" stroke-linecap="round" fill="none"></path>
             </g>
@@ -135,6 +405,144 @@
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
 
-  <script src="./app.js"></script>
+  <script>
+    (function () {
+      var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+      try {
+        if (tg && typeof tg.ready === "function") tg.ready();
+        if (tg && typeof tg.expand === "function") tg.expand();
+      } catch (e) {}
+
+      function $(sel) { return document.querySelector(sel); }
+      var toastEl = $("#toast");
+      var searchInput = $("#globalSearch");
+      var searchBtn = $("#searchBtn");
+
+      var favBadge = $("#favBadge");
+      var cartBadge = $("#cartBadge");
+
+      function toInt(v) {
+        var n = parseInt(v, 10);
+        return isNaN(n) ? 0 : n;
+      }
+
+      var state = {
+        favCount: toInt(localStorage.getItem("lespaw_fav")),
+        cartCount: toInt(localStorage.getItem("lespaw_cart"))
+      };
+
+      function setBadge(el, count) {
+        if (!el) return;
+        if (!count) {
+          el.hidden = true;
+          el.textContent = "0";
+          el.classList.remove("glow");
+          return;
+        }
+        el.hidden = false;
+        el.textContent = String(count);
+        el.classList.add("glow");
+      }
+
+      function saveState() {
+        localStorage.setItem("lespaw_fav", String(state.favCount));
+        localStorage.setItem("lespaw_cart", String(state.cartCount));
+      }
+
+      function toast(msg) {
+        if (!toastEl) return;
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        if (toastEl._t) clearTimeout(toastEl._t);
+        toastEl._t = setTimeout(function () {
+          toastEl.classList.remove("show");
+        }, 1600);
+      }
+
+      setBadge(favBadge, state.favCount);
+      setBadge(cartBadge, state.cartCount);
+
+      function go(action) {
+        var map = {
+          categories: "Открываю «Категории»…",
+          lamination: "Открываю «Примеры ламинации и плёнки»…",
+          reviews: "Открываю «Отзывы»…",
+          info: "Открываю «Важная информация»…",
+          fav: "Открываю «Избранное»…",
+          cart: "Открываю «Корзина»…"
+        };
+        toast(map[action] || "Открываю…");
+      }
+
+      var cards = document.querySelectorAll(".card");
+      for (var i = 0; i < cards.length; i++) {
+        (function (btn) {
+          btn.addEventListener("click", function () {
+            go(btn.getAttribute("data-action"));
+          });
+        })(cards[i]);
+      }
+
+      var btnBack = $("#btnBack");
+      var btnFav = $("#btnFav");
+      var btnCart = $("#btnCart");
+
+      if (btnBack) {
+        btnBack.addEventListener("click", function () {
+          if (window.history && window.history.length > 1) window.history.back();
+          else if (tg && typeof tg.close === "function") tg.close();
+        });
+      }
+      if (btnFav) btnFav.addEventListener("click", function () { go("fav"); });
+      if (btnCart) btnCart.addEventListener("click", function () { go("cart"); });
+
+      function runSearch() {
+        var q = searchInput ? String(searchInput.value || "").trim() : "";
+        if (!q) return toast("Введите запрос для поиска");
+        toast("Ищу: «" + q + "»");
+      }
+
+      if (searchBtn) searchBtn.addEventListener("click", runSearch);
+      if (searchInput) {
+        searchInput.addEventListener("keydown", function (e) {
+          if (e && e.key === "Enter") runSearch();
+        });
+      }
+
+      // DEV long-press для теста бейджей (можешь удалить)
+      var pressTimer = null;
+      function attachLongPress(el, onLong) {
+        if (!el) return;
+
+        function start() {
+          if (pressTimer) clearTimeout(pressTimer);
+          pressTimer = setTimeout(function () { onLong(); }, 420);
+        }
+        function cancel() {
+          if (pressTimer) clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+
+        el.addEventListener("pointerdown", start);
+        el.addEventListener("pointerup", cancel);
+        el.addEventListener("pointercancel", cancel);
+        el.addEventListener("pointerleave", cancel);
+      }
+
+      attachLongPress(btnFav, function () {
+        state.favCount = (state.favCount + 1) % 10;
+        setBadge(favBadge, state.favCount);
+        saveState();
+        toast("Тест: избранное +1");
+      });
+
+      attachLongPress(btnCart, function () {
+        state.cartCount = (state.cartCount + 1) % 10;
+        setBadge(cartBadge, state.cartCount);
+        saveState();
+        toast("Тест: корзина +1");
+      });
+    })();
+  </script>
 </body>
 </html>
