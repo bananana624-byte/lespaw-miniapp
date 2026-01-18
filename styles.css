@@ -1,11 +1,11 @@
 :root{
   --bg: #070812;
-  --glass: rgba(255,255,255,.07);
-  --glass2: rgba(255,255,255,.045);
-  --border: rgba(255,255,255,.14);
+  --glass: rgba(255,255,255,.09);
+  --glass2: rgba(255,255,255,.055);
+  --border: rgba(255,255,255,.16);
 
   --text: #F4F2FF;
-  --muted: rgba(244,242,255,.70);
+  --muted: rgba(244,242,255,.72);
 
   --accent: #B86BFF;     /* фиолетовый неон */
   --accent2:#63E6FF;     /* голубой неон */
@@ -28,16 +28,16 @@ body{
     linear-gradient(180deg, #050612, var(--bg));
 }
 
+/* верх — компактный */
 .top{
   position: sticky;
   top: 0;
   z-index: 20;
   display:flex;
   align-items:center;
-  gap:10px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   backdrop-filter: blur(12px);
-  background: rgba(7,8,18,.70);
+  background: rgba(7,8,18,.78);
   border-bottom: 1px solid var(--border);
 }
 
@@ -49,13 +49,6 @@ body{
   letter-spacing: .3px;
   line-height: 1.05;
 }
-.brand::before{
-  content:"🪐";
-  position:absolute;
-  left:14px;
-  top:10px;
-  opacity:.0; /* просто чтобы не мешало, можно убрать */
-}
 .brand .sub{
   font-size: 12px;
   font-weight: 700;
@@ -63,12 +56,10 @@ body{
   opacity: .95;
 }
 
-.top-spacer{flex:1}
-
 .wrap{
   max-width: 920px;
   margin: 0 auto;
-  padding: 14px;
+  padding: 12px 14px 86px; /* место под нижнюю навигацию */
   display:grid;
   gap: 12px;
 }
@@ -80,6 +71,8 @@ body{
   box-shadow: var(--shadow);
   padding: 14px;
 }
+
+.card-compact{ padding: 12px; }
 
 .h2{
   margin: 0 0 8px;
@@ -100,13 +93,14 @@ hr{
 }
 
 .row{display:flex; gap:10px; flex-wrap:wrap;}
+.row-compact{ gap: 8px; }
 .list{display:grid; gap:10px;}
 
 .input{
   width:100%;
-  padding: 12px 12px;
+  padding: 11px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.16);
+  border: 1px solid rgba(255,255,255,.18);
   background: rgba(8,9,18,.55);
   color: var(--text);
   outline: none;
@@ -119,12 +113,17 @@ hr{
 .btn{
   padding: 11px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.16);
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+  border: 1px solid rgba(255,255,255,.18);
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
   color: var(--text);
   cursor:pointer;
   transition: transform .06s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
   user-select:none;
+}
+.btn-compact{
+  padding: 9px 10px;
+  border-radius: 13px;
+  font-size: 13px;
 }
 
 /* ярко “горит” при нажатии */
@@ -146,7 +145,7 @@ hr{
   background:
     radial-gradient(140px 70px at 30% 20%, rgba(99,230,255,.22), transparent 60%),
     radial-gradient(160px 80px at 70% 80%, rgba(184,107,255,.22), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05));
+    linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
 }
 
 .item{
@@ -173,15 +172,12 @@ hr{
 }
 
 /* ==========================
-   Мини-карточки товаров (внутри фандома)
+   Мини-карточки товаров (2 в ряд)
    ========================== */
 .prod-grid{
   display:grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-}
-@media (min-width: 740px){
-  .prod-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .prod-card{
@@ -193,7 +189,6 @@ hr{
   transition: transform .06s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
   display:flex;
   flex-direction: column;
-  min-height: 210px;
 }
 
 .prod-card:hover{
@@ -210,9 +205,10 @@ hr{
   filter: brightness(1.04);
 }
 
+/* ключ: делаем превью НЕ гигантским */
 .prod-img{
   width:100%;
-  aspect-ratio: 1 / 1;
+  height: 128px;
   object-fit: cover;
   display:block;
   background: rgba(255,255,255,.04);
@@ -223,27 +219,108 @@ hr{
   display:flex;
   flex-direction: column;
   gap: 6px;
-  flex:1;
 }
 
 .prod-title{
   font-weight: 900;
   line-height: 1.15;
   font-size: 14px;
+  max-height: 2.4em;
+  overflow:hidden;
 }
 
 .prod-meta{
   color: var(--muted);
   font-size: 12.5px;
   line-height: 1.25;
-  margin-top:auto;
+}
+
+/* ==========================
+   Нижняя нав-плашка
+   ========================== */
+.bottom-nav{
+  position: fixed;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: min(920px, calc(100vw - 28px));
+  display:flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(7,8,18,.76);
+  border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+  z-index: 50;
+}
+
+.nav-btn{
+  position: relative;
+  flex: 1;
+  height: 46px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+  color: var(--text);
+  cursor: pointer;
+  transition: transform .06s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  user-select:none;
+}
+
+.nav-btn:active{
+  transform: scale(.985);
+  border-color: rgba(99,230,255,.50);
+  box-shadow:
+    0 0 0 3px rgba(99,230,255,.14),
+    0 0 18px rgba(184,107,255,.22);
+  filter: brightness(1.08);
+}
+
+.nav-btn.is-disabled{
+  opacity: .45;
+  cursor: default;
+}
+
+.nav-ico{
+  font-size: 18px;
+  line-height: 1;
+}
+
+.badge{
+  position:absolute;
+  top: 6px;
+  right: 10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 12px;
+  font-weight: 900;
+  background: rgba(184,107,255,.22);
+  border: 1px solid rgba(184,107,255,.45);
+  color: var(--text);
+}
+
+/* glow когда есть значение */
+.badge.glow{
+  box-shadow:
+    0 0 0 3px rgba(184,107,255,.12),
+    0 0 18px rgba(184,107,255,.28);
 }
 
 /* тосты */
 .toast{
   position: fixed;
   left: 50%;
-  bottom: 18px;
+  bottom: 78px; /* чтобы не перекрывала нижняя панель */
   transform: translateX(-50%);
   background: rgba(10,10,20,.92);
   border: 1px solid rgba(255,255,255,.18);
