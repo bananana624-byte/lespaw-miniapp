@@ -2,70 +2,216 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LesPaw Shop</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>LesPaw • Фандомная Атрибутика</title>
+
   <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
-  <header class="top">
-    <!-- кнопка назад теперь внизу, тут оставляем только бренд -->
-    <div class="brand">
-      LesPaw
-      <span class="sub">фандомная атрибутика • тёплая стая</span>
+  <div id="app" class="app">
+
+    <!-- TOP / STICKY -->
+    <div class="topbar">
+      <div class="app-title">LesPaw • Фандомная Атрибутика</div>
+      <div class="subtitle">тёплая стая · неон · луна · космос</div>
+
+      <div class="search">
+        <input id="searchInput" class="search-input" type="search" placeholder="Поиск по товарам…" autocomplete="off" />
+        <button id="infoBtn" class="icon-btn" title="Информация" aria-label="Информация">i</button>
+      </div>
+
+      <div class="section" style="margin-top:12px;">
+        <div class="chips" id="categoryChips"></div>
+      </div>
     </div>
 
-    <div class="top-spacer"></div>
-  </header>
+    <!-- MAIN CONTENT -->
+    <main id="mainView">
 
-  <main class="wrap">
-    <section class="card">
-      <input id="globalSearch" class="input" placeholder="Поиск по фандомам и товарам…" />
-      <div class="row">
-        <button id="btnCategories" class="btn">Категории</button>
-        <button id="btnInfo" class="btn">Важная инфо</button>
-        <button id="btnReviews" class="btn">Отзывы</button>
-        <button id="btnExamples" class="btn">Примеры покрытий</button>
-      </div>
-    </section>
+      <!-- Home -->
+      <section id="viewHome" class="fade-in">
+        <div class="panel compact">
+          <div class="section-title">Как заказать</div>
+          <div class="small">
+            1) выбери товар → 2) выбери ламинацию/плёнку → 3) оформи заказ (уйдёт менеджерке автоматически)
+          </div>
+        </div>
 
-    <section id="view" class="card"></section>
-  </main>
+        <div class="section">
+          <div class="section-title" id="homeTitle">Товары</div>
+          <div id="productGrid" class="product-grid"></div>
+        </div>
+      </section>
 
-  <!-- Нижняя навигация (иконки без текста) -->
-  <nav class="bottom-nav" aria-label="Навигация">
-    <button class="nav-btn" id="navBack" aria-label="Назад" title="Назад">
-      <span class="nav-ico" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
+      <!-- Product -->
+      <section id="viewProduct" class="hidden fade-in">
+        <div class="hero product-hero">
+          <img id="productImage" src="" alt="" />
+        </div>
+
+        <div class="details-card product-sheet">
+          <div class="details-header product-header">
+            <div>
+              <h1 class="details-title" id="productName">—</h1>
+              <div class="small" id="productCategory">—</div>
+            </div>
+            <div class="details-price" id="productPrice">—</div>
+          </div>
+
+          <div id="productTags" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+
+          <div class="divider"></div>
+
+          <div class="section-title">Характеристики</div>
+          <ul id="productSpecs" class="characteristics"></ul>
+
+          <div id="productOptions"></div>
+
+          <div id="productNote" class="note">
+            Струйная печать, цвета могут незначительно отличаться от экрана.
+          </div>
+
+          <div class="button-row product-actions">
+            <button id="btnFav" class="btn-secondary">☆ В избранное</button>
+            <button id="btnCart" class="btn-primary">Добавить в корзину</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Favorites -->
+      <section id="viewFav" class="hidden fade-in">
+        <div class="section">
+          <div class="section-title">Избранное</div>
+          <div id="favList" class="list"></div>
+        </div>
+      </section>
+
+      <!-- Cart -->
+      <section id="viewCart" class="hidden fade-in">
+        <div class="section">
+          <div class="section-title">Корзина</div>
+          <div id="cartList" class="list"></div>
+        </div>
+
+        <div class="panel" style="margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+            <div>
+              <div class="small">Итого</div>
+              <div style="font-weight:900; font-size:18px;" id="cartTotal">0 ₽</div>
+            </div>
+            <button id="goCheckout" class="btn-primary" style="min-width: 170px;">Оформить</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Checkout -->
+      <section id="viewCheckout" class="hidden fade-in">
+        <div class="section">
+          <div class="section-title">Оформление заказа</div>
+
+          <div class="panel compact">
+            <div class="small">
+              Заказ уйдёт менеджерке <b>@LesPaw_manager</b> с предзаполненным текстом (без возможности редактирования).
+            </div>
+          </div>
+
+          <div class="form checkout-form">
+            <div class="field">
+              <label for="buyerName">Имя</label>
+              <input id="buyerName" type="text" placeholder="Как к тебе обращаться?" />
+            </div>
+
+            <div class="field">
+              <label for="buyerContact">Контакт (TG / @username)</label>
+              <input id="buyerContact" type="text" placeholder="@username" />
+            </div>
+
+            <div class="field">
+              <label for="buyerCity">Город</label>
+              <input id="buyerCity" type="text" placeholder="Например, Санкт-Петербург" />
+            </div>
+
+            <div class="field">
+              <label for="buyerDelivery">Доставка</label>
+              <select id="buyerDelivery">
+                <option value="Почта">Почта</option>
+                <option value="СДЭК">СДЭК</option>
+                <option value="Самовывоз">Самовывоз (если возможно)</option>
+              </select>
+            </div>
+
+            <div class="checkbox-row" id="confirmRow">
+              <input id="confirmCheck" type="checkbox" />
+              <div class="small">
+                Я проверила корзину и подтверждаю заказ. <br/>
+                <span class="muted">Без этой галочки кнопка отправки будет недоступна.</span>
+              </div>
+            </div>
+
+            <button id="sendOrderBtn" class="btn-primary" disabled>Отправить заказ менеджерке</button>
+
+            <button id="backToCartBtn" class="btn-secondary">← Вернуться в корзину</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Info modal (simple sheet) -->
+      <section id="viewInfo" class="hidden fade-in">
+        <div class="panel">
+          <div class="section-title">Важная информация</div>
+          <ul class="characteristics">
+            <li><strong>Печать</strong><span>струйная</span></li>
+            <li><strong>Цвет</strong><span>может отличаться от экрана</span></li>
+            <li><strong>Варианты</strong><span>ламинaция/плёнка обязательны</span></li>
+          </ul>
+          <div class="button-row single" style="margin-top:12px;">
+            <button id="closeInfoBtn" class="btn-primary">Понятно</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav" id="bottomNav" aria-label="Навигация">
+    <button id="navBack" title="Назад" aria-label="Назад">
+      <!-- back icon -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M14.5 5L8 12l6.5 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </button>
 
-    <button class="nav-btn" id="navFav" aria-label="Избранное" title="Избранное">
-      <span class="nav-ico" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M12 21s-7-4.6-9.2-9C1 8 3.2 5.5 6 5.5c1.7 0 3.2 1 4 2.1.8-1.1 2.3-2.1 4-2.1 2.8 0 5 2.5 3.2 6.5C19 16.4 12 21 12 21z"
-                stroke="currentColor" stroke-width="2.0" stroke-linejoin="round"/>
-        </svg>
-      </span>
-      <span class="badge" id="favCount" style="display:none">0</span>
+    <button id="navFav" title="Избранное" aria-label="Избранное">
+      <span id="favBadge" class="badge-count hidden">0</span>
+      <!-- heart icon -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 21s-7-4.6-9.3-8.8C.9 8.7 3.2 5.8 6.3 5.4c1.8-.2 3.3.6 4.2 1.8.9-1.2 2.4-2 4.2-1.8 3.1.4 5.4 3.3 3.6 6.8C19 16.4 12 21 12 21z"
+              stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
     </button>
 
-    <button class="nav-btn" id="navCart" aria-label="Корзина" title="Корзина">
-      <span class="nav-ico" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M6.5 6h15l-1.4 7.5H8.2L6.5 6z" stroke="currentColor" stroke-width="2.0" stroke-linejoin="round"/>
-          <path d="M6.5 6L5.7 3.8H3" stroke="currentColor" stroke-width="2.0" stroke-linecap="round"/>
-          <path d="M9 20a1 1 0 100-2 1 1 0 000 2zM18 20a1 1 0 100-2 1 1 0 000 2z" fill="currentColor"/>
-        </svg>
-      </span>
-      <span class="badge" id="cartCount" style="display:none">0</span>
+    <button id="navCart" title="Корзина" aria-label="Корзина">
+      <span id="cartBadge" class="badge-count hidden">0</span>
+      <!-- cart icon -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6.5 6h15l-1.5 8.5H8.2L6.5 6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M6.5 6L5.7 3.5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
+              stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
     </button>
   </nav>
 
-  <!-- cache-bust: можно менять v при необходимости -->
-  <script src="app.js?v=14"></script>
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Telegram WebApp (optional) -->
+  <script>
+    // Safe init for Telegram
+    window.TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    try { window.TG && window.TG.ready(); } catch(e) {}
+  </script>
+
+  <script src="app.js"></script>
 </body>
 </html>
