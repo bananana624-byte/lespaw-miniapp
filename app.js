@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js (современный UI + рабочие кнопки + мини-карточки 2 в ряд)
+// LesPaw Mini App — app.js (твоя база + мини-товары в фандоме + рабочая нижняя навигация)
 
 // =====================
 // НАСТРОЙКИ (твои CSV)
@@ -27,12 +27,14 @@ tg?.expand();
 // =====================
 const view = document.getElementById("view");
 
+// Нижняя навигация
 const navBack = document.getElementById("navBack");
-const navFav  = document.getElementById("navFav");
+const navFav = document.getElementById("navFav");
 const navCart = document.getElementById("navCart");
-const favCountEl  = document.getElementById("favCount");
+const favCountEl = document.getElementById("favCount");
 const cartCountEl = document.getElementById("cartCount");
 
+// Верхнее меню
 const btnCategories = document.getElementById("btnCategories");
 const btnInfo = document.getElementById("btnInfo");
 const btnReviews = document.getElementById("btnReviews");
@@ -79,14 +81,13 @@ function toast(msg, kind = "") {
 }
 
 // =====================
-// Navigation
+// Navigation (страницы + назад снизу)
 // =====================
 let navStack = [];
 let currentPageFn = null;
 
 function syncBackButton() {
-  const disabled = navStack.length === 0;
-  navBack.disabled = disabled;
+  navBack.disabled = navStack.length === 0;
 }
 
 function openPage(renderFn) {
@@ -236,15 +237,16 @@ async function init(){
     updateFavBadge();
     syncBackButton();
 
-    // НАВИГАЦИЯ — через addEventListener (чтобы точно работало)
+    // нижняя навигация
     navBack.addEventListener("click", goBack);
     navCart.addEventListener("click", () => openPage(renderCart));
     navFav.addEventListener("click", () => openPage(renderFavorites));
 
-    btnCategories.addEventListener("click", goHome);
+    // верхнее меню
+    btnCategories.addEventListener("click", () => goHome());
     btnInfo.addEventListener("click", () => openPage(renderInfo));
     btnReviews.addEventListener("click", () => openPage(renderReviews));
-    btnExamples.addEventListener("click", openExamples);
+    btnExamples.addEventListener("click", () => openExamples());
 
     globalSearch.addEventListener("input", (e) => {
       const q = e.target.value || "";
@@ -275,11 +277,9 @@ function renderFandomTypes(){
     <div class="small">Выбери тип фандома</div>
     <hr>
     <div class="list">
-      ${FANDOM_TYPES.map(t => `
-        <div class="item" data-type="${t}">
-          <div class="title">${t}</div>
-        </div>
-      `).join("")}
+      ${FANDOM_TYPES.map(t => `<div class="item" data-type="${t}">
+        <div class="title">${t}</div>
+      </div>`).join("")}
     </div>
   `;
 
@@ -288,6 +288,7 @@ function renderFandomTypes(){
   });
 }
 
+// Поиск внутри категории УБРАН — как ты просила
 function renderFandomList(type){
   const list = fandoms
     .filter(f => truthy(f.is_active))
@@ -301,18 +302,14 @@ function renderFandomList(type){
     <div class="h2">${type}</div>
     <div class="small">Выбери фандом</div>
     <hr>
-    <div class="list">
-      ${letters.map(f => `
-        <div class="item" data-id="${f.fandom_id}">
-          <div class="title">${f.fandom_name}</div>
-        </div>
-      `).join("")}
+    <div class="list" id="fandomList">
+      ${letters.map(f => `<div class="item" data-id="${f.fandom_id}">
+        <div class="title">${f.fandom_name}</div>
+      </div>`).join("")}
       ${digits.length ? `<div class="small">0–9</div>` : ""}
-      ${digits.map(f => `
-        <div class="item" data-id="${f.fandom_id}">
-          <div class="title">${f.fandom_name}</div>
-        </div>
-      `).join("")}
+      ${digits.map(f => `<div class="item" data-id="${f.fandom_id}">
+        <div class="title">${f.fandom_name}</div>
+      </div>`).join("")}
     </div>
   `;
 
@@ -483,7 +480,7 @@ function renderProduct(productId){
       view.querySelectorAll("[data-ov]").forEach(b => {
         b.addEventListener("click", () => { selOverlay = b.dataset.ov; render(); });
       });
-      document.getElementById("btnExamples2").addEventListener("click", openExamples);
+      document.getElementById("btnExamples2").addEventListener("click", () => openExamples());
     }
 
     document.getElementById("btnFav").addEventListener("click", () => {
@@ -640,7 +637,7 @@ function renderCheckout(total){
     const comment = document.getElementById("comment").value.trim();
 
     if(!agree){
-      toast("Поставь галочку и ознакомься с важной информацией 💚", "warn");
+      toast("Поставь галочку и ознакомься с важной инфо 💚", "warn");
       return;
     }
     if(!fio || !phone || !pvz){
@@ -748,6 +745,7 @@ function openExamples(){
   tg?.openTelegramLink(url);
 }
 
+// Поиск ТОЛЬКО сверху: фандомы + товары (по названию/описанию/тегам/типу)
 function renderSearch(q){
   const query = (q||"").toLowerCase().trim();
 
