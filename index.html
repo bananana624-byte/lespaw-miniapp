@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!doctype html>
 <html lang="ru">
 <head>
@@ -11,7 +10,6 @@
 
 <body>
   <div class="app">
-    <!-- Soft glow background -->
     <div class="bg-glow" aria-hidden="true"></div>
 
     <header class="top">
@@ -21,41 +19,46 @@
         <span class="subbrand">Фандомная Атрибутика</span>
       </h1>
 
-      <div class="search" role="search">
-        <input id="globalSearch" type="search" placeholder="Поиск по фандомам и товарам…" autocomplete="off" />
-        <button id="searchBtn" class="searchBtn" aria-label="Искать">
-          <!-- magnifier -->
+      <div class="search" role="search" aria-label="Поиск">
+        <input
+          id="globalSearch"
+          type="search"
+          placeholder="Поиск по фандомам и товарам…"
+          autocomplete="off"
+          inputmode="search"
+        />
+        <button id="searchBtn" class="searchBtn" type="button" aria-label="Искать">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path d="M10.5 3a7.5 7.5 0 1 1 4.64 13.4l3.23 3.23a1 1 0 0 1-1.41 1.41l-3.23-3.23A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/>
+            <path d="M10.5 3a7.5 7.5 0 1 1 4.64 13.4l3.23 3.23a1 1 0 0 1-1.41 1.41l-3.23-3.23A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"></path>
           </svg>
         </button>
       </div>
     </header>
 
     <main class="main">
-      <section class="cards" aria-label="Навигация">
-        <button class="card" data-action="categories">
+      <section class="cards" aria-label="Разделы">
+        <button class="card" type="button" data-action="categories">
           <div class="cardTitle">КАТЕГОРИИ</div>
           <div class="cardSubtitle">Выбор фандома по типу</div>
         </button>
 
-        <button class="card" data-action="lamination">
+        <button class="card" type="button" data-action="lamination">
           <div class="cardTitle">ПРИМЕРЫ ЛАМИНАЦИИ И ПЛЕНКИ</div>
           <div class="cardSubtitle">Как выглядит</div>
         </button>
 
-        <button class="card" data-action="reviews">
+        <button class="card" type="button" data-action="reviews">
           <div class="cardTitle">ОТЗЫВЫ</div>
           <div class="cardSubtitle">Отзывы от наших прекрасных покупательниц</div>
         </button>
 
-        <button class="card" data-action="info">
+        <button class="card" type="button" data-action="info">
           <div class="cardTitle">ВАЖНАЯ ИНФОРМАЦИЯ</div>
           <div class="cardSubtitle">Оплата, сроки, доставка</div>
         </button>
       </section>
 
-      <!-- Decorative fox -->
+      <!-- Декор (лиса + сердечки) -->
       <aside class="decor" aria-hidden="true">
         <div class="hearts">
           <span class="heart h1">💜</span>
@@ -65,78 +68,70 @@
           <span class="spark s2">✦</span>
         </div>
 
-        <!-- Lightweight inline SVG (no external assets) -->
         <div class="foxWrap">
-          <svg class="fox" viewBox="0 0 280 260" role="img" aria-label="">
-            <!-- glow behind -->
+          <svg class="fox" viewBox="0 0 280 260" aria-hidden="true" focusable="false">
             <defs>
-              <filter id="g" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="8" result="b"/>
+              <filter id="glowFilter" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="8" result="b"></feGaussianBlur>
                 <feMerge>
-                  <feMergeNode in="b"/>
-                  <feMergeNode in="SourceGraphic"/>
+                  <feMergeNode in="b"></feMergeNode>
+                  <feMergeNode in="SourceGraphic"></feMergeNode>
                 </feMerge>
               </filter>
             </defs>
 
-            <!-- head -->
-            <g filter="url(#g)">
-              <path d="M52 110c0-52 38-88 88-88s88 36 88 88-38 96-88 96-88-44-88-96Z" fill="#2a1b2f"/>
-              <!-- ears -->
-              <path d="M70 40l38 28-48 36Z" fill="#ff9f43"/>
-              <path d="M210 40l-38 28 48 36Z" fill="#ff9f43"/>
-              <path d="M82 54l20 14-24 18Z" fill="#ffe7d0" opacity=".95"/>
-              <path d="M198 54l-20 14 24 18Z" fill="#ffe7d0" opacity=".95"/>
+            <g filter="url(#glowFilter)">
+              <path d="M52 110c0-52 38-88 88-88s88 36 88 88-38 96-88 96-88-44-88-96Z" fill="#2a1b2f"></path>
 
-              <!-- face -->
-              <path d="M86 118c6 40 30 64 54 70 24-6 48-30 54-70-12-12-30-20-54-20s-42 8-54 20Z" fill="#ffe7d0"/>
-              <path d="M108 120c0 10-8 18-18 18s-18-8-18-18 8-18 18-18 18 8 18 18Z" fill="#2a1b2f"/>
-              <path d="M208 120c0 10-8 18-18 18s-18-8-18-18 8-18 18-18 18 8 18 18Z" fill="#2a1b2f"/>
+              <path d="M70 40l38 28-48 36Z" fill="#ff9f43"></path>
+              <path d="M210 40l-38 28 48 36Z" fill="#ff9f43"></path>
 
-              <!-- blush -->
-              <ellipse cx="92" cy="158" rx="16" ry="10" fill="#ff7dbb" opacity=".55"/>
-              <ellipse cx="188" cy="158" rx="16" ry="10" fill="#ff7dbb" opacity=".55"/>
+              <path d="M82 54l20 14-24 18Z" fill="#ffe7d0" opacity="0.95"></path>
+              <path d="M198 54l-20 14 24 18Z" fill="#ffe7d0" opacity="0.95"></path>
 
-              <!-- mouth/nose -->
-              <path d="M136 150c0 6-6 10-12 10s-12-4-12-10 6-10 12-10 12 4 12 10Z" fill="#2a1b2f"/>
-              <path d="M124 166c6 10 22 10 28 0" stroke="#2a1b2f" stroke-width="6" stroke-linecap="round" fill="none"/>
+              <path d="M86 118c6 40 30 64 54 70 24-6 48-30 54-70-12-12-30-20-54-20s-42 8-54 20Z" fill="#ffe7d0"></path>
+
+              <path d="M108 120c0 10-8 18-18 18s-18-8-18-18 8-18 18-18 18 8 18 18Z" fill="#2a1b2f"></path>
+              <path d="M208 120c0 10-8 18-18 18s-18-8-18-18 8-18 18-18 18 8 18 18Z" fill="#2a1b2f"></path>
+
+              <ellipse cx="92" cy="158" rx="16" ry="10" fill="#ff7dbb" opacity="0.55"></ellipse>
+              <ellipse cx="188" cy="158" rx="16" ry="10" fill="#ff7dbb" opacity="0.55"></ellipse>
+
+              <path d="M136 150c0 6-6 10-12 10s-12-4-12-10 6-10 12-10 12 4 12 10Z" fill="#2a1b2f"></path>
+              <path d="M124 166c6 10 22 10 28 0" stroke="#2a1b2f" stroke-width="6" stroke-linecap="round" fill="none"></path>
             </g>
 
-            <!-- heart -->
             <g transform="translate(130,165)">
-              <path d="M0 40c-18-12-40-28-40-50 0-15 12-26 27-26 8 0 14 3 19 9 5-6 11-9 19-9 15 0 27 11 27 26 0 22-22 38-40 50l-6 4-6-4Z"
-                    fill="#b977ff" />
-              <path d="M-16 -6c6-10 20-10 26-2" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity=".35"/>
+              <path d="M0 40c-18-12-40-28-40-50 0-15 12-26 27-26 8 0 14 3 19 9 5-6 11-9 19-9 15 0 27 11 27 26 0 22-22 38-40 50l-6 4-6-4Z" fill="#b977ff"></path>
+              <path d="M-16 -6c6-10 20-10 26-2" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.35"></path>
             </g>
           </svg>
         </div>
       </aside>
     </main>
 
-    <!-- Bottom navigation -->
-    <nav class="bottomNav" aria-label="Навигация">
-      <button id="btnBack" class="navBtn" aria-label="Назад">
+    <nav class="bottomNav" aria-label="Нижняя навигация">
+      <button id="btnBack" class="navBtn" type="button" aria-label="Назад">
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
-          <path d="M14.5 5.5a1 1 0 0 1 0 1.4L10.4 11l4.1 4.1a1 1 0 1 1-1.4 1.4l-4.8-4.8a1 1 0 0 1 0-1.4l4.8-4.8a1 1 0 0 1 1.4 0Z"/>
+          <path d="M14.5 5.5a1 1 0 0 1 0 1.4L10.4 11l4.1 4.1a1 1 0 1 1-1.4 1.4l-4.8-4.8a1 1 0 0 1 0-1.4l4.8-4.8a1 1 0 0 1 1.4 0Z"></path>
         </svg>
       </button>
 
-      <button id="btnFav" class="navBtn" aria-label="Избранное">
+      <button id="btnFav" class="navBtn" type="button" aria-label="Избранное">
         <span class="badge" id="favBadge" hidden>0</span>
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
-          <path d="M12 21s-7-4.6-9.4-8.7C.7 8.9 2.8 5.8 6.2 5.3c1.9-.3 3.6.6 4.6 1.8 1-1.2 2.7-2.1 4.6-1.8 3.4.5 5.5 3.6 3.6 7-2.4 4.1-9 8.7-9 8.7Z"/>
+          <path d="M12 21s-7-4.6-9.4-8.7C.7 8.9 2.8 5.8 6.2 5.3c1.9-.3 3.6.6 4.6 1.8 1-1.2 2.7-2.1 4.6-1.8 3.4.5 5.5 3.6 3.6 7-2.4 4.1-9 8.7-9 8.7Z"></path>
         </svg>
       </button>
 
-      <button id="btnCart" class="navBtn" aria-label="Корзина">
+      <button id="btnCart" class="navBtn" type="button" aria-label="Корзина">
         <span class="badge" id="cartBadge" hidden>0</span>
         <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
-          <path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM6.2 6h15.2a1 1 0 0 1 1 1.2l-1.4 7.2a2 2 0 0 1-2 1.6H8.2a2 2 0 0 1-2-1.6L4.8 3.9H2.5a1 1 0 1 1 0-2h3.1a1 1 0 0 1 1 .8L6.2 6Z"/>
+          <path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM6.2 6h15.2a1 1 0 0 1 1 1.2l-1.4 7.2a2 2 0 0 1-2 1.6H8.2a2 2 0 0 1-2-1.6L4.8 3.9H2.5a1 1 0 1 1 0-2h3.1a1 1 0 0 1 1 .8L6.2 6Z"></path>
         </svg>
       </button>
     </nav>
 
-    <!-- Toast -->
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
 
