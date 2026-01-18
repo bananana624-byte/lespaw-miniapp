@@ -7,13 +7,20 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
   <header class="top">
+    <button class="btn" id="btnBack" style="display:none">← Назад</button>
+
     <div class="brand">
-  LesPaw
-  <span>фандомная атрибутика • тёплая стая</span>
-</div>
-    <button id="btnCart" class="pill">Корзина (<span id="cartCount">0</span>)</button>
+      LesPaw
+      <span class="sub">фандомная атрибутика • тёплая стая</span>
+    </div>
+
+    <div class="top-spacer"></div>
+
+    <button class="btn" id="btnFavTop">Избранное (0)</button>
+    <button class="btn" id="btnCartTop">Корзина (<span id="cartCount">0</span>)</button>
   </header>
 
   <main class="wrap">
@@ -30,6 +37,7 @@
     <section id="view" class="card"></section>
   </main>
 
-  <script src="app.js?v=3"></script>
+  <!-- cache-bust: можно менять v при необходимости -->
+  <script src="app.js?v=10"></script>
 </body>
 </html>
