@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LesPaw Shop</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">LesPaw</div>
+    <button id="btnCart" class="pill">Корзина (<span id="cartCount">0</span>)</button>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <input id="globalSearch" class="input" placeholder="Поиск по фандомам и товарам…" />
+      <div class="row">
+        <button id="btnCategories" class="btn">Категории</button>
+        <button id="btnInfo" class="btn">Важная инфо</button>
+        <button id="btnReviews" class="btn">Отзывы</button>
+        <button id="btnExamples" class="btn">Примеры покрытий</button>
+      </div>
+    </section>
+
+    <section id="view" class="card"></section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
