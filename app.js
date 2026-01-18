@@ -5,22 +5,23 @@
    - Favorites + Cart: localStorage
    - Checkout: checkbox required + send to @LesPaw_manager with prefilled text (no edit)
    - Does NOT auto-open cart after adding
-   - Background gradient fixed in CSS
+   - Loads products from 3 Google Sheets CSV tabs
    ========================================================= */
 
 const MANAGER_USERNAME = "LesPaw_manager"; // without @
 const STORAGE_KEY = "lespaw_state_v2";
 
-/**
- * CSV source:
- * - If you already have CSV from Google Sheets on GitHub Pages, set it here.
- * - Example: "./data.csv" or "https://.../export?format=csv"
- */
-const CSV_URL = "./products.csv"; // change if needed
+/* === YOUR CSV LINKS (3 tabs) === */
+const CSV_URLS = [
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=0&single=true&output=csv",
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=636991555&single=true&output=csv",
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=2041657059&single=true&output=csv"
+];
 
 // --- DOM ---
 const el = (id) => document.getElementById(id);
 
+// Views
 const viewHome = el("viewHome");
 const viewProduct = el("viewProduct");
 const viewFav = el("viewFav");
@@ -28,11 +29,13 @@ const viewCart = el("viewCart");
 const viewCheckout = el("viewCheckout");
 const viewInfo = el("viewInfo");
 
+// Home UI
 const productGrid = el("productGrid");
 const categoryChips = el("categoryChips");
 const searchInput = el("searchInput");
 const homeTitle = el("homeTitle");
 
+// Toast
 const toastEl = el("toast");
 
 // Product page
@@ -80,16 +83,9 @@ let PRODUCTS = [];
 let currentProduct = null;
 let currentCategory = "Все";
 let currentQuery = "";
-
 let state = loadState();
 
-// state shape
-// {
-//   favorites: { [productId]: true },
-//   cart: { [key]: { productId, qty, selectedOptions } },
-//   history: [] // simple view stack
-// }
-
+// ---------- State ----------
 function defaultState() {
   return {
     favorites: {},
@@ -121,12 +117,26 @@ function saveState() {
   updateBadges();
 }
 
+// ---------- Utils ----------
 function money(n) {
   const num = Number(n) || 0;
   return `${num.toLocaleString("ru-RU")} ₽`;
 }
 
-// --- Toast ---
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(s) {
+  return escapeHtml(s);
+}
+
+// ---------- Toast ----------
 let toastTimer = null;
 function toast(msg, type = "") {
   toastEl.className = `toast ${type}`.trim();
@@ -136,12 +146,10 @@ function toast(msg, type = "") {
   toastTimer = setTimeout(() => toastEl.classList.add("hidden"), 2400);
 }
 
-// --- Routing / Views ---
+// ---------- Routing / Views ----------
 function showView(name) {
-  // Hide all
   [viewHome, viewProduct, viewFav, viewCart, viewCheckout, viewInfo].forEach(v => v.classList.add("hidden"));
 
-  // Show requested
   if (name === "home") viewHome.classList.remove("hidden");
   if (name === "product") viewProduct.classList.remove("hidden");
   if (name === "fav") viewFav.classList.remove("hidden");
@@ -149,27 +157,23 @@ function showView(name) {
   if (name === "checkout") viewCheckout.classList.remove("hidden");
   if (name === "info") viewInfo.classList.remove("hidden");
 
-  // Nav active state (only for fav/cart; home has none)
   navFav.classList.toggle("active", name === "fav");
   navCart.classList.toggle("active", name === "cart" || name === "checkout");
 
-  // Keep simple history (avoid duplicates)
   const last = state.history[state.history.length - 1];
   if (last !== name) state.history.push(name);
   saveState();
 }
 
 function back() {
-  // pop current
   state.history.pop();
   const prev = state.history[state.history.length - 1] || "home";
   saveState();
   showView(prev);
 }
 
-// --- CSV loading ---
+// ---------- CSV ----------
 function parseCSV(text) {
-  // Very small CSV parser (handles commas inside quotes)
   const rows = [];
   let row = [];
   let cur = "";
@@ -184,18 +188,15 @@ function parseCSV(text) {
       i++;
       continue;
     }
-
     if (ch === '"') {
       inQuotes = !inQuotes;
       continue;
     }
-
     if (ch === "," && !inQuotes) {
       row.push(cur);
       cur = "";
       continue;
     }
-
     if ((ch === "\n" || ch === "\r") && !inQuotes) {
       if (ch === "\r" && next === "\n") i++;
       row.push(cur);
@@ -204,7 +205,6 @@ function parseCSV(text) {
       row = [];
       continue;
     }
-
     cur += ch;
   }
 
@@ -229,29 +229,25 @@ function parseCSV(text) {
 }
 
 /**
- * Expected (recommended) CSV columns:
- * id, title, price, image, category, type, size, material, note,
- * lamination_options, film_options
- *
- * where:
- * type: "sticker" | "pin" | "other"
- * lamination_options example: "Глянцевая|Матовая"
- * film_options example: "Стандарт|Усиленная"
- *
- * If absent, app uses defaults:
- * stickers: lamination required
- * pins: film required
+ * CSV columns supported (flexible):
+ * id/ID/sku, title/name, price, image, category, type,
+ * size, material, note,
+ * lamination_options (A|B|C), film_options (A|B|C)
  */
 function normalizeProduct(p) {
-  const id = p.id || p.ID || p.Id || p.sku || p.SKU || p.title;
+  const id = p.id || p.ID || p.Id || p.sku || p.SKU || p.title || p.name;
   const title = p.title || p.name || p.Name || "Без названия";
   const price = Number((p.price || p.Price || "0").replace(/[^\d.]/g, "")) || 0;
   const image = p.image || p.img || p.Image || "";
   const category = p.category || p.Category || "Другое";
+
   const typeRaw = (p.type || p.Type || "").toLowerCase();
-  const type = typeRaw.includes("sticker") || category.toLowerCase().includes("накле") ? "sticker"
-            : typeRaw.includes("pin") || category.toLowerCase().includes("знач") ? "pin"
-            : (typeRaw || "other");
+  const catLower = String(category || "").toLowerCase();
+
+  const type =
+    typeRaw.includes("sticker") || catLower.includes("накле") ? "sticker" :
+    typeRaw.includes("pin") || catLower.includes("знач") ? "pin" :
+    (typeRaw || "other");
 
   const size = p.size || p.Size || "";
   const material = p.material || p.Material || "";
@@ -270,7 +266,6 @@ function normalizeProduct(p) {
   const film = film_options.length ? film_options
     : (type === "pin" ? ["Стандарт", "Усиленная"] : []);
 
-  // Requirements
   const requiresLamination = type === "sticker";
   const requiresFilm = type === "pin";
 
@@ -293,17 +288,34 @@ function normalizeProduct(p) {
 
 async function loadProducts() {
   try {
-    const res = await fetch(CSV_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error("CSV not found");
-    const text = await res.text();
-    const rawItems = parseCSV(text);
-    const items = rawItems
-      .filter(x => Object.keys(x).some(k => String(x[k] || "").trim() !== ""))
-      .map(normalizeProduct);
+    const all = [];
 
-    // Filter empty IDs just in case
-    PRODUCTS = items.filter(p => p.id && p.title);
+    for (const url of CSV_URLS) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("CSV not reachable: " + url);
+
+      const text = await res.text();
+      const rawItems = parseCSV(text);
+
+      const items = rawItems
+        .filter(x => Object.keys(x).some(k => String(x[k] || "").trim() !== ""))
+        .map(normalizeProduct);
+
+      all.push(...items);
+    }
+
+    // remove duplicates by id (keep first)
+    const byId = new Map();
+    for (const p of all) {
+      if (!p.id) continue;
+      if (!byId.has(p.id)) byId.set(p.id, p);
+    }
+
+    PRODUCTS = Array.from(byId.values()).filter(p => p.id && p.title);
+
   } catch (e) {
+    console.error(e);
+
     // Fallback demo products (so app doesn't die)
     PRODUCTS = [
       normalizeProduct({
@@ -314,7 +326,7 @@ async function loadProducts() {
         category: "Наклейки",
         type: "sticker",
         size: "16×25 см",
-        material: "плёнка (глянцевая)",
+        material: "плёнка",
         note: "Струйная печать, цвета могут незначительно отличаться от экрана.",
         lamination_options: "Глянцевая|Матовая",
       }),
@@ -333,7 +345,7 @@ async function loadProducts() {
   }
 }
 
-// --- UI builders ---
+// ---------- UI builders ----------
 function buildCategoryChips() {
   const cats = new Set(["Все"]);
   PRODUCTS.forEach(p => cats.add(p.category));
@@ -385,7 +397,8 @@ function renderHome() {
     const card = document.createElement("div");
     card.className = "product-card";
     card.innerHTML = `
-      <img class="product-thumb" src="${escapeAttr(p.image)}" alt="${escapeAttr(p.title)}" onerror="this.style.opacity=0.25; this.alt='';" />
+      <img class="product-thumb" src="${escapeAttr(p.image)}" alt="${escapeAttr(p.title)}"
+           onerror="this.style.opacity=0.25; this.alt='';" />
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.title)}</div>
         <div class="product-meta">
@@ -409,7 +422,7 @@ function renderFavorites() {
     favList.innerHTML = `
       <div class="panel compact">
         <div class="section-title">Пока пусто</div>
-        <div class="small">Добавляй товары в избранное сердечком ⭐</div>
+        <div class="small">Добавляй товары в избранное ⭐</div>
       </div>
     `;
     return;
@@ -447,14 +460,22 @@ function renderFavorites() {
     });
 }
 
+// ---------- Cart ----------
 function cartKey(productId, selectedOptions) {
-  // stable key including options so same product with different options becomes separate line
   const opt = JSON.stringify(selectedOptions || {});
   return `${productId}__${opt}`;
 }
 
 function getCartItems() {
   return Object.values(state.cart || {});
+}
+
+function formatOptions(opts) {
+  if (!opts) return "";
+  const parts = [];
+  if (opts.lamination) parts.push(`Ламинация: ${opts.lamination}`);
+  if (opts.film) parts.push(`Плёнка: ${opts.film}`);
+  return parts.join(", ");
 }
 
 function renderCart() {
@@ -479,7 +500,6 @@ function renderCart() {
     if (!p) return;
 
     total += (p.price * line.qty);
-
     const optText = formatOptions(line.selectedOptions);
 
     const row = document.createElement("div");
@@ -512,14 +532,6 @@ function renderCart() {
   cartTotal.textContent = money(total);
 }
 
-function formatOptions(opts) {
-  if (!opts) return "";
-  const parts = [];
-  if (opts.lamination) parts.push(`Ламинация: ${opts.lamination}`);
-  if (opts.film) parts.push(`Плёнка: ${opts.film}`);
-  return parts.join(", ");
-}
-
 function changeQty(key, delta) {
   const line = state.cart[key];
   if (!line) return;
@@ -536,20 +548,16 @@ function removeFromCart(key) {
   toast("Убрала из корзины");
 }
 
-// --- Product page ---
+// ---------- Product page ----------
 function openProduct(productId) {
   const p = PRODUCTS.find(x => x.id === productId);
   if (!p) return;
 
   currentProduct = {
     ...p,
-    selectedOptions: {
-      lamination: "",
-      film: ""
-    }
+    selectedOptions: { lamination: "", film: "" }
   };
 
-  // Fill UI
   productImage.src = p.image || "";
   productImage.alt = p.title;
 
@@ -568,12 +576,13 @@ function openProduct(productId) {
   addSpec("Размер", p.size || "—");
   addSpec("Материал", p.material || "—");
 
-  // Note override
+  // Note
   const note = p.note || "Струйная печать, цвета могут незначительно отличаться от экрана.";
   el("productNote").textContent = note;
 
   // Options
   productOptions.innerHTML = "";
+
   if (p.requiresLamination) {
     productOptions.appendChild(buildOptionGroup({
       id: "lamination",
@@ -585,6 +594,7 @@ function openProduct(productId) {
       }
     }));
   }
+
   if (p.requiresFilm) {
     productOptions.appendChild(buildOptionGroup({
       id: "film",
@@ -597,13 +607,9 @@ function openProduct(productId) {
     }));
   }
 
-  // Fav button state
   syncFavButton();
-
-  // Cart button state (must validate)
   validateProductOptions();
 
-  // Bind actions
   btnFav.onclick = () => toggleFavorite(p.id);
   btnCart.onclick = () => addCurrentToCart();
 
@@ -635,14 +641,14 @@ function buildOptionGroup({ id, title, options, onSelect }) {
   const row = document.createElement("div");
   row.className = "options";
 
-  options.forEach(opt => {
+  (options || []).forEach(opt => {
     const b = document.createElement("button");
     b.className = "option-btn";
     b.type = "button";
     b.textContent = opt;
     b.setAttribute("aria-pressed", "false");
+
     b.addEventListener("click", () => {
-      // toggle active within group
       row.querySelectorAll("button").forEach(x => {
         x.classList.remove("active");
         x.setAttribute("aria-pressed", "false");
@@ -651,6 +657,7 @@ function buildOptionGroup({ id, title, options, onSelect }) {
       b.setAttribute("aria-pressed", "true");
       onSelect(opt);
     });
+
     row.appendChild(b);
   });
 
@@ -663,8 +670,6 @@ function validateProductOptions() {
   if (!currentProduct) return;
 
   let ok = true;
-
-  // remove invalid visuals
   productOptions.querySelectorAll(".option-group").forEach(g => g.classList.remove("invalid"));
 
   if (currentProduct.requiresLamination && !currentProduct.selectedOptions.lamination) {
@@ -680,7 +685,6 @@ function validateProductOptions() {
 
   btnCart.disabled = !ok;
   btnCart.textContent = ok ? "Добавить в корзину" : "Выбери варианты";
-
   return ok;
 }
 
@@ -692,30 +696,23 @@ function addCurrentToCart() {
   }
 
   const selectedOptions = {};
-
   if (currentProduct.requiresLamination) selectedOptions.lamination = currentProduct.selectedOptions.lamination;
   if (currentProduct.requiresFilm) selectedOptions.film = currentProduct.selectedOptions.film;
 
   const key = cartKey(currentProduct.id, selectedOptions);
 
   if (!state.cart[key]) {
-    state.cart[key] = {
-      key,
-      productId: currentProduct.id,
-      qty: 1,
-      selectedOptions
-    };
+    state.cart[key] = { key, productId: currentProduct.id, qty: 1, selectedOptions };
   } else {
     state.cart[key].qty += 1;
   }
 
   saveState();
   toast("Добавлено в корзину ✨", "good");
-
-  // IMPORTANT: do NOT open cart automatically
+  // IMPORTANT: cart does NOT open automatically
 }
 
-// --- Favorites ---
+// ---------- Favorites ----------
 function toggleFavorite(productId) {
   const isFav = !!state.favorites[productId];
   if (isFav) delete state.favorites[productId];
@@ -732,7 +729,7 @@ function syncFavButton() {
   btnFav.textContent = isFav ? "★ В избранном" : "☆ В избранное";
 }
 
-// --- Badges ---
+// ---------- Badges ----------
 function updateBadges() {
   const favCount = Object.keys(state.favorites).filter(id => state.favorites[id]).length;
   const cartCount = getCartItems().reduce((sum, x) => sum + (x.qty || 0), 0);
@@ -756,9 +753,8 @@ function updateBadges() {
   }
 }
 
-// --- Checkout ---
+// ---------- Checkout ----------
 function openCheckout() {
-  // fill form from state
   buyerName.value = state.form?.name || "";
   buyerContact.value = state.form?.contact || "";
   buyerCity.value = state.form?.city || "";
@@ -839,8 +835,6 @@ function sendOrder() {
 
   const text = buildOrderText();
   const encoded = encodeURIComponent(text);
-
-  // no edit: open direct TG link with prefilled text
   const url = `https://t.me/${MANAGER_USERNAME}?text=${encoded}`;
 
   // Telegram WebApp preferred
@@ -853,31 +847,19 @@ function sendOrder() {
   }
 }
 
-// --- Helpers ---
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-function escapeAttr(s) {
-  // attribute-safe (basic)
-  return escapeHtml(s);
-}
-
-// --- Event listeners ---
+// ---------- Events ----------
 searchInput.addEventListener("input", (e) => {
   currentQuery = e.target.value;
   renderHome();
 });
 
 navBack.addEventListener("click", () => back());
+
 navFav.addEventListener("click", () => {
   renderFavorites();
   showView("fav");
 });
+
 navCart.addEventListener("click", () => {
   renderCart();
   showView("cart");
@@ -887,6 +869,7 @@ infoBtn.addEventListener("click", () => showView("info"));
 closeInfoBtn.addEventListener("click", () => showView("home"));
 
 goCheckout.addEventListener("click", () => openCheckout());
+
 backToCartBtn.addEventListener("click", () => {
   renderCart();
   showView("cart");
@@ -899,24 +882,19 @@ confirmCheck.addEventListener("change", () => {
 
 [buyerName, buyerContact, buyerCity, buyerDelivery].forEach(inp => {
   inp.addEventListener("change", saveFormToState);
-  inp.addEventListener("input", () => {
-    // keep state fresh but lightweight
-    saveFormToState();
-  });
+  inp.addEventListener("input", () => saveFormToState());
 });
 
 sendOrderBtn.addEventListener("click", () => sendOrder());
 
-// --- Init ---
+// ---------- Init ----------
 (async function init() {
   updateBadges();
-
   await loadProducts();
-
   buildCategoryChips();
   renderHome();
   showView("home");
 
-  // If TG: expand view
+  // Telegram expand if exists
   try { window.TG && window.TG.expand && window.TG.expand(); } catch(e) {}
 })();
