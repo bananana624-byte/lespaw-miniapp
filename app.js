@@ -1,25 +1,34 @@
-// app.js
-(() => {
-  // Telegram Mini App friendly init (safe if opened in browser)
-  const tg = window.Telegram?.WebApp;
+(function () {
+  // Telegram Mini App init (не ломает обычный браузер)
+  var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
   try {
-    tg?.ready?.();
-    tg?.expand?.();
-  } catch (_) {}
+    if (tg && typeof tg.ready === "function") tg.ready();
+    if (tg && typeof tg.expand === "function") tg.expand();
+  } catch (e) {}
 
-  const $ = (sel) => document.querySelector(sel);
+  function $(sel) { return document.querySelector(sel); }
 
-  const toastEl = $("#toast");
-  const searchInput = $("#globalSearch");
-  const searchBtn = $("#searchBtn");
+  var toastEl = $("#toast");
+  var searchInput = $("#globalSearch");
+  var searchBtn = $("#searchBtn");
 
-  const favBadge = $("#favBadge");
-  const cartBadge = $("#cartBadge");
+  var favBadge = $("#favBadge");
+  var cartBadge = $("#cartBadge");
 
-  // --- Simple state (replace later with your real logic/storage) ---
-  const state = {
-    favCount: Number(localStorage.getItem("lespaw_fav") || 0),
-    cartCount: Number(localStorage.getItem("lespaw_cart") || 0),
+  var btnBack = $("#btnBack");
+  var btnFav = $("#btnFav");
+  var btnCart = $("#btnCart");
+
+  // Безопасное чтение чисел
+  function toInt(v) {
+    var n = parseInt(v, 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // State (пока заглушка: localStorage; потом заменишь на реальный стор)
+  var state = {
+    favCount: toInt(localStorage.getItem("lespaw_fav")),
+    cartCount: toInt(localStorage.getItem("lespaw_cart"))
   };
 
   function setBadge(el, count) {
@@ -44,76 +53,86 @@
     if (!toastEl) return;
     toastEl.textContent = msg;
     toastEl.classList.add("show");
-    clearTimeout(toastEl.__t);
-    toastEl.__t = setTimeout(() => toastEl.classList.remove("show"), 1600);
+    if (toastEl._t) clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(function () {
+      toastEl.classList.remove("show");
+    }, 1600);
   }
 
-  // init badges
+  // Init badges
   setBadge(favBadge, state.favCount);
   setBadge(cartBadge, state.cartCount);
 
-  // --- Actions (stub navigation) ---
+  // Навигационные действия (заглушки)
   function go(action) {
-    // Тут ты потом подцепишь реальные экраны/роутинг.
-    const map = {
+    var map = {
       categories: "Открываю «Категории»…",
       lamination: "Открываю «Примеры ламинации и плёнки»…",
       reviews: "Открываю «Отзывы»…",
       info: "Открываю «Важная информация»…",
       fav: "Открываю «Избранное»…",
-      cart: "Открываю «Корзина»…",
+      cart: "Открываю «Корзина»…"
     };
-
     toast(map[action] || "Открываю…");
-
-    // Example: if you use hash routing later
-    // location.hash = action;
+    // Если у тебя есть роутинг — сюда можно поставить location.hash = action;
   }
 
-  // cards click
-  document.querySelectorAll(".card").forEach((btn) => {
-    btn.addEventListener("click", () => go(btn.dataset.action));
-  });
+  // Cards click
+  var cards = document.querySelectorAll(".card");
+  for (var i = 0; i < cards.length; i++) {
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        go(btn.getAttribute("data-action"));
+      });
+    })(cards[i]);
+  }
 
-  // bottom nav
-  $("#btnBack")?.addEventListener("click", () => {
-    // Telegram back if inside webapp
-    if (tg?.BackButton) {
-      // If you manage your own stack, wire it here. For now, just close or history back.
-      if (history.length > 1) history.back();
-      else tg.close?.();
-      return;
-    }
-    if (history.length > 1) history.back();
-  });
+  // Bottom nav
+  if (btnBack) {
+    btnBack.addEventListener("click", function () {
+      // Если есть история — назад, иначе (в TG) закрыть
+      if (window.history && window.history.length > 1) {
+        window.history.back();
+      } else if (tg && typeof tg.close === "function") {
+        tg.close();
+      }
+    });
+  }
 
-  $("#btnFav")?.addEventListener("click", () => go("fav"));
-  $("#btnCart")?.addEventListener("click", () => go("cart"));
+  if (btnFav) btnFav.addEventListener("click", function () { go("fav"); });
+  if (btnCart) btnCart.addEventListener("click", function () { go("cart"); });
 
-  // search
+  // Search
   function runSearch() {
-    const q = (searchInput?.value || "").trim();
+    var q = searchInput ? String(searchInput.value || "").trim() : "";
     if (!q) return toast("Введите запрос для поиска");
-    toast(`Ищу: «${q}»`);
-    // later: filter catalog, open results page etc.
+    toast("Ищу: «" + q + "»");
   }
 
-  searchBtn?.addEventListener("click", runSearch);
-  searchInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") runSearch();
-  });
+  if (searchBtn) searchBtn.addEventListener("click", runSearch);
+  if (searchInput) {
+    searchInput.addEventListener("keydown", function (e) {
+      if (e && e.key === "Enter") runSearch();
+    });
+  }
 
-  // --- Dev helpers (you can delete) ---
-  // Long-press badges to test glow/count quickly
-  let pressTimer = null;
+  // DEV: long-press для быстрого теста бейджей (можешь удалить)
+  var pressTimer = null;
 
   function attachLongPress(el, onLong) {
     if (!el) return;
-    const start = () => {
-      clearTimeout(pressTimer);
-      pressTimer = setTimeout(onLong, 420);
-    };
-    const cancel = () => clearTimeout(pressTimer);
+
+    function start() {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = setTimeout(function () {
+        onLong();
+      }, 420);
+    }
+
+    function cancel() {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = null;
+    }
 
     el.addEventListener("pointerdown", start);
     el.addEventListener("pointerup", cancel);
@@ -121,14 +140,14 @@
     el.addEventListener("pointerleave", cancel);
   }
 
-  attachLongPress($("#btnFav"), () => {
+  attachLongPress(btnFav, function () {
     state.favCount = (state.favCount + 1) % 10;
     setBadge(favBadge, state.favCount);
     saveState();
     toast("Тест: избранное +1");
   });
 
-  attachLongPress($("#btnCart"), () => {
+  attachLongPress(btnCart, function () {
     state.cartCount = (state.cartCount + 1) % 10;
     setBadge(cartBadge, state.cartCount);
     saveState();
