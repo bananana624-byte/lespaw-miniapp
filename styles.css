@@ -54,7 +54,7 @@ body{
   position:absolute;
   left:14px;
   top:10px;
-  opacity:.0; /* просто чтобы не мешало, можно убрать */
+  opacity:.0;
 }
 .brand .sub{
   font-size: 12px;
@@ -127,7 +127,6 @@ hr{
   user-select:none;
 }
 
-/* ярко “горит” при нажатии */
 .btn:active{
   transform: scale(.985);
   border-color: rgba(99,230,255,.50);
@@ -137,7 +136,6 @@ hr{
   filter: brightness(1.10);
 }
 
-/* активная кнопка/таб (горит постоянно) */
 .btn.is-active{
   border-color: rgba(184,107,255,.55);
   box-shadow:
@@ -173,7 +171,7 @@ hr{
 }
 
 /* =========================
-   Мини-товары в фандоме
+   Мини-товары с картинкой
    ========================= */
 .prod-mini{
   display:flex;
@@ -219,7 +217,9 @@ hr{
   flex-wrap:wrap;
 }
 
-/* тосты */
+/* =========================
+   Toast
+   ========================= */
 .toast{
   position: fixed;
   left: 50%;
