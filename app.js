@@ -243,6 +243,30 @@ function isDigitStart(name) {
   return /^[0-9]/.test((name || "").trim());
 }
 
+// Нормализуем тип товара из CSV (на случай, если там русские названия или мн. число)
+function normalizeProductType(t) {
+  const s = String(t || '').trim().toLowerCase();
+  if (!s) return '';
+
+  // sticker
+  if (['sticker', 'stickers', 'stикер', 'stikers'].includes(s)) return 'sticker';
+  if (['наклейка', 'наклейки', 'стикер', 'стикеры'].includes(s)) return 'sticker';
+
+  // pin (значки)
+  if (['pin', 'pins', 'badge', 'badges'].includes(s)) return 'pin';
+  if (['значок', 'значки', 'набор значков', 'наборы значков'].includes(s)) return 'pin';
+
+  // poster
+  if (['poster', 'posters'].includes(s)) return 'poster';
+  if (['постер', 'постеры'].includes(s)) return 'poster';
+
+  // box
+  if (['box', 'boxes'].includes(s)) return 'box';
+  if (['бокс', 'боксы'].includes(s)) return 'box';
+
+  return s;
+}
+
 function typeLabel(t) {
   const map = { sticker: "Наклейки", pin: "Набор значков", poster: "Постеры", box: "Боксы" };
   return map[t] || t || "";
@@ -325,7 +349,12 @@ async function init() {
     });
 
     fandoms = await fetchCSV(CSV_FANDOMS_URL);
-    products = await fetchCSV(CSV_PRODUCTS_URL);
+    const rawProducts = await fetchCSV(CSV_PRODUCTS_URL);
+    products = rawProducts.map((p) => ({
+      ...p,
+      product_type_raw: p.product_type,
+      product_type: normalizeProductType(p.product_type),
+    }));
 
     const s = await fetchCSV(CSV_SETTINGS_URL);
     s.forEach((row) => {
@@ -478,6 +507,7 @@ function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
+  // порядок секций (можно менять)
   const order = ["sticker", "pin", "poster", "box"];
   const labels = {
     sticker: "Наклейки",
@@ -486,14 +516,21 @@ function renderFandomPage(fandomId) {
     box: "Боксы",
   };
 
-  const activeTypes = order.filter((t) => all.some((p) => p.product_type === t));
+  // Если в CSV типы записаны нестандартно — они нормализуются в init().
+  // Но на всякий случай показываем и "прочие" типы, чтобы товары не пропадали.
+  const present = Array.from(new Set(all.map((p) => String(p.product_type || "").trim()).filter(Boolean)));
+  const ordered = order.filter((t) => present.includes(t));
+  const others = present.filter((t) => !order.includes(t));
+  const activeTypes = [...ordered, ...others];
 
   function sectionHTML(t) {
     const items = all.filter((p) => p.product_type === t);
     if (!items.length) return "";
 
+    const title = labels[t] || typeLabel(t) || t;
+
     return `
-      <div class="small" style="margin-top:2px"><b>${labels[t] || typeLabel(t) || t}</b></div>
+      <div class="small" style="margin-top:2px"><b>${title}</b></div>
       <div style="height:10px"></div>
       <div class="grid2">
         ${items
@@ -534,6 +571,7 @@ function renderFandomPage(fandomId) {
   syncNav();
   syncBottomSpace();
 }
+
 
 // =====================
 // Инфо / отзывы / примеры
