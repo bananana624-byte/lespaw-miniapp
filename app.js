@@ -1,13 +1,15 @@
-// LesPaw Mini App — app.js v49 (faster load + auto grouped products)
+// LesPaw Mini App — app.js v50
+// Полная рабочая версия (фикс: прошлый app.js был обрезан -> из-за синтаксической ошибки главное меню не отображалось)
 //
-// Улучшения скорости:
-// - CSV грузятся параллельно (Promise.all)
-// - localStorage cache с TTL (по умолчанию 15 минут)
-// - убран fetch cache:no-store (разрешаем кеш браузера)
-//
-// UX:
-// - Главная страница появляется сразу (экран загрузки)
-// - Товары в фандоме автоматически сгруппированы по типам (без табов)
+// Фичи:
+// - Глобальный поиск только сверху
+// - Нижний навбар: назад / избранное / корзина (бейджи)
+// - Категории -> типы фандомов -> список -> страница фандома
+// - Страница фандома: автогруппировка товаров по типам (без вкладок)
+// - Сетка товаров 2× + превью (если есть image/images/...)
+// - Карточка товара: избранное, добавить в корзину; для наклеек — основа/покрытие + доплаты из settings
+// - Корзина: управление количеством, удаление, сумма
+// - Оформление: обязательная галочка; отправка предзаполненного текста менеджерке @LesPaw_manager
 
 // =====================
 // CSV ссылки (твои)
@@ -33,8 +35,12 @@ const SUGGEST_URL = "https://t.me/LesPaw/280";
 // Telegram init
 // =====================
 const tg = window.Telegram?.WebApp;
-tg?.ready();
-tg?.expand();
+try {
+  tg?.ready();
+  tg?.expand();
+} catch {
+  // no-op for browser
+}
 
 // =====================
 // DOM
@@ -53,16 +59,10 @@ const wrapEl = document.querySelector(".wrap");
 const navBarEl = document.querySelector(".navBar");
 
 // =====================
-// Storage (оставила прежние ключи, чтобы не сбросить корзину/избранное у людей)
+// Storage
 // =====================
 const LS_CART = "lespaw_cart_v41";
 const LS_FAV = "lespaw_fav_v41";
-
-// CSV cache (ускоряет открытие, особенно в Telegram WebView)
-const LS_CACHE_FANDOMS = "lespaw_cache_fandoms_v1";
-const LS_CACHE_PRODUCTS = "lespaw_cache_products_v1";
-const LS_CACHE_SETTINGS = "lespaw_cache_settings_v1";
-const CSV_CACHE_TTL_MS = 15 * 60 * 1000; // 15 минут
 
 function loadJSON(key, fallback) {
   try {
@@ -90,7 +90,7 @@ function toast(msg, kind = "") {
 }
 
 // =====================
-// Safe bottom space (nav must NOT cover content)
+// Safe bottom space
 // =====================
 function syncBottomSpace() {
   if (!wrapEl || !navBarEl) return;
@@ -193,36 +193,10 @@ function parseCSV(text) {
   });
 }
 
-async function fetchCSV(url, cacheKey = "", ttlMs = CSV_CACHE_TTL_MS) {
-  const now = Date.now();
-
-  if (cacheKey) {
-    try {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) {
-        const cached = JSON.parse(raw);
-        if (cached && cached.t && cached.text && now - cached.t < ttlMs) {
-          return parseCSV(String(cached.text));
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-
+async function fetchCSV(url) {
   const res = await fetch(url, { cache: "default" });
   if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`);
-  const text = await res.text();
-
-  if (cacheKey) {
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify({ t: now, text }));
-    } catch {
-      // ignore
-    }
-  }
-
-  return parseCSV(text);
+  return parseCSV(await res.text());
 }
 
 // =====================
@@ -252,10 +226,12 @@ const OVERLAY_OPTIONS = [
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
 }
+
 function money(n) {
   return `${Number(n) || 0} ₽`;
 }
 
+// поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
     .split(/[,;\n]+/g)
@@ -267,26 +243,33 @@ function isDigitStart(name) {
   return /^[0-9]/.test((name || "").trim());
 }
 
-function typeLabel(t) {
-  const map = { sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
-  return map[t] || t || "";
+// Нормализуем тип товара из CSV (на случай, если там русские названия или мн. число)
+function normalizeProductType(t) {
+  const s = String(t || '').trim().toLowerCase();
+  if (!s) return '';
+
+  // sticker
+  if (['sticker', 'stickers', 'stикер', 'stikers'].includes(s)) return 'sticker';
+  if (['наклейка', 'наклейки', 'стикер', 'стикеры'].includes(s)) return 'sticker';
+
+  // pin (значки)
+  if (['pin', 'pins', 'badge', 'badges'].includes(s)) return 'pin';
+  if (['значок', 'значки', 'набор значков', 'наборы значков'].includes(s)) return 'pin';
+
+  // poster
+  if (['poster', 'posters'].includes(s)) return 'poster';
+  if (['постер', 'постеры'].includes(s)) return 'poster';
+
+  // box
+  if (['box', 'boxes'].includes(s)) return 'box';
+  if (['бокс', 'боксы'].includes(s)) return 'box';
+
+  return s;
 }
 
-function normalizeProductType(t) {
-  const v = String(t || "").trim().toLowerCase();
-  if (!v) return "";
-
-  const norm = v
-    .replace(/ё/g, "е")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (["sticker", "stickers", "наклейка", "наклейки", "стикер", "стикеры"].some((x) => norm === x)) return "sticker";
-  if (["pin", "pins", "значок", "значки", "набор значков", "бэдж", "badge", "badges"].some((x) => norm === x)) return "pin";
-  if (["poster", "posters", "постер", "постеры"].some((x) => norm === x)) return "poster";
-  if (["box", "boxes", "бокс", "боксы"].some((x) => norm === x)) return "box";
-
-  return t; // неизвестный тип не прячем
+function typeLabel(t) {
+  const map = { sticker: "Наклейки", pin: "Набор значков", poster: "Постеры", box: "Боксы" };
+  return map[t] || t || "";
 }
 
 function getFandomById(id) {
@@ -322,6 +305,54 @@ function updateBadges() {
   } else cartCount.style.display = "none";
 }
 
+// ===== thumbnails helpers =====
+// ===== Lazy images (loads only when visible) =====
+let imgObserver = null;
+
+function ensureImgObserver() {
+  if (imgObserver) return imgObserver;
+  if (!("IntersectionObserver" in window)) return null;
+
+  imgObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const img = entry.target;
+        imgObserver.unobserve(img);
+        const src = img.getAttribute("data-src");
+        if (src) img.src = src;
+      });
+    },
+    { root: null, rootMargin: "220px 0px", threshold: 0.01 }
+  );
+  return imgObserver;
+}
+
+function mountLazyImages(scope = document) {
+  const imgs = scope.querySelectorAll("img.lazyImg[data-src]");
+  if (!imgs.length) return;
+
+  const ob = ensureImgObserver();
+  imgs.forEach((img) => {
+    img.decoding = "async";
+    img.loading = "lazy";
+    img.fetchPriority = "low";
+    img.addEventListener(
+      "load",
+      () => img.classList.add("is-loaded"),
+      { once: true }
+    );
+
+    // if no IntersectionObserver — load immediately
+    if (!ob) {
+      const src = img.getAttribute("data-src");
+      if (src) img.src = src;
+      return;
+    }
+    ob.observe(img);
+  });
+}
+
 function imagesField(p) {
   return p?.images || p?.image || p?.image_url || p?.photo || p?.img || "";
 }
@@ -334,7 +365,8 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy">`;
+  // data-src + lazy observer to avoid loading 400+ images сразу
+  return `<img class="pcardImg lazyImg" data-src="${u}" alt="Фото товара">`;
 }
 
 function safeText(s) {
@@ -353,58 +385,113 @@ function openTelegram(url) {
 // Init
 // =====================
 async function init() {
+  // Навигация (сразу)
+  navBack.onclick = () => goBack();
+  navFav.onclick = () => openPage(renderFavorites);
+  navCart.onclick = () => openPage(renderCart);
+
+  // Сразу рисуем главное меню (чтобы не было "пусто")
+  // Данные догружаются фоном
   try {
-    view.innerHTML = `
-      <div class="card">
-        <div class="h2">Загрузка…</div>
-        <div class="small">Подключаюсь к каталогу и подтягиваю товары.</div>
-      </div>
-    `;
+    globalSearch.disabled = true;
+    globalSearch.placeholder = "Загрузка…";
+  } catch {}
 
-    navBack.onclick = () => goBack();
-    navFav.onclick = () => openPage(renderFavorites);
-    navCart.onclick = () => openPage(renderCart);
+  resetToHome();
+  syncBottomSpace();
 
-    globalSearch.addEventListener("input", (e) => {
-      const q = e.target.value || "";
-      if (q.trim()) openPage(() => renderSearch(q));
-      else resetToHome();
-    });
+  globalSearch.addEventListener("input", (e) => {
+    const q = e.target.value || "";
+    if (q.trim()) openPage(() => renderSearch(q));
+    else resetToHome();
+  });
 
+  // ===== Data loader (cache + parallel) =====
+  async function loadAllData() {
+    // 1) try cache
+    try {
+      const cached = JSON.parse(localStorage.getItem(LS_CACHE) || "null");
+      if (cached && cached.ts && Date.now() - cached.ts < CACHE_TTL_MS) {
+        fandoms = Array.isArray(cached.fandoms) ? cached.fandoms : [];
+        products = Array.isArray(cached.products) ? cached.products : [];
+        settings = cached.settings && typeof cached.settings === "object" ? cached.settings : settings;
+        return { fromCache: true };
+      }
+    } catch {}
+
+    // 2) fetch in parallel
     const [fRows, pRows, sRows] = await Promise.all([
-      fetchCSV(CSV_FANDOMS_URL, LS_CACHE_FANDOMS, CSV_CACHE_TTL_MS),
-      fetchCSV(CSV_PRODUCTS_URL, LS_CACHE_PRODUCTS, CSV_CACHE_TTL_MS),
-      fetchCSV(CSV_SETTINGS_URL, LS_CACHE_SETTINGS, CSV_CACHE_TTL_MS),
+      fetchCSV(CSV_FANDOMS_URL),
+      fetchCSV(CSV_PRODUCTS_URL),
+      fetchCSV(CSV_SETTINGS_URL),
     ]);
 
-    fandoms = fRows || [];
-    products = (pRows || []).map((p) => ({ ...p, product_type: normalizeProductType(p.product_type) }));
+    fandoms = fRows;
 
-    (sRows || []).forEach((row) => {
+    const rawProducts = pRows;
+    products = rawProducts.map((p) => ({
+      ...p,
+      product_type_raw: p.product_type,
+      product_type: normalizeProductType(p.product_type),
+    }));
+
+    // settings
+    const nextSettings = { ...settings };
+    sRows.forEach((row) => {
       const k = row.key;
       const v = row.value;
       if (!k) return;
-      if (k === "overlay_price_delta" || k === "holo_base_price_delta") settings[k] = Number(v);
-      else settings[k] = v;
+      if (k === "overlay_price_delta" || k === "holo_base_price_delta") nextSettings[k] = Number(v);
+      else nextSettings[k] = v;
     });
+    settings = nextSettings;
 
+    // save cache
+    try {
+      localStorage.setItem(
+        LS_CACHE,
+        JSON.stringify({ ts: Date.now(), fandoms, products, settings })
+      );
+    } catch {}
+
+    return { fromCache: false };
+  }
+
+  try {
+    await loadAllData();
     updateBadges();
-    resetToHome();
-    syncBottomSpace();
+
+    // включаем поиск
+    try {
+      globalSearch.disabled = false;
+      globalSearch.placeholder = "Поиск по фандомам и товарам…";
+    } catch {}
+
+    // если пользователь успел открыть какую-то страницу до загрузки — перерисуем её
+    if (typeof currentRender === "function") {
+      currentRender();
+      syncNav();
+      syncBottomSpace();
+    }
   } catch (e) {
+    // остаёмся на главной, но показываем аккуратную ошибку
     view.innerHTML = `
       <div class="card">
         <div class="h2">Ошибка загрузки данных</div>
         <div class="small">${safeText(String(e))}</div>
         <hr>
+        <button class="btn" id="retryLoad">Попробовать снова</button>
+        <div style="height:8px"></div>
         <div class="small">Проверь публикацию таблиц и CSV-ссылки.</div>
       </div>
     `;
+    const btn = document.getElementById("retryLoad");
+    if (btn) btn.onclick = () => init();
     syncBottomSpace();
   }
 }
-
 init();
+
 
 // =====================
 // HOME (плитки)
@@ -525,24 +612,36 @@ function renderFandomList(type) {
 }
 
 // =====================
-// Страница фандома → товары сгруппированы по типам (без табов)
+// Страница фандома → товары сеткой 2× (с фотками) + автогруппировка по типам
 // =====================
 function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
+  // порядок секций (можно менять)
   const order = ["sticker", "pin", "poster", "box"];
-  const labels = { sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
+  const labels = {
+    sticker: "Наклейки",
+    pin: "Значки",
+    poster: "Постеры",
+    box: "Боксы",
+  };
 
-  const known = order.filter((t) => all.some((p) => String(p.product_type) === t));
-  const unknown = [...new Set(all.map((p) => p.product_type).filter((t) => t && !order.includes(t)))];
-  const sections = [...known, ...unknown];
+  // Если в CSV типы записаны нестандартно — они нормализуются в init().
+  // Но на всякий случай показываем и "прочие" типы, чтобы товары не пропадали.
+  const present = Array.from(new Set(all.map((p) => String(p.product_type || "").trim()).filter(Boolean)));
+  const ordered = order.filter((t) => present.includes(t));
+  const others = present.filter((t) => !order.includes(t));
+  const activeTypes = [...ordered, ...others];
 
   function sectionHTML(t) {
-    const items = all.filter((p) => String(p.product_type) === String(t));
+    const items = all.filter((p) => p.product_type === t);
     if (!items.length) return "";
+
+    const title = labels[t] || typeLabel(t) || t;
+
     return `
-      <div class="small" style="margin-top:2px"><b>${labels[t] || typeLabel(t) || safeText(t)}</b></div>
+      <div class="small" style="margin-top:2px"><b>${title}</b></div>
       <div style="height:10px"></div>
       <div class="grid2">
         ${items
@@ -565,9 +664,12 @@ function renderFandomPage(fandomId) {
       <div class="h2">${f?.fandom_name || "Фандом"}</div>
       <div class="small">Товары сгруппированы по типам</div>
       <hr>
+
       ${
-        sections.length
-          ? sections.map((t, idx) => `${sectionHTML(t)}${idx < sections.length - 1 ? "<hr>" : ""}`).join("")
+        all.length
+          ? activeTypes
+              .map((t, idx) => `${sectionHTML(t)}${idx < activeTypes.length - 1 ? "<hr>" : ""}`)
+              .join("")
           : `<div class="small">Пока нет товаров.</div>`
       }
     </div>
@@ -576,10 +678,12 @@ function renderFandomPage(fandomId) {
   view.querySelectorAll("[data-id]").forEach((el) => {
     el.onclick = () => openPage(() => renderProduct(el.dataset.id));
   });
+  mountLazyImages(view);
 
   syncNav();
   syncBottomSpace();
 }
+
 
 // =====================
 // Инфо / отзывы / примеры
@@ -647,7 +751,7 @@ function openExamples() {
 }
 
 // =====================
-// Поиск (только сверху)
+// Поиск — товары тоже с фотками
 // =====================
 function renderSearch(q) {
   const query = (q || "").toLowerCase().trim();
@@ -659,7 +763,7 @@ function renderSearch(q) {
 
   const pHits = products
     .filter((p) => {
-      const typeName = String(p.product_type || "").toLowerCase();
+      const typeName = (p.product_type || "").toLowerCase();
       const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
       return hay.includes(query);
     })
@@ -712,9 +816,39 @@ function renderSearch(q) {
 
   view.querySelectorAll("[data-fid]").forEach((el) => (el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid))));
   view.querySelectorAll("[data-pid]").forEach((el) => (el.onclick = () => openPage(() => renderProduct(el.dataset.pid))));
+  mountLazyImages(view);
 
   syncNav();
   syncBottomSpace();
+}
+
+// =====================
+// Price helpers (options)
+// =====================
+function calcItemUnitPrice(p, item) {
+  let price = Number(p?.price) || 0;
+  if ((p?.product_type || "") === "sticker") {
+    const overlayDelta = Number(settings.overlay_price_delta) || 0;
+    const holoDelta = Number(settings.holo_base_price_delta) || 0;
+    if ((item?.overlay || "none") !== "none") price += overlayDelta;
+    if ((item?.base || "normal") === "holo") price += holoDelta;
+  }
+  return price;
+}
+
+function optionLabel(item) {
+  const p = getProductById(item?.id);
+  if (!p) return "";
+  if ((p.product_type || "") !== "sticker") return "";
+
+  const base = (item.base || "normal") === "holo" ? "Голографическая основа" : "Обычная основа";
+  const ovKey = item.overlay || "none";
+  const ov = OVERLAY_OPTIONS.find((x) => x[0] === ovKey)?.[1] || "Без покрытия";
+  return `${base}; покрытие: ${ov}`;
+}
+
+function cartKey(item) {
+  return `${item.id}__${item.base || ""}__${item.overlay || ""}`;
 }
 
 // =====================
@@ -732,22 +866,10 @@ function renderProduct(productId) {
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
-  const overlayDelta = Number(settings.overlay_price_delta) || 0;
-  const holoDelta = Number(settings.holo_base_price_delta) || 0;
-
-  const isSticker = String(p.product_type || "") === "sticker";
+  const isSticker = (p.product_type || "") === "sticker";
 
   let selectedOverlay = "none";
   let selectedBase = "normal"; // normal | holo
-
-  function calcPrice() {
-    let price = Number(p.price) || 0;
-    if (isSticker) {
-      if (selectedOverlay !== "none") price += overlayDelta;
-      if (selectedBase === "holo") price += holoDelta;
-    }
-    return price;
-  }
 
   function inFav() {
     return fav.includes(p.id);
@@ -759,6 +881,10 @@ function renderProduct(productId) {
     render();
   }
 
+  function calcPrice() {
+    return calcItemUnitPrice(p, { id: p.id, base: selectedBase, overlay: selectedOverlay });
+  }
+
   function addToCart() {
     const item = {
       id: p.id,
@@ -767,12 +893,8 @@ function renderProduct(productId) {
       base: isSticker ? selectedBase : "",
     };
 
-    const existing = cart.find(
-      (x) =>
-        x.id === item.id &&
-        (x.overlay || "") === (item.overlay || "") &&
-        (x.base || "") === (item.base || "")
-    );
+    const key = cartKey(item);
+    const existing = cart.find((x) => cartKey(x) === key);
 
     if (existing) {
       existing.qty = (Number(existing.qty) || 0) + 1;
@@ -837,12 +959,8 @@ function renderProduct(productId) {
       const ovRow = document.getElementById("ovRow");
 
       function syncBtns() {
-        baseRow
-          .querySelectorAll(".btn")
-          .forEach((b) => b.classList.toggle("is-active", b.dataset.base === selectedBase));
-        ovRow
-          .querySelectorAll(".btn")
-          .forEach((b) => b.classList.toggle("is-active", b.dataset.ov === selectedOverlay));
+        baseRow.querySelectorAll(".btn").forEach((b) => b.classList.toggle("is-active", b.dataset.base === selectedBase));
+        ovRow.querySelectorAll(".btn").forEach((b) => b.classList.toggle("is-active", b.dataset.ov === selectedOverlay));
         btnCart.textContent = `Добавить в корзину · ${money(calcPrice())}`;
       }
 
@@ -852,7 +970,6 @@ function renderProduct(productId) {
           syncBtns();
         };
       });
-
       ovRow.querySelectorAll("[data-ov]").forEach((b) => {
         b.onclick = () => {
           selectedOverlay = b.dataset.ov;
@@ -862,44 +979,43 @@ function renderProduct(productId) {
 
       syncBtns();
     }
-
-    syncNav();
-    syncBottomSpace();
   }
 
   render();
+  syncNav();
+  syncBottomSpace();
 }
 
 // =====================
 // Favorites
 // =====================
 function renderFavorites() {
-  const items = fav.map(getProductById).filter(Boolean);
+  const list = fav
+    .map((id) => getProductById(id))
+    .filter(Boolean);
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">Избранное</div>
-      <div class="small">${items.length ? "Твои сохранённые товары" : "Пока тут пусто."}</div>
+      <div class="small">${list.length ? "Нажми на товар, чтобы открыть карточку" : "Пока пусто"}</div>
       <hr>
       ${
-        items.length
-          ? `<div class="grid2">${items
-              .map(
-                (p) => `
-            <div class="pcard" data-id="${p.id}">
-              ${cardThumbHTML(p)}
-              <div class="pcardTitle">${p.name}</div>
-              <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
+        list.length
+          ? `<div class="grid2">
+              ${list
+                .map(
+                  (p) => `
+                <div class="pcard" data-id="${p.id}">
+                  ${cardThumbHTML(p)}
+                  <div class="pcardTitle">${p.name}</div>
+                  <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
+                </div>
+              `
+                )
+                .join("")}
             </div>
-          `
-              )
-              .join("")}</div>`
-          : ""
-      }
-
-      ${
-        items.length
-          ? `<div style="height:12px"></div><button class="btn" id="btnClearFav">Очистить избранное</button>`
+            <div style="height:12px"></div>
+            <button class="btn" id="btnClearFav">Очистить избранное</button>`
           : ""
       }
     </div>
@@ -925,98 +1041,61 @@ function renderFavorites() {
 // =====================
 // Cart
 // =====================
-function cartItemTitle(ci) {
-  const p = getProductById(ci.id);
-  if (!p) return "Товар";
-  const parts = [p.name];
-
-  if (String(p.product_type) === "sticker") {
-    if (ci.base === "holo") parts.push("(голографическая основа)");
-    if (ci.overlay && ci.overlay !== "none") {
-      const label = OVERLAY_OPTIONS.find((x) => x[0] === ci.overlay)?.[1] || ci.overlay;
-      parts.push(`(покрытие: ${label})`);
-    }
-  }
-
-  return parts.join(" ");
-}
-
-function cartItemPrice(ci) {
-  const p = getProductById(ci.id);
-  if (!p) return 0;
-  let price = Number(p.price) || 0;
-
-  if (String(p.product_type) === "sticker") {
-    const overlayDelta = Number(settings.overlay_price_delta) || 0;
-    const holoDelta = Number(settings.holo_base_price_delta) || 0;
-
-    if (ci.overlay && ci.overlay !== "none") price += overlayDelta;
-    if (ci.base === "holo") price += holoDelta;
-  }
-
-  return price;
-}
-
 function renderCart() {
-  const rows = cart
-    .map((ci, idx) => {
-      const p = getProductById(ci.id);
-      if (!p) return null
-      return {
-        idx,
-        id: ci.id,
-        qty: Number(ci.qty) || 1,
-        title: cartItemTitle(ci),
-        unit: cartItemPrice(ci),
-        type: p.product_type,
-      };
+  const items = cart
+    .map((it) => {
+      const p = getProductById(it.id);
+      if (!p) return null;
+      return { it, p };
     })
     .filter(Boolean);
 
-  const total = rows.reduce((sum, r) => sum + r.unit * r.qty, 0);
+  const total = items.reduce((sum, x) => sum + calcItemUnitPrice(x.p, x.it) * (Number(x.it.qty) || 0), 0);
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">Корзина</div>
-      <div class="small">${rows.length ? "Проверь позиции и оформи заказ" : "Пока корзина пустая."}</div>
+      <div class="small">${items.length ? "Проверь количество и оформи заказ" : "Пока пусто"}</div>
       <hr>
 
       ${
-        rows.length
-          ? `<div class="list">${rows
-              .map(
-                (r) => `
-            <div class="item">
-              <div class="title">${safeText(r.title)}</div>
-              <div class="meta">${money(r.unit)} · Кол-во: <b>${r.qty}</b></div>
-              <div class="row" style="margin-top:10px">
-                <button class="btn" data-dec="${r.idx}">−</button>
-                <button class="btn" data-inc="${r.idx}">+</button>
-                <button class="btn" data-del="${r.idx}">Удалить</button>
-              </div>
-            </div>
-          `
-              )
-              .join("")}</div>`
-          : ""
-      }
-
-      ${
-        rows.length
+        items.length
           ? `
+        <div class="list">
+          ${items
+            .map(({ it, p }) => {
+              const unit = calcItemUnitPrice(p, it);
+              const line = unit * (Number(it.qty) || 0);
+              const opt = optionLabel(it);
+              return `
+                <div class="item" data-key="${cartKey(it)}">
+                  <div class="title">${p.name}</div>
+                  <div class="meta">${money(unit)} за шт. · ${typeLabel(p.product_type)}${opt ? ` · ${opt}` : ""}</div>
+                  <div style="height:10px"></div>
+                  <div class="row" style="align-items:center; justify-content:space-between">
+                    <div class="row" style="gap:8px; align-items:center">
+                      <button class="btn" data-act="minus">−</button>
+                      <div class="small" style="min-width:36px; text-align:center"><b>${Number(it.qty) || 0}</b></div>
+                      <button class="btn" data-act="plus">+</button>
+                    </div>
+                    <div class="small"><b>${money(line)}</b></div>
+                    <button class="btn" data-act="remove">Удалить</button>
+                  </div>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+
         <hr>
-        <div class="small"><b>Итого:</b> ${money(total)}</div>
-        <div style="height:12px"></div>
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <div class="small"><b>Итого</b></div>
+          <div class="h2" style="margin:0">${money(total)}</div>
+        </div>
 
-        <label class="small" style="display:flex; gap:10px; align-items:flex-start; user-select:none">
-          <input type="checkbox" id="agree" style="margin-top:3px" />
-          <span>Я подтверждаю, что ознакомилась с важной информацией (оплата, сроки, доставка) и согласна оформить заказ.</span>
-        </label>
-
-        <div style="height:12px"></div>
-
+        <div style="height:10px"></div>
         <div class="row">
-          <button class="btn" id="btnClearCart">Очистить</button>
+          <button class="btn" id="btnClearCart">Очистить корзину</button>
           <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
         </div>
       `
@@ -1025,42 +1104,42 @@ function renderCart() {
     </div>
   `;
 
-  function updateCartAt(idx, nextQty) {
-    const next = [...cart];
-    const ci = next[idx];
-    if (!ci) return;
-    ci.qty = Math.max(1, Number(nextQty) || 1);
-    setCart(next);
-    renderCart();
-  }
+  // handlers
+  view.querySelectorAll(".item[data-key]").forEach((row) => {
+    const key = row.getAttribute("data-key");
 
-  function removeCartAt(idx) {
-    const next = [...cart];
-    next.splice(idx, 1);
-    setCart(next);
-    renderCart();
-  }
+    row.querySelectorAll("[data-act]").forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const act = b.getAttribute("data-act");
 
-  view.querySelectorAll("[data-inc]").forEach((b) => {
-    b.onclick = () => {
-      const idx = Number(b.dataset.inc);
-      const ci = cart[idx];
-      if (!ci) return;
-      updateCartAt(idx, (Number(ci.qty) || 1) + 1);
+        const idx = cart.findIndex((x) => cartKey(x) === key);
+        if (idx < 0) return;
+
+        const next = [...cart];
+        const cur = { ...next[idx] };
+        const q = Number(cur.qty) || 0;
+
+        if (act === "plus") cur.qty = q + 1;
+        if (act === "minus") cur.qty = Math.max(1, q - 1);
+        if (act === "remove") {
+          next.splice(idx, 1);
+          setCart(next);
+          renderCart();
+          return;
+        }
+
+        next[idx] = cur;
+        setCart(next);
+        renderCart();
+      };
+    });
+
+    // tap on row opens product
+    row.onclick = () => {
+      const id = key.split("__")[0];
+      if (id) openPage(() => renderProduct(id));
     };
-  });
-
-  view.querySelectorAll("[data-dec]").forEach((b) => {
-    b.onclick = () => {
-      const idx = Number(b.dataset.dec);
-      const ci = cart[idx];
-      if (!ci) return;
-      updateCartAt(idx, (Number(ci.qty) || 1) - 1);
-    };
-  });
-
-  view.querySelectorAll("[data-del]").forEach((b) => {
-    b.onclick = () => removeCartAt(Number(b.dataset.del));
   });
 
   const btnClear = document.getElementById("btnClearCart");
@@ -1073,55 +1152,131 @@ function renderCart() {
   }
 
   const btnCheckout = document.getElementById("btnCheckout");
-  if (btnCheckout) {
-    btnCheckout.onclick = () => {
-      const agree = document.getElementById("agree");
-      if (!agree?.checked) {
-        toast("Поставь галочку перед оформлением", "warn");
-        return;
-      }
-
-      const lines = cart
-        .map((ci) => {
-          const p = getProductById(ci.id);
-          if (!p) return null;
-
-          const unit = cartItemPrice(ci);
-          const qty = Number(ci.qty) || 1;
-          let opts = "";
-
-          if (String(p.product_type) === "sticker") {
-            const parts = [];
-            if (ci.base === "holo") parts.push("основа: голографическая");
-            else parts.push("основа: обычная");
-
-            if (ci.overlay && ci.overlay !== "none") {
-              const label = OVERLAY_OPTIONS.find((x) => x[0] === ci.overlay)?.[1] || ci.overlay;
-              parts.push(`покрытие: ${label}`);
-            } else parts.push("покрытие: без покрытия");
-
-            opts = ` (${parts.join(", ")})`;
-          }
-
-          return `• ${p.name}${opts} — ${qty} шт × ${unit} ₽ = ${unit * qty} ₽`;
-        })
-        .filter(Boolean);
-
-      const text = [
-        "Привет! Хочу оформить заказ в LesPaw 🐾",
-        "",
-        ...lines,
-        "",
-        `Итого: ${total} ₽`,
-        "",
-        "Данные для доставки:\n(город, ФИО, телефон, пункт выдачи/адрес)",
-      ].join("\n");
-
-      const url = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(text)}`;
-      openTelegram(url);
-    };
-  }
+  if (btnCheckout) btnCheckout.onclick = () => openPage(renderCheckout);
 
   syncNav();
   syncBottomSpace();
+}
+
+// =====================
+// Checkout
+// =====================
+function renderCheckout() {
+  if (!cart.length) {
+    view.innerHTML = `
+      <div class="card">
+        <div class="h2">Корзина пуста</div>
+        <div class="small">Добавь товары, чтобы оформить заказ.</div>
+      </div>
+    `;
+    syncNav();
+    syncBottomSpace();
+    return;
+  }
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Оформление заказа</div>
+      <div class="small">Заполни данные — и отправим менеджерке предзаполненное сообщение.</div>
+      <hr>
+
+      <div class="small"><b>Имя</b></div>
+      <input class="searchInput" id="cName" placeholder="Как к тебе обращаться?" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Контакт</b></div>
+      <input class="searchInput" id="cContact" placeholder="@ник или телефон" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Доставка</b></div>
+      <input class="searchInput" id="cDelivery" placeholder="Яндекс ПВЗ / 5post / другое" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Адрес/ПВЗ</b></div>
+      <input class="searchInput" id="cAddr" placeholder="Город, адрес или код/адрес ПВЗ" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Комментарий (опционально)</b></div>
+      <input class="searchInput" id="cComment" placeholder="Например: объединить в один заказ" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <hr>
+
+      <label class="item" style="display:flex; gap:10px; align-items:flex-start">
+        <input type="checkbox" id="cAgree" style="margin-top:4px" />
+        <div>
+          <div class="title">Я проверила состав заказа</div>
+          <div class="meta">Без этой галочки отправить заказ нельзя</div>
+        </div>
+      </label>
+
+      <div style="height:12px"></div>
+      <button class="btn is-active" id="cSend">Отправить заказ менеджерке</button>
+
+      <div style="height:10px"></div>
+      <div class="small">Откроется чат с @${MANAGER_USERNAME} и предзаполненным текстом.</div>
+    </div>
+  `;
+
+  document.getElementById("cSend").onclick = () => {
+    const agree = document.getElementById("cAgree").checked;
+    if (!agree) {
+      toast("Поставь галочку подтверждения", "warn");
+      return;
+    }
+
+    const name = document.getElementById("cName").value.trim();
+    const contact = document.getElementById("cContact").value.trim();
+    const delivery = document.getElementById("cDelivery").value.trim();
+    const addr = document.getElementById("cAddr").value.trim();
+    const comment = document.getElementById("cComment").value.trim();
+
+    const text = buildOrderText({ name, contact, delivery, addr, comment });
+    const url = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(text)}`;
+    openTelegram(url);
+  };
+
+  syncNav();
+  syncBottomSpace();
+}
+
+function buildOrderText({ name, contact, delivery, addr, comment }) {
+  const lines = [];
+  lines.push("🛒 Заказ LesPaw");
+  lines.push("");
+
+  if (name) lines.push(`👤 Имя: ${name}`);
+  if (contact) lines.push(`📱 Контакт: ${contact}`);
+  if (delivery) lines.push(`🚚 Доставка: ${delivery}`);
+  if (addr) lines.push(`📍 Адрес/ПВЗ: ${addr}`);
+  if (comment) lines.push(`📝 Комментарий: ${comment}`);
+
+  lines.push("");
+  lines.push("📦 Состав заказа:");
+
+  let total = 0;
+
+  cart.forEach((it, idx) => {
+    const p = getProductById(it.id);
+    if (!p) return;
+
+    const fandom = getFandomById(p.fandom_id);
+    const unit = calcItemUnitPrice(p, it);
+    const qty = Number(it.qty) || 0;
+    const lineTotal = unit * qty;
+    total += lineTotal;
+
+    const opt = optionLabel(it);
+    lines.push(`${idx + 1}) ${p.name} — ${typeLabel(p.product_type)}${fandom?.fandom_name ? ` / ${fandom.fandom_name}` : ""}`);
+    if (opt) lines.push(`   • Опции: ${opt}`);
+    lines.push(`   • Кол-во: ${qty}`);
+    lines.push(`   • Цена: ${money(unit)} / шт.`);
+    lines.push(`   • Сумма: ${money(lineTotal)}`);
+  });
+
+  lines.push("");
+  lines.push(`💳 Итого: ${money(total)}`);
+  lines.push("");
+  lines.push("✨ Отправлено из Mini App LesPaw");
+
+  return lines.join("\n");
 }
