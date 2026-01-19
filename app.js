@@ -152,6 +152,34 @@ let settings = {
 // =====================
 // CSV utils
 // =====================
+// =====================
+// CSV CACHE (ускорение загрузки)
+// - сначала пробуем взять данные из localStorage (быстро)
+// - затем тихо обновляем в фоне (чтобы данные не устаревали)
+// =====================
+const LS_CSV_CACHE_FANDOMS = "lespaw_csv_cache_fandoms_v1";
+const LS_CSV_CACHE_PRODUCTS = "lespaw_csv_cache_products_v1";
+const LS_CSV_CACHE_SETTINGS = "lespaw_csv_cache_settings_v1";
+const CSV_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 часов
+
+function loadCsvCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.data)) return null;
+    return obj;
+  } catch {
+    return null;
+  }
+}
+function saveCsvCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // ignore
+  }
+}
 function parseCSV(text) {
   const rows = [];
   let row = [];
@@ -197,10 +225,27 @@ function parseCSV(text) {
 }
 
 async function fetchCSV(url) {
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`);
   return parseCSV(await res.text());
 }
+
+async function fetchCSVWithCache(url, cacheKey) {
+  const cached = loadCsvCache(cacheKey);
+  // Если кеш свежий — используем сразу и параллельно обновляем в фоне
+  if (cached && Date.now() - (cached.ts || 0) < CSV_CACHE_TTL_MS) {
+    // фон-обновление (не блокируем UI)
+    fetchCSV(url)
+      .then((fresh) => saveCsvCache(cacheKey, fresh))
+      .catch(() => {});
+    return cached.data;
+  }
+  // иначе грузим как обычно
+  const fresh = await fetchCSV(url);
+  saveCsvCache(cacheKey, fresh);
+  return fresh;
+}
+
 
 // =====================
 // Helpers
@@ -374,7 +419,7 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy">`;
+  return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy" decoding="async">`;
 }
 
 function safeText(s) {
@@ -410,12 +455,46 @@ async function init() {
       if (q.trim()) openPage(() => renderSearch(q));
       else resetToHome();
     });
+    // Быстрый старт: пробуем взять данные из кеша (если есть)
+    // и сразу показываем главную, чтобы меню не "висело" пустым.
+    try {
+      const cachedF = loadCsvCache(LS_CSV_CACHE_FANDOMS);
+      const cachedP = loadCsvCache(LS_CSV_CACHE_PRODUCTS);
+      const cachedS = loadCsvCache(LS_CSV_CACHE_SETTINGS);
+      if (cachedF?.data?.length) fandoms = cachedF.data;
+      if (cachedP?.data?.length) products = cachedP.data;
+      if (cachedS?.data?.length) {
+        // settings кешируем как массив строк (как из CSV)
+        cachedS.data.forEach((row) => {
+          const k = row.key;
+          const v = row.value;
+          if (!k) return;
+          if (k === "overlay_price_delta" || k === "holo_base_price_delta") settings[k] = Number(v);
+          else settings[k] = v;
+        });
+      }
+    } catch {}
 
-    fandoms = await fetchCSV(CSV_FANDOMS_URL);
-    products = await fetchCSV(CSV_PRODUCTS_URL);
+    updateBadges();
+    resetToHome(); // уже можно открыть меню
 
-    const s = await fetchCSV(CSV_SETTINGS_URL);
-    s.forEach((row) => {
+    // Параллельно грузим свежие CSV (быстрее, чем по очереди)
+    const [fFresh, pFresh, sFresh] = await Promise.all([
+      fetchCSVWithCache(CSV_FANDOMS_URL, LS_CSV_CACHE_FANDOMS),
+      fetchCSVWithCache(CSV_PRODUCTS_URL, LS_CSV_CACHE_PRODUCTS),
+      fetchCSVWithCache(CSV_SETTINGS_URL, LS_CSV_CACHE_SETTINGS),
+    ]);
+
+    fandoms = fFresh || [];
+    products = pFresh || [];
+
+    // Пересобираем settings из свежих
+    settings = {
+      overlay_price_delta: settings.overlay_price_delta ?? 100,
+      holo_base_price_delta: settings.holo_base_price_delta ?? 100,
+      examples_url: settings.examples_url ?? "https://t.me/LesPaw",
+    };
+    (sFresh || []).forEach((row) => {
       const k = row.key;
       const v = row.value;
       if (!k) return;
@@ -423,10 +502,12 @@ async function init() {
       else settings[k] = v;
     });
 
-    updateBadges();
-    resetToHome();
+    // Если пользователька уже в каталоге/поиске — перерисуем текущий экран с обновлёнными данными
+    try {
+      if (typeof currentRender === "function" && currentRender !== renderHome) currentRender();
+    } catch {}
     syncBottomSpace();
-  } catch (e) {
+} catch (e) {
     view.innerHTML = `
       <div class="card">
         <div class="h2">Ошибка загрузки данных</div>
@@ -703,7 +784,7 @@ function renderLaminationExamples() {
         .map((ex) => {
           const img = ex.images?.[0] || "";
           const imgHTML = img
-            ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
+            ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy" decoding="async">`
             : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
 
           return `
@@ -771,7 +852,7 @@ function renderLaminationExampleDetail(exId) {
                 .map(
                   (u) => `
                 <div class="exBigBtn" style="cursor:default">
-                  <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
+                  <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy" decoding="async">
                 </div>
               `
                 )
@@ -934,7 +1015,7 @@ function renderProduct(productId) {
         <div class="small">${fandom?.fandom_name ? `<b>${fandom.fandom_name}</b> · ` : ""}${typeLabel(p.product_type)}</div>
         <hr>
 
-        ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy">` : ""}
+        ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async">` : ""}
 
         ${p.description ? `<div class="small" style="margin-top:10px">${p.description}</div>` : ""}
         ${p.description_short && !p.description ? `<div class="small" style="margin-top:10px">${p.description_short}</div>` : ""}
