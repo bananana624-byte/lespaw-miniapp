@@ -35,273 +35,7 @@ const SUGGEST_URL = "https://t.me/LesPaw/280";
 // Telegram init
 // =====================
 const tg = window.Telegram?.WebApp;
-try {
-  tg?.ready();
-  tg?.expand();
-} catch {
-  // если вне Telegram — не падаем
-}
-
-// =====================
-// DOM
-// =====================
-const view = document.getElementById("view");
-const globalSearch = document.getElementById("globalSearch");
-
-const navBack = document.getElementById("navBack");
-const navHome = document.getElementById("navHome");
-const navFav = document.getElementById("navFav");
-const navCart = document.getElementById("navCart");
-
-const favCount = document.getElementById("favCount");
-const cartCount = document.getElementById("cartCount");
-
-const wrapEl = document.querySelector(".wrap");
-const navBarEl = document.querySelector(".navBar");
-
-// =====================
-// Storage (старые ключи — чтобы не сбросить корзину/избранное)
-// =====================
-const LS_CART = "lespaw_cart_v41";
-const LS_FAV = "lespaw_fav_v41";
-
-function loadJSON(key, fallback) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-function saveJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-let cart = loadJSON(LS_CART, []);
-let fav = loadJSON(LS_FAV, []);
-
-// =====================
-// Toast
-// =====================
-function toast(msg, kind = "") {
-  const el = document.createElement("div");
-  el.className = `toast ${kind}`.trim();
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2200);
-}
-
-// =====================
-// Safe bottom space (nav must NOT cover content)
-// =====================
-function syncBottomSpace() {
-  if (!wrapEl || !navBarEl) return;
-  const h = navBarEl.offsetHeight || 70;
-  wrapEl.style.paddingBottom = `calc(${h + 80}px + env(safe-area-inset-bottom))`;
-}
-window.addEventListener("resize", syncBottomSpace);
-
-// =====================
-// Navigation stack
-// =====================
-const navStack = [];
-let currentRender = null;
-
-function openPage(renderFn) {
-  if (currentRender) navStack.push(currentRender);
-  currentRender = renderFn;
-  syncNav();
-  renderFn();
-  syncBottomSpace();
-}
-
-function goBack() {
-  const prev = navStack.pop();
-  currentRender = prev || renderHome;
-  syncNav();
-  currentRender();
-  syncBottomSpace();
-}
-
-function resetToHome() {
-  navStack.length = 0;
-  currentRender = renderHome;
-  if (globalSearch) globalSearch.value = "";
-  syncNav();
-  renderHome();
-  syncBottomSpace();
-}
-
-function syncNav() {
-  navBack?.classList.toggle("is-active", navStack.length > 0);
-  navHome?.classList.toggle("is-active", currentRender === renderHome && navStack.length === 0);
-  navFav?.classList.toggle("is-active", currentRender === renderFavorites);
-  navCart?.classList.toggle("is-active", currentRender === renderCart);
-}
-
-// =====================
-// Data
-// =====================
-let fandoms = [];
-let products = [];
-let settings = {
-  overlay_price_delta: 100,
-  holo_base_price_delta: 100,
-  examples_url: "https://t.me/LesPaw",
-};
-
-// =====================
-// CSV utils
-// =====================
-function parseCSV(text) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-
-  const s = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (inQuotes) {
-      if (c === '"') {
-        const next = s[i + 1];
-        if (next === '"') {
-          field += '"';
-          i++;
-        } else inQuotes = false;
-      } else field += c;
-    } else {
-      if (c === '"') inQuotes = true;
-      else if (c === ",") {
-        row.push(field);
-        field = "";
-      } else if (c === "\n") {
-        row.push(field);
-        rows.push(row);
-        row = [];
-        field = "";
-      } else field += c;
-    }
-  }
-  row.push(field);
-  rows.push(row);
-
-  const cleaned = rows.filter((r) => r.some((cell) => String(cell).trim() !== ""));
-  if (!cleaned.length) return [];
-
-  const headers = cleaned[0].map((h) => String(h).trim());
-  return cleaned.slice(1).map((r) => {
-    const obj = {};
-    headers.forEach((h, idx) => (obj[h] = (r[idx] ?? "").toString().trim()));
-    return obj;
-  });
-}
-
-async function fetchCSV(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`);
-  return parseCSV(await res.text());
-}
-
-// =====================
-// Helpers
-// =====================
-const FANDOM_TYPES = [
-  "Фильмы",
-  "Игры",
-  "Сериалы",
-  "Актрисы и певицы",
-  "Аниме",
-  "Мультсериалы",
-  "Манхвы / манги",
-  "Лакорны",
-  "Что-то тематическое",
-];
-
-const OVERLAY_OPTIONS = [
-  ["none", "Без покрытия"],
-  ["sugar", "Сахар"],
-  ["stars", "Звёздочки"],
-  ["snowflakes_small", "Маленькие снежинки"],
-  ["stars_big", "Большие звёзды"],
-  ["holo_overlay", "Голографическая ламинация"],
-];
-const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
-
-// =====================
-// Примеры ламинации / пленки (локально в приложении)
-//
-// Как пользоваться:
-// 1) Вставь прямые ссылки на картинки (https://...jpg/png/webp)
-//    Лучше всего — изображения, доступные без авторизации.
-// 2) Можно добавлять несколько фото на один пример.
-//
-// Если images пустой — карточка покажет заглушку (чтобы ты не теряла название).
-// =====================
-const LAMINATION_EXAMPLES = [
-  {
-    id: "none",
-    title: "Без покрытия",
-    subtitle: "Матовая/обычная поверхность",
-    images: [],
-  },
-  {
-    id: "sugar",
-    kind: "lamination",
-    title: "Сахар",
-    subtitle: "Микрорельеф, блестящая крошка",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%A1%D0%B0%D1%85%D0%B0%D1%80.jpg"],
-  },
-  {
-    id: "stars",
-    kind: "lamination",
-    title: "Звёздочки",
-    subtitle: "Мелкие звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%97%D0%B2%D1%91%D0%B7%D0%B4%D0%BE%D1%87%D0%BA%D0%B8.jpg"],
-  },
-  {
-    id: "snowflakes_small",
-    kind: "lamination",
-    title: "Маленькие снежинки",
-    subtitle: "Зимний эффект",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%9C%D0%B0%D0%BB%D0%B5%D0%BD%D1%8C%D0%BA%D0%B8%D0%B5%20%D1%81%D0%BD%D0%B5%D0%B6%D0%B8%D0%BD%D0%BA%D0%B8.jpg"],
-  },
-  {
-    id: "stars_big",
-    kind: "lamination",
-    title: "Большие звёзды",
-    subtitle: "Крупные звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%91%D0%BE%D0%BB%D1%8C%D1%88%D0%B8%D0%B5%20%D0%B7%D0%B2%D1%91%D0%B7%D0%B4%D1%8B.jpg"],
-  },
-  {
-    id: "holo_overlay",
-    kind: "lamination",
-    title: "Голографическая ламинация",
-    subtitle: "Радужные переливы",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%93%D0%BE%D0%BB%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%8F%20%D0%B1%D0%B5%D0%B7%20%D1%80%D0%B8%D1%81%D1%83%D0%BD%D0%BA%D0%B0.jpg"],
-  },
-  {
-    id: "holo_base",
-    title: "Голографическая основа",
-    subtitle: "Сама наклейка — голографическая",
-    images: [],
-  },
-
-  {
-    id: "film_glossy",
-    kind: "film",
-    title: "Стандартная глянцевая плёнка",
-    subtitle: "Базовая плёнка — всегда глянец",
-    description: "Это стандартная плёнка с глянцевой поверхностью. Она всегда глянцевая по своей природе и даёт ровный, чистый блеск без дополнительных эффектов.",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
-  },
-  {
-    id: "film_holo",
-    kind: "film",
-    title: "Голографическая плёнка",
-    subtitle: "Самая яркая голография (за счёт текстуры плёнки)",
-    description: "Тут эффект голографии обычно заметнее и «сочнее», потому что сама плёнка уже голографическая по текстуре. А голографическая ламинация — это прозрачное покрытие с эффектом сверху: оно тоже красиво переливается, но выглядит мягче, потому что основа остаётся прозрачной.",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"],
-  },
+try
 
 ];
 
@@ -315,7 +49,7 @@ function money(n) {
 // поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
-    .split(/[,;\n]+/g)
+    .split(/[;\n]+/g)
     .map((x) => x.trim())
     .filter(Boolean);
 }
@@ -699,52 +433,39 @@ function openExamples() {
 }
 
 function renderLaminationExamples() {
-  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
   const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
+  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
 
-  const renderGrid = (items) =>
-    `
-      <div class="grid2 exGrid" id="exGrid">
-        ${items
-          .map((ex) => {
-            const img = ex.images?.[0] || "";
-            const imgHTML = img
-              ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
-              : `<div class="exStub" aria-hidden="true">
-                  <div class="exStubGlow"></div>
-                  <div class="exStubText">Нет фото</div>
-                </div>`;
-            return `
-              <div class="exCard" data-exid="${ex.id}">
-                ${imgHTML}
-                <div class="exTitle">${safeText(ex.title)}</div>
-                ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
-              </div>
-            `;
-          })
-          .join("")}
-      </div>
-    `;
+  const renderGrid = (items) => `
+    <div class="grid2 exGrid">
+      ${items.map((ex) => {
+        const img = ex.images?.[0];
+        return `
+          <div class="exCard">
+            ${img ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}">` :
+              `<div class="exStub"><div class="exStubText">Нет фото</div></div>`}
+            <div class="exTitle">${safeText(ex.title)}</div>
+            ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">Примеры ламинации и плёнки</div>
       <div class="small">Все примеры — прямо здесь, без перехода в Telegram.</div>
+
       <hr>
-
-      <div class="h3" style="margin-top:2px">Ламинация</div>
-      ${renderGrid(laminations)}
-
-      <hr style="margin:16px 0">
-
-      <div class="h3" style="margin-top:2px">Плёнка</div>
+      <div class="h3">Плёнка</div>
       ${renderGrid(films)}
+
+      <hr>
+      <div class="h3">Ламинация</div>
+      ${renderGrid(laminations)}
     </div>
   `;
-
-  view.querySelectorAll("[data-exid]").forEach((el) => {
-    el.onclick = () => openPage(() => renderLaminationExampleDetail(el.dataset.exid));
-  });
 
   syncNav();
   syncBottomSpace();
@@ -765,8 +486,6 @@ function renderLaminationExampleDetail(exId) {
     <div class="card">
       <div class="h2">${safeText(ex.title)}</div>
       ${ex.subtitle ? `<div class="small">${safeText(ex.subtitle)}</div>` : ``}
-
-      ${ex.description ? `<div class="small" style="margin-top:8px">${safeText(ex.description)}</div>` : ``}
       <hr>
 
       ${imgs.length
@@ -774,13 +493,14 @@ function renderLaminationExampleDetail(exId) {
             ${imgs
               .map(
                 (u) => `
-              <div class="exBigBtn" style="cursor:default">
+              <button class="exBigBtn" type="button" data-openimg="${u}">
                 <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
-              </div>
+              </button>
             `
               )
               .join("")}
-          </div>`
+          </div>
+          <div class="small"></div>`
         : `<div class="small">Фото для этого примера пока не добавлено.</div>`}
 
       <hr>
@@ -789,8 +509,9 @@ function renderLaminationExampleDetail(exId) {
   `;
 
   document.getElementById("exBack").onclick = () => goBack();
-
-  // Никаких открытий "отдельно" — это не нужно для примеров ламинации/плёнки.
+  view.querySelectorAll("[data-openimg]").forEach((b) => {
+    b.onclick = () => openExternal(b.dataset.openimg);
+  });
 
   syncNav();
   syncBottomSpace();
