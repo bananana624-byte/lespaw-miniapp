@@ -1,10 +1,15 @@
-// LesPaw Mini App — app.js v44 (thumbs in grid cards + robust safe bottom space)
+// LesPaw Mini App — app.js v45
+// Полная рабочая версия (фикс: прошлый app.js был обрезан -> из-за синтаксической ошибки главное меню не отображалось)
 //
-// IMPORTANT:
-// - Мини-карточки товара с фото (если есть ссылки)
-// - splitList поддерживает: запятая, ;, переносы строк
-// - images берём из: images / image / image_url / photo / img (fallback)
-// - Нижний отступ под навбар рассчитываем JS (чтобы не перекрывалось)
+// Фичи:
+// - Глобальный поиск только сверху
+// - Нижний навбар: назад / избранное / корзина (бейджи)
+// - Категории -> типы фандомов -> список -> страница фандома
+// - Страница фандома: автогруппировка товаров по типам (без вкладок)
+// - Сетка товаров 2× + превью (если есть image/images/...)
+// - Карточка товара: избранное, добавить в корзину; для наклеек — основа/покрытие + доплаты из settings
+// - Корзина: управление количеством, удаление, сумма
+// - Оформление: обязательная галочка; отправка предзаполненного текста менеджерке @LesPaw_manager
 
 // =====================
 // CSV ссылки (твои)
@@ -30,8 +35,12 @@ const SUGGEST_URL = "https://t.me/LesPaw/280";
 // Telegram init
 // =====================
 const tg = window.Telegram?.WebApp;
-tg?.ready();
-tg?.expand();
+try {
+  tg?.ready();
+  tg?.expand();
+} catch {
+  // no-op for browser
+}
 
 // =====================
 // DOM
@@ -50,7 +59,7 @@ const wrapEl = document.querySelector(".wrap");
 const navBarEl = document.querySelector(".navBar");
 
 // =====================
-// Storage (оставила прежние ключи, чтобы не сбросить корзину/избранное у людей)
+// Storage
 // =====================
 const LS_CART = "lespaw_cart_v41";
 const LS_FAV = "lespaw_fav_v41";
@@ -81,12 +90,11 @@ function toast(msg, kind = "") {
 }
 
 // =====================
-// Safe bottom space (nav must NOT cover content)
+// Safe bottom space
 // =====================
 function syncBottomSpace() {
   if (!wrapEl || !navBarEl) return;
   const h = navBarEl.offsetHeight || 70;
-  // 18px bottom gap + glow/air + nav height; safe-area учитываем через env()
   wrapEl.style.paddingBottom = `calc(${h + 80}px + env(safe-area-inset-bottom))`;
 }
 window.addEventListener("resize", syncBottomSpace);
@@ -214,16 +222,16 @@ const OVERLAY_OPTIONS = [
   ["stars_big", "Большие звёзды"],
   ["holo_overlay", "Голографическая ламинация"],
 ];
-const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
 
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
 }
+
 function money(n) {
   return `${Number(n) || 0} ₽`;
 }
 
-// ✅ ВАЖНО: поддержка " , ; \n "
+// поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
     .split(/[,;\n]+/g)
@@ -275,15 +283,7 @@ function updateBadges() {
 
 // ===== thumbnails helpers =====
 function imagesField(p) {
-  // пробуем несколько названий колонок
-  return (
-    p?.images ||
-    p?.image ||
-    p?.image_url ||
-    p?.photo ||
-    p?.img ||
-    ""
-  );
+  return p?.images || p?.image || p?.image_url || p?.photo || p?.img || "";
 }
 
 function firstImageUrl(p) {
@@ -293,8 +293,20 @@ function firstImageUrl(p) {
 
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
-  if (!u) return ""; // если пусто — просто без картинки (не ломаем сетку)
+  if (!u) return "";
   return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy">`;
+}
+
+function safeText(s) {
+  return String(s || "").replace(/[<>]/g, "");
+}
+
+function openTelegram(url) {
+  try {
+    tg?.openTelegramLink(url);
+  } catch {
+    window.open(url, "_blank");
+  }
 }
 
 // =====================
@@ -331,7 +343,7 @@ async function init() {
     view.innerHTML = `
       <div class="card">
         <div class="h2">Ошибка загрузки данных</div>
-        <div class="small">${String(e)}</div>
+        <div class="small">${safeText(String(e))}</div>
         <hr>
         <div class="small">Проверь публикацию таблиц и CSV-ссылки.</div>
       </div>
@@ -460,13 +472,12 @@ function renderFandomList(type) {
 }
 
 // =====================
-// Страница фандома → товары сеткой 2× (с фотками)
+// Страница фандома → товары сеткой 2× (с фотками) + автогруппировка по типам
 // =====================
 function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
-  // порядок секций (можно менять)
   const order = ["sticker", "pin", "poster", "box"];
   const labels = {
     sticker: "Наклейки",
@@ -516,7 +527,6 @@ function renderFandomPage(fandomId) {
     </div>
   `;
 
-  // клики по карточкам
   view.querySelectorAll("[data-id]").forEach((el) => {
     el.onclick = () => openPage(() => renderProduct(el.dataset.id));
   });
@@ -564,8 +574,8 @@ function renderInfo() {
     </div>
   `;
 
-  document.getElementById("btnMain").onclick = () => tg?.openTelegramLink(MAIN_CHANNEL_URL);
-  document.getElementById("btnSuggest").onclick = () => tg?.openTelegramLink(SUGGEST_URL);
+  document.getElementById("btnMain").onclick = () => openTelegram(MAIN_CHANNEL_URL);
+  document.getElementById("btnSuggest").onclick = () => openTelegram(SUGGEST_URL);
 
   syncNav();
   syncBottomSpace();
@@ -580,18 +590,18 @@ function renderReviews() {
       <button class="btn" id="openReviews">Открыть отзывы</button>
     </div>
   `;
-  document.getElementById("openReviews").onclick = () => tg?.openTelegramLink(REVIEWS_URL);
+  document.getElementById("openReviews").onclick = () => openTelegram(REVIEWS_URL);
   syncNav();
   syncBottomSpace();
 }
 
 function openExamples() {
   const url = settings.examples_url || "https://t.me/LesPaw";
-  tg?.openTelegramLink(url);
+  openTelegram(url);
 }
 
 // =====================
-// Поиск (только сверху) — товары тоже с фотками
+// Поиск — товары тоже с фотками
 // =====================
 function renderSearch(q) {
   const query = (q || "").toLowerCase().trim();
@@ -611,7 +621,7 @@ function renderSearch(q) {
 
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Поиск: “${q}”</div>
+      <div class="h2">Поиск: “${safeText(q)}”</div>
 
       <div class="small"><b>Фандомы</b></div>
       <div class="list">
@@ -662,7 +672,36 @@ function renderSearch(q) {
 }
 
 // =====================
-// Product page (полная карточка)
+// Price helpers (options)
+// =====================
+function calcItemUnitPrice(p, item) {
+  let price = Number(p?.price) || 0;
+  if ((p?.product_type || "") === "sticker") {
+    const overlayDelta = Number(settings.overlay_price_delta) || 0;
+    const holoDelta = Number(settings.holo_base_price_delta) || 0;
+    if ((item?.overlay || "none") !== "none") price += overlayDelta;
+    if ((item?.base || "normal") === "holo") price += holoDelta;
+  }
+  return price;
+}
+
+function optionLabel(item) {
+  const p = getProductById(item?.id);
+  if (!p) return "";
+  if ((p.product_type || "") !== "sticker") return "";
+
+  const base = (item.base || "normal") === "holo" ? "Голографическая основа" : "Обычная основа";
+  const ovKey = item.overlay || "none";
+  const ov = OVERLAY_OPTIONS.find((x) => x[0] === ovKey)?.[1] || "Без покрытия";
+  return `${base}; покрытие: ${ov}`;
+}
+
+function cartKey(item) {
+  return `${item.id}__${item.base || ""}__${item.overlay || ""}`;
+}
+
+// =====================
+// Product page
 // =====================
 function renderProduct(productId) {
   const p = getProductById(productId);
@@ -676,49 +715,43 @@ function renderProduct(productId) {
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
-  // Покрытие / база (используем existing settings)
-  const overlayDelta = Number(settings.overlay_price_delta) || 0;
-  const holoDelta = Number(settings.holo_base_price_delta) || 0;
-
   const isSticker = (p.product_type || "") === "sticker";
 
-  // состояние выбора
   let selectedOverlay = "none";
-  let selectedBase = "normal"; // normal | holo (для наклеек)
-
-  function calcPrice() {
-    let price = Number(p.price) || 0;
-    if (isSticker) {
-      if (selectedOverlay !== "none") price += overlayDelta;
-      if (selectedBase === "holo") price += holoDelta;
-    }
-    return price;
-  }
+  let selectedBase = "normal"; // normal | holo
 
   function inFav() {
     return fav.includes(p.id);
   }
+
   function favToggle() {
     if (inFav()) setFav(fav.filter((id) => id !== p.id));
     else setFav([...fav, p.id]);
-    render(); // перерисуем кнопку
+    render();
+  }
+
+  function calcPrice() {
+    return calcItemUnitPrice(p, { id: p.id, base: selectedBase, overlay: selectedOverlay });
   }
 
   function addToCart() {
     const item = {
       id: p.id,
       qty: 1,
-      // сохраняем опции (чтобы заказ сформировался корректно)
       overlay: isSticker ? selectedOverlay : "",
       base: isSticker ? selectedBase : "",
     };
-    const existing = cart.find((x) => x.id === item.id && (x.overlay || "") === (item.overlay || "") && (x.base || "") === (item.base || ""));
+
+    const key = cartKey(item);
+    const existing = cart.find((x) => cartKey(x) === key);
+
     if (existing) {
       existing.qty = (Number(existing.qty) || 0) + 1;
       setCart([...cart]);
     } else {
       setCart([...cart, item]);
     }
+
     toast("Добавлено в корзину", "good");
   }
 
@@ -788,3 +821,311 @@ function renderProduct(productId) {
       });
       ovRow.querySelectorAll("[data-ov]").forEach((b) => {
         b.onclick = () => {
+          selectedOverlay = b.dataset.ov;
+          syncBtns();
+        };
+      });
+
+      syncBtns();
+    }
+  }
+
+  render();
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Favorites
+// =====================
+function renderFavorites() {
+  const list = fav
+    .map((id) => getProductById(id))
+    .filter(Boolean);
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Избранное</div>
+      <div class="small">${list.length ? "Нажми на товар, чтобы открыть карточку" : "Пока пусто"}</div>
+      <hr>
+      ${
+        list.length
+          ? `<div class="grid2">
+              ${list
+                .map(
+                  (p) => `
+                <div class="pcard" data-id="${p.id}">
+                  ${cardThumbHTML(p)}
+                  <div class="pcardTitle">${p.name}</div>
+                  <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+            <div style="height:12px"></div>
+            <button class="btn" id="btnClearFav">Очистить избранное</button>`
+          : ""
+      }
+    </div>
+  `;
+
+  view.querySelectorAll("[data-id]").forEach((el) => {
+    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+  });
+
+  const btnClear = document.getElementById("btnClearFav");
+  if (btnClear) {
+    btnClear.onclick = () => {
+      setFav([]);
+      toast("Избранное очищено", "good");
+      renderFavorites();
+    };
+  }
+
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Cart
+// =====================
+function renderCart() {
+  const items = cart
+    .map((it) => {
+      const p = getProductById(it.id);
+      if (!p) return null;
+      return { it, p };
+    })
+    .filter(Boolean);
+
+  const total = items.reduce((sum, x) => sum + calcItemUnitPrice(x.p, x.it) * (Number(x.it.qty) || 0), 0);
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Корзина</div>
+      <div class="small">${items.length ? "Проверь количество и оформи заказ" : "Пока пусто"}</div>
+      <hr>
+
+      ${
+        items.length
+          ? `
+        <div class="list">
+          ${items
+            .map(({ it, p }) => {
+              const unit = calcItemUnitPrice(p, it);
+              const line = unit * (Number(it.qty) || 0);
+              const opt = optionLabel(it);
+              return `
+                <div class="item" data-key="${cartKey(it)}">
+                  <div class="title">${p.name}</div>
+                  <div class="meta">${money(unit)} за шт. · ${typeLabel(p.product_type)}${opt ? ` · ${opt}` : ""}</div>
+                  <div style="height:10px"></div>
+                  <div class="row" style="align-items:center; justify-content:space-between">
+                    <div class="row" style="gap:8px; align-items:center">
+                      <button class="btn" data-act="minus">−</button>
+                      <div class="small" style="min-width:36px; text-align:center"><b>${Number(it.qty) || 0}</b></div>
+                      <button class="btn" data-act="plus">+</button>
+                    </div>
+                    <div class="small"><b>${money(line)}</b></div>
+                    <button class="btn" data-act="remove">Удалить</button>
+                  </div>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+
+        <hr>
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <div class="small"><b>Итого</b></div>
+          <div class="h2" style="margin:0">${money(total)}</div>
+        </div>
+
+        <div style="height:10px"></div>
+        <div class="row">
+          <button class="btn" id="btnClearCart">Очистить корзину</button>
+          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
+        </div>
+      `
+          : ""
+      }
+    </div>
+  `;
+
+  // handlers
+  view.querySelectorAll(".item[data-key]").forEach((row) => {
+    const key = row.getAttribute("data-key");
+
+    row.querySelectorAll("[data-act]").forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const act = b.getAttribute("data-act");
+
+        const idx = cart.findIndex((x) => cartKey(x) === key);
+        if (idx < 0) return;
+
+        const next = [...cart];
+        const cur = { ...next[idx] };
+        const q = Number(cur.qty) || 0;
+
+        if (act === "plus") cur.qty = q + 1;
+        if (act === "minus") cur.qty = Math.max(1, q - 1);
+        if (act === "remove") {
+          next.splice(idx, 1);
+          setCart(next);
+          renderCart();
+          return;
+        }
+
+        next[idx] = cur;
+        setCart(next);
+        renderCart();
+      };
+    });
+
+    // tap on row opens product
+    row.onclick = () => {
+      const id = key.split("__")[0];
+      if (id) openPage(() => renderProduct(id));
+    };
+  });
+
+  const btnClear = document.getElementById("btnClearCart");
+  if (btnClear) {
+    btnClear.onclick = () => {
+      setCart([]);
+      toast("Корзина очищена", "good");
+      renderCart();
+    };
+  }
+
+  const btnCheckout = document.getElementById("btnCheckout");
+  if (btnCheckout) btnCheckout.onclick = () => openPage(renderCheckout);
+
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Checkout
+// =====================
+function renderCheckout() {
+  if (!cart.length) {
+    view.innerHTML = `
+      <div class="card">
+        <div class="h2">Корзина пуста</div>
+        <div class="small">Добавь товары, чтобы оформить заказ.</div>
+      </div>
+    `;
+    syncNav();
+    syncBottomSpace();
+    return;
+  }
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Оформление заказа</div>
+      <div class="small">Заполни данные — и отправим менеджерке предзаполненное сообщение.</div>
+      <hr>
+
+      <div class="small"><b>Имя</b></div>
+      <input class="searchInput" id="cName" placeholder="Как к тебе обращаться?" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Контакт</b></div>
+      <input class="searchInput" id="cContact" placeholder="@ник или телефон" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Доставка</b></div>
+      <input class="searchInput" id="cDelivery" placeholder="Яндекс ПВЗ / 5post / другое" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Адрес/ПВЗ</b></div>
+      <input class="searchInput" id="cAddr" placeholder="Город, адрес или код/адрес ПВЗ" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <div style="height:12px"></div>
+      <div class="small"><b>Комментарий (опционально)</b></div>
+      <input class="searchInput" id="cComment" placeholder="Например: объединить в один заказ" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
+
+      <hr>
+
+      <label class="item" style="display:flex; gap:10px; align-items:flex-start">
+        <input type="checkbox" id="cAgree" style="margin-top:4px" />
+        <div>
+          <div class="title">Я проверила состав заказа</div>
+          <div class="meta">Без этой галочки отправить заказ нельзя</div>
+        </div>
+      </label>
+
+      <div style="height:12px"></div>
+      <button class="btn is-active" id="cSend">Отправить заказ менеджерке</button>
+
+      <div style="height:10px"></div>
+      <div class="small">Откроется чат с @${MANAGER_USERNAME} и предзаполненным текстом.</div>
+    </div>
+  `;
+
+  document.getElementById("cSend").onclick = () => {
+    const agree = document.getElementById("cAgree").checked;
+    if (!agree) {
+      toast("Поставь галочку подтверждения", "warn");
+      return;
+    }
+
+    const name = document.getElementById("cName").value.trim();
+    const contact = document.getElementById("cContact").value.trim();
+    const delivery = document.getElementById("cDelivery").value.trim();
+    const addr = document.getElementById("cAddr").value.trim();
+    const comment = document.getElementById("cComment").value.trim();
+
+    const text = buildOrderText({ name, contact, delivery, addr, comment });
+    const url = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(text)}`;
+    openTelegram(url);
+  };
+
+  syncNav();
+  syncBottomSpace();
+}
+
+function buildOrderText({ name, contact, delivery, addr, comment }) {
+  const lines = [];
+  lines.push("🛒 Заказ LesPaw");
+  lines.push("");
+
+  if (name) lines.push(`👤 Имя: ${name}`);
+  if (contact) lines.push(`📱 Контакт: ${contact}`);
+  if (delivery) lines.push(`🚚 Доставка: ${delivery}`);
+  if (addr) lines.push(`📍 Адрес/ПВЗ: ${addr}`);
+  if (comment) lines.push(`📝 Комментарий: ${comment}`);
+
+  lines.push("");
+  lines.push("📦 Состав заказа:");
+
+  let total = 0;
+
+  cart.forEach((it, idx) => {
+    const p = getProductById(it.id);
+    if (!p) return;
+
+    const fandom = getFandomById(p.fandom_id);
+    const unit = calcItemUnitPrice(p, it);
+    const qty = Number(it.qty) || 0;
+    const lineTotal = unit * qty;
+    total += lineTotal;
+
+    const opt = optionLabel(it);
+    lines.push(`${idx + 1}) ${p.name} — ${typeLabel(p.product_type)}${fandom?.fandom_name ? ` / ${fandom.fandom_name}` : ""}`);
+    if (opt) lines.push(`   • Опции: ${opt}`);
+    lines.push(`   • Кол-во: ${qty}`);
+    lines.push(`   • Цена: ${money(unit)} / шт.`);
+    lines.push(`   • Сумма: ${money(lineTotal)}`);
+  });
+
+  lines.push("");
+  lines.push(`💳 Итого: ${money(total)}`);
+  lines.push("");
+  lines.push("✨ Отправлено из Mini App LesPaw");
+
+  return lines.join("\n");
+}
