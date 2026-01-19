@@ -1,10 +1,11 @@
-// LesPaw Mini App — app.js v53
+// LesPaw Mini App — app.js v54
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
 // - Главный экран (плитки)
 // - Категории -> фандомы -> товары (сетка 2x + фото)
 // - Поиск только сверху
+// - Примеры ламинации/пленки внутри Mini App (без перехода в TG-пост)
 // - Избранное + Корзина + Оформление
 // - После добавления товара корзина НЕ открывается
 // - На оформлении обязательная галочка (если нет — уведомление)
@@ -226,6 +227,61 @@ const OVERLAY_OPTIONS = [
 ];
 const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
 
+// =====================
+// Примеры ламинации / пленки (локально в приложении)
+//
+// Как пользоваться:
+// 1) Вставь прямые ссылки на картинки (https://...jpg/png/webp)
+//    Лучше всего — изображения, доступные без авторизации.
+// 2) Можно добавлять несколько фото на один пример.
+//
+// Если images пустой — карточка покажет заглушку (чтобы ты не теряла название).
+// =====================
+const LAMINATION_EXAMPLES = [
+  {
+    id: "none",
+    title: "Без покрытия",
+    subtitle: "Матовая/обычная поверхность",
+    images: [],
+  },
+  {
+    id: "sugar",
+    title: "Сахар",
+    subtitle: "Микрорельеф, блестящая крошка",
+    images: [],
+  },
+  {
+    id: "stars",
+    title: "Звёздочки",
+    subtitle: "Мелкие звёзды",
+    images: [],
+  },
+  {
+    id: "snowflakes_small",
+    title: "Маленькие снежинки",
+    subtitle: "Зимний эффект",
+    images: [],
+  },
+  {
+    id: "stars_big",
+    title: "Большие звёзды",
+    subtitle: "Крупные звёзды",
+    images: [],
+  },
+  {
+    id: "holo_overlay",
+    title: "Голографическая ламинация",
+    subtitle: "Радужные переливы",
+    images: [],
+  },
+  {
+    id: "holo_base",
+    title: "Голографическая основа",
+    subtitle: "Сама наклейка — голографическая",
+    images: [],
+  },
+];
+
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
 }
@@ -310,6 +366,15 @@ function safeText(s) {
 function openTelegramText(toUsername, text) {
   const link = `https://t.me/${toUsername}?text=${encodeURIComponent(text)}`;
   tg?.openTelegramLink(link);
+}
+
+function openExternal(url) {
+  const u = String(url || "").trim();
+  if (!u) return;
+  // Telegram WebApp: openLink работает для любых ссылок
+  if (tg?.openLink) tg.openLink(u);
+  else if (tg?.openTelegramLink && u.startsWith("https://t.me/")) tg.openTelegramLink(u);
+  else window.open(u, "_blank", "noopener,noreferrer");
 }
 
 // =====================
@@ -603,9 +668,98 @@ function renderReviews() {
   syncBottomSpace();
 }
 
+// =====================
+// Примеры ламинации / пленки (внутри приложения)
+// =====================
 function openExamples() {
-  const url = settings.examples_url || "https://t.me/LesPaw";
-  tg?.openTelegramLink(url);
+  openPage(renderLaminationExamples);
+}
+
+function renderLaminationExamples() {
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Примеры ламинации и пленки</div>
+      <div class="small">Все примеры — прямо здесь, без перехода в Telegram.</div>
+      <hr>
+      <div class="small"><b>Подсказка:</b> нажми на пример, чтобы открыть его крупно.</div>
+      <div class="grid2 exGrid" id="exGrid">
+        ${LAMINATION_EXAMPLES.map((ex) => {
+          const img = ex.images?.[0] || "";
+          const imgHTML = img
+            ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
+            : `<div class="exStub" aria-hidden="true">
+                <div class="exStubGlow"></div>
+                <div class="exStubText">Нет фото</div>
+              </div>`;
+          return `
+            <div class="exCard" data-exid="${ex.id}">
+              ${imgHTML}
+              <div class="exTitle">${safeText(ex.title)}</div>
+              ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      <hr>
+      <div class="small">
+        Если хочешь, я могу вынести эти примеры в отдельную Google-таблицу (CSV), чтобы ты меняла их без правок кода.
+      </div>
+    </div>
+  `;
+
+  view.querySelectorAll("[data-exid]").forEach((el) => {
+    el.onclick = () => openPage(() => renderLaminationExampleDetail(el.dataset.exid));
+  });
+
+  syncNav();
+  syncBottomSpace();
+}
+
+function renderLaminationExampleDetail(exId) {
+  const ex = LAMINATION_EXAMPLES.find((x) => x.id === exId);
+  if (!ex) {
+    view.innerHTML = `<div class="card"><div class="h2">Пример не найден</div></div>`;
+    syncNav();
+    syncBottomSpace();
+    return;
+  }
+
+  const imgs = Array.isArray(ex.images) ? ex.images.filter(Boolean) : [];
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">${safeText(ex.title)}</div>
+      ${ex.subtitle ? `<div class="small">${safeText(ex.subtitle)}</div>` : ``}
+      <hr>
+
+      ${imgs.length
+        ? `<div class="exBig">
+            ${imgs
+              .map(
+                (u) => `
+              <button class="exBigBtn" type="button" data-openimg="${u}">
+                <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
+              </button>
+            `
+              )
+              .join("")}
+          </div>
+          <div class="small">Нажми на фото, чтобы открыть отдельно (если нужно приблизить).</div>`
+        : `<div class="small">Фото для этого примера пока не добавлено.</div>`}
+
+      <hr>
+      <button class="btn" id="exBack">К списку примеров</button>
+    </div>
+  `;
+
+  document.getElementById("exBack").onclick = () => goBack();
+  view.querySelectorAll("[data-openimg]").forEach((b) => {
+    b.onclick = () => openExternal(b.dataset.openimg);
+  });
+
+  syncNav();
+  syncBottomSpace();
 }
 
 // =====================
