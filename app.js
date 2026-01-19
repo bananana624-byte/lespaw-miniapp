@@ -311,7 +311,7 @@ function renderFandomPage(fandomId) {
     <div class="card">
       <div class="h2">${f?.fandom_name || "Фандом"}</div>
       <div class="row" id="tabs">
-        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
+        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</div>`).join("")}
       </div>
       <hr>
       <div class="grid2" id="prodList"></div>
@@ -398,8 +398,8 @@ function renderInfo() {
       </div>
       <hr>
       <div class="row">
-        <button class="btn" id="btnMain">Наш основной канал</button>
-        <button class="btn" id="btnSuggest">Предложить фандом</button>
+        <button class="btn" id="btnMain">Наш основной канал</div>
+        <button class="btn" id="btnSuggest">Предложить фандом</div>
       </div>
     </div>
   `;
@@ -417,7 +417,7 @@ function renderReviews() {
       <div class="h2">Отзывы</div>
       <div class="small">Откроется пост с отзывами в Telegram.</div>
       <hr>
-      <button class="btn" id="openReviews">Открыть отзывы</button>
+      <button class="btn" id="openReviews">Открыть отзывы</div>
     </div>
   `;
   document.getElementById("openReviews").onclick = () => tg?.openTelegramLink(REVIEWS_URL);
@@ -446,6 +446,7 @@ function renderLaminationExamples() {
               `<div class="exStub"><div class="exStubText">Нет фото</div></div>`}
             <div class="exTitle">${safeText(ex.title)}</div>
             ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+            ${ex.description ? `<div class="exDesc">${safeText(ex.description)}</div>` : ``}
           </div>
         `;
       }).join("")}
@@ -493,9 +494,9 @@ function renderLaminationExampleDetail(exId) {
             ${imgs
               .map(
                 (u) => `
-              <button class="exBigBtn" type="button" data-openimg="${u}">
+              <div class="exBigBtn" style="cursor:default">
                 <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
-              </button>
+              </div>
             `
               )
               .join("")}
@@ -504,14 +505,12 @@ function renderLaminationExampleDetail(exId) {
         : `<div class="small">Фото для этого примера пока не добавлено.</div>`}
 
       <hr>
-      <button class="btn" id="exBack">К списку примеров</button>
+      <button class="btn" id="exBack">К списку примеров</div>
     </div>
   `;
 
   document.getElementById("exBack").onclick = () => goBack();
-  view.querySelectorAll("[data-openimg]").forEach((b) => {
-    b.onclick = () => openExternal(b.dataset.openimg);
-  });
+    });
 
   syncNav();
   syncBottomSpace();
@@ -671,15 +670,15 @@ function renderProduct(productId) {
             ? `
           <div class="small"><b>Основа</b></div>
           <div class="row" id="baseRow">
-            <button class="btn" data-base="normal">Обычная</button>
-            <button class="btn" data-base="holo">Голографическая</button>
+            <button class="btn" data-base="normal">Обычная</div>
+            <button class="btn" data-base="holo">Голографическая</div>
           </div>
 
           <div style="height:10px"></div>
 
           <div class="small"><b>Покрытие</b></div>
           <div class="row" id="ovRow">
-            ${OVERLAY_OPTIONS.map(([k, label]) => `<button class="btn" data-ov="${k}">${label}</button>`).join("")}
+            ${OVERLAY_OPTIONS.map(([k, label]) => `<button class="btn" data-ov="${k}">${label}</div>`).join("")}
           </div>
 
           <hr>
@@ -688,8 +687,8 @@ function renderProduct(productId) {
         }
 
         <div class="row">
-          <button class="btn" id="btnFav">${inFav() ? "♥ В избранном" : "♡ В избранное"}</button>
-          <button class="btn is-active" id="btnCart">Добавить в корзину · ${money(calcPrice())}</button>
+          <button class="btn" id="btnFav">${inFav() ? "♥ В избранном" : "♡ В избранное"}</div>
+          <button class="btn is-active" id="btnCart">Добавить в корзину · ${money(calcPrice())}</div>
         </div>
       </div>
     `;
@@ -761,8 +760,8 @@ function renderFavorites() {
                       <div class="title">${p.name}</div>
                       <div class="meta">${money(p.price)} · ${typeLabel(p.product_type)}${img ? " · есть фото" : ""}</div>
                       <div class="row" style="margin-top:10px">
-                        <button class="btn" data-remove="${p.id}">Убрать</button>
-                        <button class="btn is-active" data-to-cart="${p.id}">В корзину</button>
+                        <button class="btn" data-remove="${p.id}">Убрать</div>
+                        <button class="btn is-active" data-to-cart="${p.id}">В корзину</div>
                       </div>
                     </div>
                   `;
@@ -869,11 +868,11 @@ function renderCart() {
                       <div class="meta">${money(p.price)} · ${typeLabel(p.product_type)}${opt ? ` · ${opt}` : ""}</div>
 
                       <div class="row" style="margin-top:10px; align-items:center">
-                        <button class="btn" data-dec="${idx}">−</button>
+                        <button class="btn" data-dec="${idx}">−</div>
                         <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" data-inc="${idx}">+</button>
+                        <button class="btn" data-inc="${idx}">+</div>
                         <div style="flex:1"></div>
-                        <button class="btn" data-rm="${idx}">Удалить</button>
+                        <button class="btn" data-rm="${idx}">Удалить</div>
                       </div>
                     </div>
                   `;
@@ -890,8 +889,8 @@ function renderCart() {
         <div class="small">Итого: <b>${money(calcCartTotal())}</b></div>
         <div style="height:10px"></div>
         <div class="row">
-          <button class="btn" id="btnClear">Очистить</button>
-          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
+          <button class="btn" id="btnClear">Очистить</div>
+          <button class="btn is-active" id="btnCheckout">Оформить заказ</div>
         </div>
       `
           : ""
@@ -1017,7 +1016,7 @@ function renderCheckout() {
         <div class="h2">Оформление</div>
         <div class="small">Корзина пустая — нечего оформлять.</div>
         <hr>
-        <button class="btn is-active" id="goHome">На главную</button>
+        <button class="btn is-active" id="goHome">На главную</div>
       </div>
     `;
     document.getElementById("goHome").onclick = () => resetToHome();
@@ -1061,8 +1060,8 @@ function renderCheckout() {
       <div style="height:12px"></div>
 
       <div class="row">
-        <button class="btn" id="btnPreview">Посмотреть текст заказа</button>
-        <button class="btn is-active" id="btnSend">Отправить заказ менеджерке</button>
+        <button class="btn" id="btnPreview">Посмотреть текст заказа</div>
+        <button class="btn is-active" id="btnSend">Отправить заказ менеджерке</div>
       </div>
 
       <div id="preview" style="display:none; margin-top:12px">
