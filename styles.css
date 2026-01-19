@@ -527,3 +527,110 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   border-radius:12px;
   font-size:13px;
 }
+
+/* =====================
+   Important Info + Checkout must-read
+===================== */
+
+/* Important Info */
+.infoLead{
+  margin-top:-2px;
+  color:rgba(11,11,18,.72);
+}
+
+.infoStack{
+  display:grid;
+  gap:12px;
+  margin-top:12px;
+}
+
+.infoSection{
+  background:rgba(0,0,0,.04);
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:16px;
+  padding:12px;
+}
+
+.infoTitle{
+  font-weight:1000;
+  font-size:15px;
+  letter-spacing:.2px;
+  color:#0b0b12;
+}
+
+.infoList{
+  margin:8px 0 0;
+  padding-left:18px;
+  color:rgba(11,11,18,.88);
+  font-size:14px;
+  line-height:1.45;
+}
+.infoList li{ margin:6px 0; }
+
+.infoNote{
+  margin-top:10px;
+  font-size:13px;
+  line-height:1.45;
+  color:rgba(11,11,18,.70);
+}
+
+.infoLinkBtn{
+  margin-top:10px;
+  width:100%;
+  border:none;
+  cursor:pointer;
+  padding:11px 12px;
+  border-radius:14px;
+  font-weight:1000;
+  letter-spacing:.2px;
+  color:#0b0b12;
+  background: linear-gradient(180deg, rgba(190,120,255,.22), rgba(125,60,255,.16));
+  border:1px solid rgba(125,60,255,.28);
+  box-shadow: 0 0 0 3px rgba(125,60,255,.10), 0 0 26px rgba(190,120,255,.22);
+}
+.infoLinkBtn:active{
+  transform:scale(.985);
+  filter:brightness(1.03);
+}
+
+/* Checkout must-read banner */
+.mustRead{
+  margin-top:10px;
+  padding:12px;
+  border-radius:16px;
+  border:1px solid rgba(0,0,0,.12);
+  background: linear-gradient(180deg, rgba(190,120,255,.22), rgba(255,255,255,.00));
+  box-shadow: 0 0 0 3px rgba(125,60,255,.10), 0 0 24px rgba(190,120,255,.18);
+}
+
+.mustReadText{
+  font-size:13px;
+  line-height:1.45;
+  color:rgba(11,11,18,.80);
+}
+
+.mustReadBtn{
+  margin-top:10px;
+  width:100%;
+  border:none;
+  cursor:pointer;
+  padding:11px 12px;
+  border-radius:14px;
+  font-weight:1000;
+  color:#0b0b12;
+  background:rgba(0,0,0,.04);
+  border:1px solid rgba(0,0,0,.12);
+}
+.mustReadBtn:active{
+  transform:scale(.985);
+  box-shadow: 0 0 0 3px rgba(125,60,255,.18), 0 0 24px rgba(190,120,255,.28);
+}
+
+/* disabled buttons */
+.btn.is-disabled, .btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  filter:saturate(.9);
+  transform:none;
+  box-shadow:none;
+}
