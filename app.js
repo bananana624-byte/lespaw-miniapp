@@ -438,35 +438,46 @@ function renderLaminationExamples() {
 
   const renderGrid = (items) => `
     <div class="grid2 exGrid">
-      ${items.map((ex) => {
-        const img = ex.images?.[0];
-        return `
-          <div class="exCard">
-            ${img ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}">` :
-              `<div class="exStub"><div class="exStubText">Нет фото</div></div>`}
-            <div class="exTitle">${safeText(ex.title)}</div>
-            ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
-            ${ex.description ? `<div class="exDesc">${safeText(ex.description)}</div>` : ``}
-          </div>
-        `;
-      }).join("")}
+      ${items
+        .map((ex) => {
+          const img = ex.images?.[0];
+          return `
+            <div class="exCard" data-exid="${ex.id}">
+              ${
+                img
+                  ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
+                  : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`
+              }
+              <div class="exTitle">${safeText(ex.title)}</div>
+              ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+              ${ex.description ? `<div class="small" style="margin-top:6px; opacity:.9">${safeText(ex.description)}</div>` : ``}
+            </div>
+          `;
+        })
+        .join("")}
     </div>
   `;
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">Примеры ламинации и плёнки</div>
-      <div class="small"></div>
 
       <hr>
-      <div class="h3">Плёнка</div><div class="small">Плёнка — это основа наклейки. Она определяет внешний вид сразу: блеск, текстуру и глубину эффекта.</div>
+      <div class="h3">Плёнка</div>
+      <div class="small" style="margin-top:6px">Плёнка — это основа наклейки: она задаёт блеск, текстуру и «характер» сразу.</div>
       ${renderGrid(films)}
 
       <hr>
-      <div class="h3">Ламинация</div><div class="small">Ламинация — это прозрачное покрытие поверх наклейки. Она добавляет эффект и защищает поверхность.</div>
+      <div class="h3">Ламинация</div>
+      <div class="small" style="margin-top:6px">Ламинация — прозрачное покрытие сверху: добавляет эффект и защищает поверхность.</div>
       ${renderGrid(laminations)}
     </div>
   `;
+
+  // Открываем карточку примера внутри приложения (без внешних ссылок).
+  view.querySelectorAll("[data-exid]").forEach((el) => {
+    el.onclick = () => openPage(() => renderLaminationExampleDetail(el.dataset.exid));
+  });
 
   syncNav();
   syncBottomSpace();
