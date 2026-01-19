@@ -288,16 +288,23 @@ const LAMINATION_EXAMPLES = [
     id: "film_glossy",
     kind: "film",
     title: "Стандартная глянцевая плёнка",
-    subtitle: "Классический блеск",
-    description: "Гладкая и блестящая основа. Цвета выглядят ярче и насыщеннее.",
+    subtitle: "База (по умолчанию)",
+    description:
+      "Это стандартная глянцевая плёнка, на которой печатаются все наклейки по умолчанию. " +
+      "Даёт ровную поверхность, хорошую цветопередачу и насыщенные оттенки. " +
+      "Если не указано иное — наклейка будет напечатана именно на этой плёнке.",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
   },
   {
     id: "film_holo",
     kind: "film",
     title: "Голографическая плёнка",
-    subtitle: "Самая заметная голография",
-    description: "Сама плёнка уже голографическая по текстуре — эффект яркий и заметный.",
+    subtitle: "Яркая голография",
+    description:
+      "Плёнка с выраженной голографической текстурой по всей поверхности — эффект заметный при любом освещении. " +
+      "Важно: у плёнки сероватая основа, поэтому при печати цвета могут выглядеть немного тусклее и уходить в серый оттенок " +
+      "(по сравнению с обычной глянцевой плёнкой). " +
+      "Зато голографический эффект получается максимально «сочным».",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"],
   },
 
@@ -306,44 +313,65 @@ const LAMINATION_EXAMPLES = [
     id: "sugar",
     kind: "lamination",
     title: "Сахар",
-    subtitle: "Искрящаяся крошка",
-    description: "Мелкая блестящая крошка — поверхность «искрится» на свету.",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%A1%D0%B0%D1%85%D0%B0%D1%80.jpg"],
+    subtitle: "Мелкие искры",
+    description:
+      "Ламинация с мелкой блестящей «крошкой». " +
+      "Смотрится как нежное мерцание — красиво подсвечивает дизайн, но не перетягивает внимание.",
+    images: [
+      "https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%A1%D0%B0%D1%85%D0%B0%D1%80.jpg",
+    ],
   },
   {
     id: "stars",
     kind: "lamination",
     title: "Звёздочки",
-    subtitle: "Мелкие звёзды",
-    description: "Маленькие звёзды, которые красиво переливаются при наклоне.",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%97%D0%B2%D1%91%D0%B7%D0%B4%D0%BE%D1%87%D0%BA%D0%B8.jpg"],
+    subtitle: "Милые звёзды",
+    description:
+      "Прозрачная ламинация с маленькими звёздами. " +
+      "Переливается при наклоне и даёт эффект «волшебства», при этом рисунок остаётся читаемым.",
+    images: [
+      "https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%97%D0%B2%D1%91%D0%B7%D0%B4%D0%BE%D1%87%D0%BA%D0%B8.jpg",
+    ],
   },
   {
     id: "snowflakes_small",
     kind: "lamination",
     title: "Маленькие снежинки",
-    subtitle: "Нежный зимний эффект",
-    description: "Лёгкие снежинки — аккуратный «зимний» блеск без перегруза.",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%9C%D0%B0%D0%BB%D0%B5%D0%BD%D1%8C%D0%BA%D0%B8%D0%B5%20%D1%81%D0%BD%D0%B5%D0%B6%D0%B8%D0%BD%D0%BA%D0%B8.jpg"],
+    subtitle: "Самый яркий блеск",
+    description:
+      "Ламинация с большим количеством мелких снежинок и точечного блеска по всей поверхности. " +
+      "Эффект очень ярко выражен: активно переливается при движении и на свету. " +
+      "По насыщенности блеска ярче, чем «Звёздочки», и заметнее, чем «Сахар» — если хочется максимального сияния.",
+    images: [
+      "https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%9C%D0%B0%D0%BB%D0%B5%D0%BD%D1%8C%D0%BA%D0%B8%D0%B5%20%D1%81%D0%BD%D0%B5%D0%B6%D0%B8%D0%BD%D0%BA%D0%B8.jpg",
+    ],
   },
   {
     id: "stars_big",
     kind: "lamination",
     title: "Большие звёзды",
-    subtitle: "Крупные звёзды",
-    description: "Звёзды крупнее и заметнее — эффект более «праздничный».",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%91%D0%BE%D0%BB%D1%8C%D1%88%D0%B8%D0%B5%20%D0%B7%D0%B2%D1%91%D0%B7%D0%B4%D1%8B.jpg"],
+    subtitle: "Акцентные звёзды",
+    description:
+      "Ламинация с более крупными звёздами — эффект заметный и «праздничный». " +
+      "Лучше всего раскрывается на контрастных дизайнах и крупных деталях.",
+    images: [
+      "https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%91%D0%BE%D0%BB%D1%8C%D1%88%D0%B8%D0%B5%20%D0%B7%D0%B2%D1%91%D0%B7%D0%B4%D1%8B.jpg",
+    ],
   },
   {
     id: "holo_overlay",
     kind: "lamination",
     title: "Голографическая ламинация",
-    subtitle: "Мягкие радужные переливы",
-    description: "Прозрачное покрытие с голографическим переливом — эффект деликатный.",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%93%D0%BE%D0%BB%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%8F%20%D0%B1%D0%B5%D0%B7%20%D1%80%D0%B8%D1%81%D1%83%D0%BD%D0%BA%D0%B0.jpg"],
+    subtitle: "Мягкий перелив",
+    description:
+      "Прозрачная ламинация с голографическим переливом. " +
+      "В отличие от голографической плёнки, основа остаётся обычной, а эффект появляется только сверху — " +
+      "поэтому цветопередача почти не меняется, а перелив выглядит деликатнее.",
+    images: [
+      "https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%93%D0%BE%D0%BB%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%8F%20%D0%B1%D0%B5%D0%B7%20%D1%80%D0%B8%D1%81%D1%83%D0%BD%D0%BA%D0%B0.jpg",
+    ],
   },
 ];
-
 
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
@@ -792,7 +820,6 @@ function renderLaminationExamples() {
               ${imgHTML}
               <div class="exTitle">${safeText(ex.title)}</div>
               ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
-              ${ex.description ? `<div class="small" style="margin-top:6px; opacity:.9">${safeText(ex.description)}</div>` : ``}
             </div>
           `;
         })
@@ -816,7 +843,6 @@ function renderLaminationExamples() {
     </div>
   `;
 
-  // Открываем карточку примера внутри приложения (без внешних ссылок).
   view.querySelectorAll("[data-exid]").forEach((el) => {
     el.onclick = () => openPage(() => renderLaminationExampleDetail(el.dataset.exid));
   });
