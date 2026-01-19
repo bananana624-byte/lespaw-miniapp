@@ -35,8 +35,251 @@ const SUGGEST_URL = "https://t.me/LesPaw/280";
 // Telegram init
 // =====================
 const tg = window.Telegram?.WebApp;
-try
+try {
+  tg?.ready();
+  tg?.expand();
+} catch {
+  // если вне Telegram — не падаем
+}
 
+// =====================
+// DOM
+// =====================
+const view = document.getElementById("view");
+const globalSearch = document.getElementById("globalSearch");
+
+const navBack = document.getElementById("navBack");
+const navHome = document.getElementById("navHome");
+const navFav = document.getElementById("navFav");
+const navCart = document.getElementById("navCart");
+
+const favCount = document.getElementById("favCount");
+const cartCount = document.getElementById("cartCount");
+
+const wrapEl = document.querySelector(".wrap");
+const navBarEl = document.querySelector(".navBar");
+
+// =====================
+// Storage (старые ключи — чтобы не сбросить корзину/избранное)
+// =====================
+const LS_CART = "lespaw_cart_v41";
+const LS_FAV = "lespaw_fav_v41";
+
+function loadJSON(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function saveJSON(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+let cart = loadJSON(LS_CART, []);
+let fav = loadJSON(LS_FAV, []);
+
+// =====================
+// Toast
+// =====================
+function toast(msg, kind = "") {
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`.trim();
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
+
+// =====================
+// Safe bottom space (nav must NOT cover content)
+// =====================
+function syncBottomSpace() {
+  if (!wrapEl || !navBarEl) return;
+  const h = navBarEl.offsetHeight || 70;
+  wrapEl.style.paddingBottom = `calc(${h + 80}px + env(safe-area-inset-bottom))`;
+}
+window.addEventListener("resize", syncBottomSpace);
+
+// =====================
+// Navigation stack
+// =====================
+const navStack = [];
+let currentRender = null;
+
+function openPage(renderFn) {
+  if (currentRender) navStack.push(currentRender);
+  currentRender = renderFn;
+  syncNav();
+  renderFn();
+  syncBottomSpace();
+}
+
+function goBack() {
+  const prev = navStack.pop();
+  currentRender = prev || renderHome;
+  syncNav();
+  currentRender();
+  syncBottomSpace();
+}
+
+function resetToHome() {
+  navStack.length = 0;
+  currentRender = renderHome;
+  if (globalSearch) globalSearch.value = "";
+  syncNav();
+  renderHome();
+  syncBottomSpace();
+}
+
+function syncNav() {
+  navBack?.classList.toggle("is-active", navStack.length > 0);
+  navHome?.classList.toggle("is-active", currentRender === renderHome && navStack.length === 0);
+  navFav?.classList.toggle("is-active", currentRender === renderFavorites);
+  navCart?.classList.toggle("is-active", currentRender === renderCart);
+}
+
+// =====================
+// Data
+// =====================
+let fandoms = [];
+let products = [];
+let settings = {
+  overlay_price_delta: 100,
+  holo_base_price_delta: 100,
+  examples_url: "https://t.me/LesPaw",
+};
+
+// =====================
+// CSV utils
+// =====================
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  const s = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        const next = s[i + 1];
+        if (next === '"') {
+          field += '"';
+          i++;
+        } else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ",") {
+        row.push(field);
+        field = "";
+      } else if (c === "\n") {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = "";
+      } else field += c;
+    }
+  }
+  row.push(field);
+  rows.push(row);
+
+  const cleaned = rows.filter((r) => r.some((cell) => String(cell).trim() !== ""));
+  if (!cleaned.length) return [];
+
+  const headers = cleaned[0].map((h) => String(h).trim());
+  return cleaned.slice(1).map((r) => {
+    const obj = {};
+    headers.forEach((h, idx) => (obj[h] = (r[idx] ?? "").toString().trim()));
+    return obj;
+  });
+}
+
+async function fetchCSV(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`);
+  return parseCSV(await res.text());
+}
+
+// =====================
+// Helpers
+// =====================
+const FANDOM_TYPES = [
+  "Фильмы",
+  "Игры",
+  "Сериалы",
+  "Актрисы и певицы",
+  "Аниме",
+  "Мультсериалы",
+  "Манхвы / манги",
+  "Лакорны",
+  "Что-то тематическое",
+];
+
+const OVERLAY_OPTIONS = [
+  ["none", "Без покрытия"],
+  ["sugar", "Сахар"],
+  ["stars", "Звёздочки"],
+  ["snowflakes_small", "Маленькие снежинки"],
+  ["stars_big", "Большие звёзды"],
+  ["holo_overlay", "Голографическая ламинация"],
+];
+const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
+
+// =====================
+// Примеры ламинации / пленки (локально в приложении)
+//
+// Как пользоваться:
+// 1) Вставь прямые ссылки на картинки (https://...jpg/png/webp)
+//    Лучше всего — изображения, доступные без авторизации.
+// 2) Можно добавлять несколько фото на один пример.
+//
+// Если images пустой — карточка покажет заглушку (чтобы ты не теряла название).
+// =====================
+const LAMINATION_EXAMPLES = [
+  {
+    id: "none",
+    title: "Без покрытия",
+    subtitle: "Матовая/обычная поверхность",
+    images: [],
+  },
+  {
+    id: "sugar",
+    title: "Сахар",
+    subtitle: "Микрорельеф, блестящая крошка",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Сахар.jpg"],
+  },
+  {
+    id: "stars",
+    title: "Звёздочки",
+    subtitle: "Мелкие звёзды",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Звёздочки.jpg"],
+  },
+  {
+    id: "snowflakes_small",
+    title: "Маленькие снежинки",
+    subtitle: "Зимний эффект",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Маленькие%20снежинки.jpg"],
+  },
+  {
+    id: "stars_big",
+    title: "Большие звёзды",
+    subtitle: "Крупные звёзды",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Большие%20звёзды.jpg"],
+  },
+  {
+    id: "holo_overlay",
+    title: "Голографическая ламинация",
+    subtitle: "Радужные переливы",
+    images: [],
+  },
+  {
+    id: "holo_base",
+    title: "Голографическая основа",
+    subtitle: "Сама наклейка — голографическая",
+    images: [],
+  },
 ];
 
 function truthy(v) {
@@ -49,7 +292,7 @@ function money(n) {
 // поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
-    .split(/[;\n]+/g)
+    .split(/[,;\n]+/g)
     .map((x) => x.trim())
     .filter(Boolean);
 }
@@ -311,7 +554,7 @@ function renderFandomPage(fandomId) {
     <div class="card">
       <div class="h2">${f?.fandom_name || "Фандом"}</div>
       <div class="row" id="tabs">
-        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</div>`).join("")}
+        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
       </div>
       <hr>
       <div class="grid2" id="prodList"></div>
@@ -398,8 +641,8 @@ function renderInfo() {
       </div>
       <hr>
       <div class="row">
-        <button class="btn" id="btnMain">Наш основной канал</div>
-        <button class="btn" id="btnSuggest">Предложить фандом</div>
+        <button class="btn" id="btnMain">Наш основной канал</button>
+        <button class="btn" id="btnSuggest">Предложить фандом</button>
       </div>
     </div>
   `;
@@ -417,7 +660,7 @@ function renderReviews() {
       <div class="h2">Отзывы</div>
       <div class="small">Откроется пост с отзывами в Telegram.</div>
       <hr>
-      <button class="btn" id="openReviews">Открыть отзывы</div>
+      <button class="btn" id="openReviews">Открыть отзывы</button>
     </div>
   `;
   document.getElementById("openReviews").onclick = () => tg?.openTelegramLink(REVIEWS_URL);
@@ -433,48 +676,38 @@ function openExamples() {
 }
 
 function renderLaminationExamples() {
-  const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
-  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
-
-  const renderGrid = (items) => `
-    <div class="grid2 exGrid">
-      ${items
-        .map((ex) => {
-          const img = ex.images?.[0];
-          return `
-            <div class="exCard" data-exid="${ex.id}">
-              ${
-                img
-                  ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
-                  : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`
-              }
-              <div class="exTitle">${safeText(ex.title)}</div>
-              ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
-              ${ex.description ? `<div class="small" style="margin-top:6px; opacity:.9">${safeText(ex.description)}</div>` : ``}
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Примеры ламинации и плёнки</div>
+      <div class="h2">Примеры ламинации и пленки</div>
+      <div class="small">Все примеры — прямо здесь, без перехода в Telegram.</div>
+      <hr>
+      <div class="small"><b>Подсказка:</b> нажми на пример, чтобы открыть его крупно.</div>
+      <div class="grid2 exGrid" id="exGrid">
+        ${LAMINATION_EXAMPLES.map((ex) => {
+          const img = ex.images?.[0] || "";
+          const imgHTML = img
+            ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
+            : `<div class="exStub" aria-hidden="true">
+                <div class="exStubGlow"></div>
+                <div class="exStubText">Нет фото</div>
+              </div>`;
+          return `
+            <div class="exCard" data-exid="${ex.id}">
+              ${imgHTML}
+              <div class="exTitle">${safeText(ex.title)}</div>
+              ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+            </div>
+          `;
+        }).join("")}
+      </div>
 
       <hr>
-      <div class="h3">Плёнка</div>
-      <div class="small" style="margin-top:6px">Плёнка — это основа наклейки: она задаёт блеск, текстуру и «характер» сразу.</div>
-      ${renderGrid(films)}
-
-      <hr>
-      <div class="h3">Ламинация</div>
-      <div class="small" style="margin-top:6px">Ламинация — прозрачное покрытие сверху: добавляет эффект и защищает поверхность.</div>
-      ${renderGrid(laminations)}
+      <div class="small">
+        Если хочешь, я могу вынести эти примеры в отдельную Google-таблицу (CSV), чтобы ты меняла их без правок кода.
+      </div>
     </div>
   `;
 
-  // Открываем карточку примера внутри приложения (без внешних ссылок).
   view.querySelectorAll("[data-exid]").forEach((el) => {
     el.onclick = () => openPage(() => renderLaminationExampleDetail(el.dataset.exid));
   });
@@ -505,23 +738,25 @@ function renderLaminationExampleDetail(exId) {
             ${imgs
               .map(
                 (u) => `
-              <div class="exBigBtn" style="cursor:default">
+              <button class="exBigBtn" type="button" data-openimg="${u}">
                 <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
-              </div>
+              </button>
             `
               )
               .join("")}
           </div>
-          <div class="small"></div>`
+          <div class="small">Нажми на фото, чтобы открыть отдельно (если нужно приблизить).</div>`
         : `<div class="small">Фото для этого примера пока не добавлено.</div>`}
 
       <hr>
-      <button class="btn" id="exBack">К списку примеров</div>
+      <button class="btn" id="exBack">К списку примеров</button>
     </div>
   `;
 
   document.getElementById("exBack").onclick = () => goBack();
-    });
+  view.querySelectorAll("[data-openimg]").forEach((b) => {
+    b.onclick = () => openExternal(b.dataset.openimg);
+  });
 
   syncNav();
   syncBottomSpace();
@@ -681,15 +916,15 @@ function renderProduct(productId) {
             ? `
           <div class="small"><b>Основа</b></div>
           <div class="row" id="baseRow">
-            <button class="btn" data-base="normal">Обычная</div>
-            <button class="btn" data-base="holo">Голографическая</div>
+            <button class="btn" data-base="normal">Обычная</button>
+            <button class="btn" data-base="holo">Голографическая</button>
           </div>
 
           <div style="height:10px"></div>
 
           <div class="small"><b>Покрытие</b></div>
           <div class="row" id="ovRow">
-            ${OVERLAY_OPTIONS.map(([k, label]) => `<button class="btn" data-ov="${k}">${label}</div>`).join("")}
+            ${OVERLAY_OPTIONS.map(([k, label]) => `<button class="btn" data-ov="${k}">${label}</button>`).join("")}
           </div>
 
           <hr>
@@ -698,8 +933,8 @@ function renderProduct(productId) {
         }
 
         <div class="row">
-          <button class="btn" id="btnFav">${inFav() ? "♥ В избранном" : "♡ В избранное"}</div>
-          <button class="btn is-active" id="btnCart">Добавить в корзину · ${money(calcPrice())}</div>
+          <button class="btn" id="btnFav">${inFav() ? "♥ В избранном" : "♡ В избранное"}</button>
+          <button class="btn is-active" id="btnCart">Добавить в корзину · ${money(calcPrice())}</button>
         </div>
       </div>
     `;
@@ -771,8 +1006,8 @@ function renderFavorites() {
                       <div class="title">${p.name}</div>
                       <div class="meta">${money(p.price)} · ${typeLabel(p.product_type)}${img ? " · есть фото" : ""}</div>
                       <div class="row" style="margin-top:10px">
-                        <button class="btn" data-remove="${p.id}">Убрать</div>
-                        <button class="btn is-active" data-to-cart="${p.id}">В корзину</div>
+                        <button class="btn" data-remove="${p.id}">Убрать</button>
+                        <button class="btn is-active" data-to-cart="${p.id}">В корзину</button>
                       </div>
                     </div>
                   `;
@@ -879,11 +1114,11 @@ function renderCart() {
                       <div class="meta">${money(p.price)} · ${typeLabel(p.product_type)}${opt ? ` · ${opt}` : ""}</div>
 
                       <div class="row" style="margin-top:10px; align-items:center">
-                        <button class="btn" data-dec="${idx}">−</div>
+                        <button class="btn" data-dec="${idx}">−</button>
                         <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" data-inc="${idx}">+</div>
+                        <button class="btn" data-inc="${idx}">+</button>
                         <div style="flex:1"></div>
-                        <button class="btn" data-rm="${idx}">Удалить</div>
+                        <button class="btn" data-rm="${idx}">Удалить</button>
                       </div>
                     </div>
                   `;
@@ -900,8 +1135,8 @@ function renderCart() {
         <div class="small">Итого: <b>${money(calcCartTotal())}</b></div>
         <div style="height:10px"></div>
         <div class="row">
-          <button class="btn" id="btnClear">Очистить</div>
-          <button class="btn is-active" id="btnCheckout">Оформить заказ</div>
+          <button class="btn" id="btnClear">Очистить</button>
+          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
         </div>
       `
           : ""
@@ -1027,7 +1262,7 @@ function renderCheckout() {
         <div class="h2">Оформление</div>
         <div class="small">Корзина пустая — нечего оформлять.</div>
         <hr>
-        <button class="btn is-active" id="goHome">На главную</div>
+        <button class="btn is-active" id="goHome">На главную</button>
       </div>
     `;
     document.getElementById("goHome").onclick = () => resetToHome();
@@ -1071,8 +1306,8 @@ function renderCheckout() {
       <div style="height:12px"></div>
 
       <div class="row">
-        <button class="btn" id="btnPreview">Посмотреть текст заказа</div>
-        <button class="btn is-active" id="btnSend">Отправить заказ менеджерке</div>
+        <button class="btn" id="btnPreview">Посмотреть текст заказа</button>
+        <button class="btn is-active" id="btnSend">Отправить заказ менеджерке</button>
       </div>
 
       <div id="preview" style="display:none; margin-top:12px">
