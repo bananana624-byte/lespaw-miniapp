@@ -1,179 +1,60 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>LesPaw • Фандомная Атрибутика</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LesPaw Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-  <div class="app">
+  <header class="top">
+    <div class="titleGlow">LesPaw • Фандомная Атрибутика</div>
 
-    <!-- Top -->
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand__title">LesPaw <span class="dot">•</span> <span class="brand__sub">Фандомная Атрибутика</span></div>
-      </div>
-
-      <div class="search">
-        <input id="searchInput" type="search" placeholder="Поиск по фандомам и товарам…" autocomplete="off" />
-        <button class="search__btn" id="searchClear" aria-label="Очистить поиск" title="Очистить">×</button>
-        <div class="search__icon" aria-hidden="true">⌕</div>
-      </div>
-    </header>
-
-    <!-- Main -->
-    <main class="main">
-      <!-- Home blocks -->
-      <section id="homeBlocks" class="blocks">
-        <button class="block" data-open="categories">
-          <div class="block__title">КАТЕГОРИИ</div>
-          <div class="block__sub">ВЫБОР ФАНДОМА ПО ТИПУ</div>
-        </button>
-
-        <button class="block" data-open="examples">
-          <div class="block__title">ПРИМЕРЫ ЛАМИНАЦИИ И ПЛЕНКИ</div>
-          <div class="block__sub">КАК ВЫГЛЯДИТ</div>
-        </button>
-
-        <button class="block" data-open="reviews">
-          <div class="block__title">ОТЗЫВЫ</div>
-          <div class="block__sub">ОТЗЫВЫ ОТ НАШИХ ПРЕКРАСНЫХ ПОКУПАТЕЛЬНИЦ</div>
-        </button>
-
-        <button class="block" data-open="info">
-          <div class="block__title">ВАЖНАЯ ИНФОРМАЦИЯ</div>
-          <div class="block__sub">ОПЛАТА, СРОКИ, ДОСТАВКА</div>
-        </button>
-      </section>
-
-      <!-- View: Categories -->
-      <section id="viewCategories" class="view hidden">
-        <div class="view__head">
-          <h2>Категории</h2>
-          <p class="muted">Нажми на категорию, чтобы увидеть товары.</p>
-        </div>
-        <div id="categoriesGrid" class="chips"></div>
-      </section>
-
-      <!-- View: Products -->
-      <section id="viewProducts" class="view hidden">
-        <div class="view__head">
-          <h2 id="productsTitle">Товары</h2>
-          <p id="productsHint" class="muted"></p>
-        </div>
-        <div id="productsGrid" class="grid"></div>
-        <div id="emptyState" class="empty hidden">
-          Ничего не нашлось 🥲 Попробуй другой запрос или категорию.
-        </div>
-      </section>
-
-      <!-- View: Text pages (Examples / Reviews / Info) -->
-      <section id="viewPage" class="view hidden">
-        <div class="view__head">
-          <h2 id="pageTitle">Раздел</h2>
-          <p id="pageSubtitle" class="muted"></p>
-        </div>
-        <div id="pageContent" class="page"></div>
-      </section>
-    </main>
-
-    <!-- Bottom Nav -->
-    <nav class="nav">
-      <button class="nav__btn" id="navBack" aria-label="Назад" title="Назад">
-        <span class="ico">‹</span>
-      </button>
-
-      <button class="nav__btn" id="navFav" aria-label="Избранное" title="Избранное">
-        <span class="ico">♡</span>
-        <span class="badge hidden" id="badgeFav">0</span>
-      </button>
-
-      <button class="nav__btn" id="navCart" aria-label="Корзина" title="Корзина">
-        <span class="ico">🛒</span>
-        <span class="badge hidden" id="badgeCart">0</span>
-      </button>
-    </nav>
-
-    <!-- Product Modal -->
-    <div class="modal hidden" id="productModal" role="dialog" aria-modal="true">
-      <div class="modal__backdrop" data-close="product"></div>
-      <div class="modal__sheet">
-        <div class="sheet__top">
-          <button class="sheet__close" data-close="product" aria-label="Закрыть">×</button>
-          <div class="sheet__title" id="modalTitle">Товар</div>
-          <div class="sheet__meta" id="modalMeta"></div>
-        </div>
-
-        <div class="sheet__body">
-          <div class="hero" id="modalHero"></div>
-          <div class="priceRow">
-            <div class="price" id="modalPrice"></div>
-            <div class="pill" id="modalStock"></div>
-          </div>
-          <div class="desc" id="modalDesc"></div>
-
-          <div class="actions">
-            <button class="btn btn--ghost" id="modalFav">В избранное</button>
-            <button class="btn btn--solid" id="modalAdd">В корзину</button>
-          </div>
-        </div>
+    <div class="searchWrap">
+      <input id="globalSearch" class="searchInput" placeholder="Поиск по фандомам и товарам…" />
+      <div class="searchIcon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true">
+          <path d="M21 21l-4.3-4.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        </svg>
       </div>
     </div>
+  </header>
 
-    <!-- Favorites Modal -->
-    <div class="modal hidden" id="favModal" role="dialog" aria-modal="true">
-      <div class="modal__backdrop" data-close="fav"></div>
-      <div class="modal__sheet">
-        <div class="sheet__top">
-          <button class="sheet__close" data-close="fav" aria-label="Закрыть">×</button>
-          <div class="sheet__title">Избранное</div>
-          <div class="sheet__meta muted">Тапни по товару, чтобы открыть карточку.</div>
-        </div>
-        <div class="sheet__body">
-          <div id="favList" class="list"></div>
-          <div id="favEmpty" class="empty">Пока пусто — добавь сердечком 💜</div>
-        </div>
-      </div>
-    </div>
+  <main class="wrap">
+    <section id="view" class="view"></section>
+  </main>
 
-    <!-- Cart Modal -->
-    <div class="modal hidden" id="cartModal" role="dialog" aria-modal="true">
-      <div class="modal__backdrop" data-close="cart"></div>
-      <div class="modal__sheet">
-        <div class="sheet__top">
-          <button class="sheet__close" data-close="cart" aria-label="Закрыть">×</button>
-          <div class="sheet__title">Корзина</div>
-          <div class="sheet__meta muted" id="cartMeta"></div>
-        </div>
+  <!-- нижняя панель -->
+  <nav class="navBar">
+    <button class="navBtn" id="navBack" aria-label="Назад" title="Назад">
+      <svg viewBox="0 0 24 24" class="navIco" aria-hidden="true">
+        <path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
 
-        <div class="sheet__body">
-          <div id="cartList" class="list"></div>
+    <button class="navBtn" id="navFav" aria-label="Избранное" title="Избранное">
+      <svg viewBox="0 0 24 24" class="navIco" aria-hidden="true">
+        <path d="M12 21s-7-4.6-9.5-8.9C.8 8.8 2.2 6 4.9 5.2c1.7-.5 3.5.1 4.7 1.4L12 9l2.4-2.4c1.2-1.3 3-1.9 4.7-1.4 2.7.8 4.1 3.6 2.4 6.9C19 16.4 12 21 12 21z"
+              fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+      </svg>
+      <span class="badge" id="favCount" style="display:none">0</span>
+    </button>
 
-          <div id="cartEmpty" class="empty">Корзина пустая. Пока что 😼</div>
+    <button class="navBtn" id="navCart" aria-label="Корзина" title="Корзина">
+      <svg viewBox="0 0 24 24" class="navIco" aria-hidden="true">
+        <path d="M6 7h15l-2 10H7L6 7z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+        <path d="M6 7 5 4H2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
+              fill="none" stroke="currentColor" stroke-width="2.6"/>
+      </svg>
+      <span class="badge" id="cartCount" style="display:none">0</span>
+    </button>
+  </nav>
 
-          <div class="checkout">
-            <div class="totalRow">
-              <div class="muted">Итого</div>
-              <div class="total" id="cartTotal">0 ₽</div>
-            </div>
-
-            <label class="check">
-              <input type="checkbox" id="agreeCheck" />
-              <span>Я ознакомилась с важной информацией (оплата/сроки/доставка)</span>
-            </label>
-
-            <button class="btn btn--solid btn--wide" id="checkoutBtn">Оформить заказ</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Toast -->
-    <div id="toast" class="toast hidden"></div>
-
-  </div>
-
-  <script src="app.js"></script>
+  <!-- cache-bust -->
+  <script src="app.js?v=30"></script>
 </body>
 </html>
