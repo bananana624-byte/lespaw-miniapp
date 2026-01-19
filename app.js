@@ -238,49 +238,67 @@ const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
 // Если images пустой — карточка покажет заглушку (чтобы ты не теряла название).
 // =====================
 const LAMINATION_EXAMPLES = [
+  // ===== ПЛЁНКА (основа) =====
   {
-    id: "none",
-    title: "Без покрытия",
-    subtitle: "Матовая/обычная поверхность",
-    images: [],
+    id: "film_glossy",
+    kind: "film",
+    title: "Стандартная глянцевая плёнка",
+    subtitle: "Классический блеск",
+    description: "Гладкая и блестящая основа. Цвета выглядят ярче и насыщеннее.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
   },
   {
+    id: "film_holo",
+    kind: "film",
+    title: "Голографическая плёнка",
+    subtitle: "Самая заметная голография",
+    description: "Сама плёнка уже голографическая по текстуре — эффект яркий и заметный.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"],
+  },
+
+  // ===== ЛАМИНАЦИЯ (прозрачное покрытие сверху) =====
+  {
     id: "sugar",
+    kind: "lamination",
     title: "Сахар",
-    subtitle: "Микрорельеф, блестящая крошка",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Сахар.jpg"],
+    subtitle: "Искрящаяся крошка",
+    description: "Мелкая блестящая крошка — поверхность «искрится» на свету.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%A1%D0%B0%D1%85%D0%B0%D1%80.jpg"],
   },
   {
     id: "stars",
+    kind: "lamination",
     title: "Звёздочки",
     subtitle: "Мелкие звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Звёздочки.jpg"],
+    description: "Маленькие звёзды, которые красиво переливаются при наклоне.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%97%D0%B2%D1%91%D0%B7%D0%B4%D0%BE%D1%87%D0%BA%D0%B8.jpg"],
   },
   {
     id: "snowflakes_small",
+    kind: "lamination",
     title: "Маленькие снежинки",
-    subtitle: "Зимний эффект",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Маленькие%20снежинки.jpg"],
+    subtitle: "Нежный зимний эффект",
+    description: "Лёгкие снежинки — аккуратный «зимний» блеск без перегруза.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%9C%D0%B0%D0%BB%D0%B5%D0%BD%D1%8C%D0%BA%D0%B8%D0%B5%20%D1%81%D0%BD%D0%B5%D0%B6%D0%B8%D0%BD%D0%BA%D0%B8.jpg"],
   },
   {
     id: "stars_big",
+    kind: "lamination",
     title: "Большие звёзды",
     subtitle: "Крупные звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Большие%20звёзды.jpg"],
+    description: "Звёзды крупнее и заметнее — эффект более «праздничный».",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%91%D0%BE%D0%BB%D1%8C%D1%88%D0%B8%D0%B5%20%D0%B7%D0%B2%D1%91%D0%B7%D0%B4%D1%8B.jpg"],
   },
   {
     id: "holo_overlay",
+    kind: "lamination",
     title: "Голографическая ламинация",
-    subtitle: "Радужные переливы",
-    images: [],
-  },
-  {
-    id: "holo_base",
-    title: "Голографическая основа",
-    subtitle: "Сама наклейка — голографическая",
-    images: [],
+    subtitle: "Мягкие радужные переливы",
+    description: "Прозрачное покрытие с голографическим переливом — эффект деликатный.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%93%D0%BE%D0%BB%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%8F%20%D0%B1%D0%B5%D0%B7%20%D1%80%D0%B8%D1%81%D1%83%D0%BD%D0%BA%D0%B0.jpg"],
   },
 ];
+
 
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
@@ -676,38 +694,48 @@ function openExamples() {
 }
 
 function renderLaminationExamples() {
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Примеры ламинации и пленки</div>
-      <div class="small">Все примеры — прямо здесь, без перехода в Telegram.</div>
-      <hr>
-      <div class="small"><b>Подсказка:</b> нажми на пример, чтобы открыть его крупно.</div>
-      <div class="grid2 exGrid" id="exGrid">
-        ${LAMINATION_EXAMPLES.map((ex) => {
+  const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
+  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
+
+  const renderGrid = (items) => `
+    <div class="grid2 exGrid">
+      ${items
+        .map((ex) => {
           const img = ex.images?.[0] || "";
           const imgHTML = img
             ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
-            : `<div class="exStub" aria-hidden="true">
-                <div class="exStubGlow"></div>
-                <div class="exStubText">Нет фото</div>
-              </div>`;
+            : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
+
           return `
             <div class="exCard" data-exid="${ex.id}">
               ${imgHTML}
               <div class="exTitle">${safeText(ex.title)}</div>
               ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+              ${ex.description ? `<div class="small" style="margin-top:6px; opacity:.9">${safeText(ex.description)}</div>` : ``}
             </div>
           `;
-        }).join("")}
-      </div>
-
-      <hr>
-      <div class="small">
-        Если хочешь, я могу вынести эти примеры в отдельную Google-таблицу (CSV), чтобы ты меняла их без правок кода.
-      </div>
+        })
+        .join("")}
     </div>
   `;
 
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Примеры ламинации и плёнки</div>
+
+      <hr>
+      <div class="h3">Плёнка</div>
+      <div class="small" style="margin-top:6px">Основа наклейки: задаёт блеск, текстуру и «характер» сразу.</div>
+      ${renderGrid(films)}
+
+      <hr>
+      <div class="h3">Ламинация</div>
+      <div class="small" style="margin-top:6px">Прозрачное покрытие сверху — добавляет эффект и защищает поверхность.</div>
+      ${renderGrid(laminations)}
+    </div>
+  `;
+
+  // Открываем карточку примера внутри приложения (без внешних ссылок).
   view.querySelectorAll("[data-exid]").forEach((el) => {
     el.onclick = () => openPage(() => renderLaminationExampleDetail(el.dataset.exid));
   });
@@ -715,6 +743,7 @@ function renderLaminationExamples() {
   syncNav();
   syncBottomSpace();
 }
+
 
 function renderLaminationExampleDetail(exId) {
   const ex = LAMINATION_EXAMPLES.find((x) => x.id === exId);
@@ -731,22 +760,25 @@ function renderLaminationExampleDetail(exId) {
     <div class="card">
       <div class="h2">${safeText(ex.title)}</div>
       ${ex.subtitle ? `<div class="small">${safeText(ex.subtitle)}</div>` : ``}
+      ${ex.description ? `<div class="small" style="margin-top:8px">${safeText(ex.description)}</div>` : ``}
+
       <hr>
 
-      ${imgs.length
-        ? `<div class="exBig">
-            ${imgs
-              .map(
-                (u) => `
-              <button class="exBigBtn" type="button" data-openimg="${u}">
-                <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
-              </button>
-            `
-              )
-              .join("")}
-          </div>
-          <div class="small">Нажми на фото, чтобы открыть отдельно (если нужно приблизить).</div>`
-        : `<div class="small">Фото для этого примера пока не добавлено.</div>`}
+      ${
+        imgs.length
+          ? `<div class="exBig">
+              ${imgs
+                .map(
+                  (u) => `
+                <div class="exBigBtn" style="cursor:default">
+                  <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
+                </div>
+              `
+                )
+                .join("")}
+            </div>`
+          : `<div class="small">Фото для этого примера пока не добавлено.</div>`
+      }
 
       <hr>
       <button class="btn" id="exBack">К списку примеров</button>
@@ -754,13 +786,11 @@ function renderLaminationExampleDetail(exId) {
   `;
 
   document.getElementById("exBack").onclick = () => goBack();
-  view.querySelectorAll("[data-openimg]").forEach((b) => {
-    b.onclick = () => openExternal(b.dataset.openimg);
-  });
 
   syncNav();
   syncBottomSpace();
 }
+
 
 // =====================
 // Поиск (только сверху)
@@ -968,7 +998,6 @@ function renderProduct(productId) {
           syncBtns();
         };
       });
-
 
       // стартовые состояния
       syncBtns();
