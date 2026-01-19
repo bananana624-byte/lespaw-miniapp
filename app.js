@@ -248,31 +248,31 @@ const LAMINATION_EXAMPLES = [
     id: "sugar",
     title: "Сахар",
     subtitle: "Микрорельеф, блестящая крошка",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Сахар.jpg"],
+    images: [],
   },
   {
     id: "stars",
     title: "Звёздочки",
     subtitle: "Мелкие звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Звёздочки.jpg"],
+    images: [],
   },
   {
     id: "snowflakes_small",
     title: "Маленькие снежинки",
     subtitle: "Зимний эффект",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Маленькие%20снежинки.jpg"],
+    images: [],
   },
   {
     id: "stars_big",
     title: "Большие звёзды",
     subtitle: "Крупные звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Большие%20звёзды.jpg"],
+    images: [],
   },
   {
     id: "holo_overlay",
     title: "Голографическая ламинация",
     subtitle: "Радужные переливы",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Голография%20без%20рисунка.jpg"],
+    images: [],
   },
   {
     id: "holo_base",
@@ -280,6 +280,20 @@ const LAMINATION_EXAMPLES = [
     subtitle: "Сама наклейка — голографическая",
     images: [],
   },
+
+  ,
+  {
+    id: "standard_film",
+    title: "Стандартная глянцевая плёнка",
+    description: "Это базовая плёнка с глянцевой поверхностью. Она всегда глянцевая по своей природе и даёт ровный, насыщенный блеск без дополнительных эффектов.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"]
+  },
+  {
+    id: "holographic_film",
+    title: "Голографическая плёнка",
+    description: "Голографическая плёнка имеет выраженную голографическую текстуру по всей поверхности. Эффект выглядит ярче и глубже, чем у голографической ламинации, потому что здесь сама плёнка уже голографическая, а не прозрачное покрытие с эффектом сверху.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"]
+  }
 ];
 
 function truthy(v) {
