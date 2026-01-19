@@ -1,10 +1,14 @@
-// LesPaw Mini App — app.js v44 (thumbs in grid cards + robust safe bottom space)
+// LesPaw Mini App — app.js v53
+// FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
-// IMPORTANT:
-// - Мини-карточки товара с фото (если есть ссылки)
-// - splitList поддерживает: запятая, ;, переносы строк
-// - images берём из: images / image / image_url / photo / img (fallback)
-// - Нижний отступ под навбар рассчитываем JS (чтобы не перекрывалось)
+// Фичи:
+// - Главный экран (плитки)
+// - Категории -> фандомы -> товары (сетка 2x + фото)
+// - Поиск только сверху
+// - Избранное + Корзина + Оформление
+// - После добавления товара корзина НЕ открывается
+// - На оформлении обязательная галочка (если нет — уведомление)
+// - Отправка заказа менеджерке через Telegram link с предзаполненным текстом
 
 // =====================
 // CSV ссылки (твои)
@@ -30,8 +34,12 @@ const SUGGEST_URL = "https://t.me/LesPaw/280";
 // Telegram init
 // =====================
 const tg = window.Telegram?.WebApp;
-tg?.ready();
-tg?.expand();
+try {
+  tg?.ready();
+  tg?.expand();
+} catch {
+  // если вне Telegram — не падаем
+}
 
 // =====================
 // DOM
@@ -51,7 +59,7 @@ const wrapEl = document.querySelector(".wrap");
 const navBarEl = document.querySelector(".navBar");
 
 // =====================
-// Storage (оставила прежние ключи, чтобы не сбросить корзину/избранное у людей)
+// Storage (старые ключи — чтобы не сбросить корзину/избранное)
 // =====================
 const LS_CART = "lespaw_cart_v41";
 const LS_FAV = "lespaw_fav_v41";
@@ -87,7 +95,6 @@ function toast(msg, kind = "") {
 function syncBottomSpace() {
   if (!wrapEl || !navBarEl) return;
   const h = navBarEl.offsetHeight || 70;
-  // 18px bottom gap + glow/air + nav height; safe-area учитываем через env()
   wrapEl.style.paddingBottom = `calc(${h + 80}px + env(safe-area-inset-bottom))`;
 }
 window.addEventListener("resize", syncBottomSpace);
@@ -124,10 +131,10 @@ function resetToHome() {
 }
 
 function syncNav() {
-  navBack.classList.toggle("is-active", navStack.length > 0);
-  navHome.classList.toggle("is-active", currentRender === renderHome && navStack.length === 0);
-  navFav.classList.toggle("is-active", currentRender === renderFavorites);
-  navCart.classList.toggle("is-active", currentRender === renderCart);
+  navBack?.classList.toggle("is-active", navStack.length > 0);
+  navHome?.classList.toggle("is-active", currentRender === renderHome && navStack.length === 0);
+  navFav?.classList.toggle("is-active", currentRender === renderFavorites);
+  navCart?.classList.toggle("is-active", currentRender === renderCart);
 }
 
 // =====================
@@ -226,7 +233,7 @@ function money(n) {
   return `${Number(n) || 0} ₽`;
 }
 
-// ✅ ВАЖНО: поддержка " , ; \n "
+// поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
     .split(/[,;\n]+/g)
@@ -265,28 +272,24 @@ function updateBadges() {
   const favN = fav.length;
   const cartN = cart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
 
-  if (favN > 0) {
-    favCount.style.display = "";
-    favCount.textContent = String(favN);
-  } else favCount.style.display = "none";
+  if (favCount) {
+    if (favN > 0) {
+      favCount.style.display = "";
+      favCount.textContent = String(favN);
+    } else favCount.style.display = "none";
+  }
 
-  if (cartN > 0) {
-    cartCount.style.display = "";
-    cartCount.textContent = String(cartN);
-  } else cartCount.style.display = "none";
+  if (cartCount) {
+    if (cartN > 0) {
+      cartCount.style.display = "";
+      cartCount.textContent = String(cartN);
+    } else cartCount.style.display = "none";
+  }
 }
 
 // ===== thumbnails helpers =====
 function imagesField(p) {
-  // пробуем несколько названий колонок
-  return (
-    p?.images ||
-    p?.image ||
-    p?.image_url ||
-    p?.photo ||
-    p?.img ||
-    ""
-  );
+  return p?.images || p?.image || p?.image_url || p?.photo || p?.img || "";
 }
 
 function firstImageUrl(p) {
@@ -296,8 +299,17 @@ function firstImageUrl(p) {
 
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
-  if (!u) return ""; // если пусто — просто без картинки (не ломаем сетку)
+  if (!u) return "";
   return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy">`;
+}
+
+function safeText(s) {
+  return String(s ?? "").trim();
+}
+
+function openTelegramText(toUsername, text) {
+  const link = `https://t.me/${toUsername}?text=${encodeURIComponent(text)}`;
+  tg?.openTelegramLink(link);
 }
 
 // =====================
@@ -381,7 +393,7 @@ function renderHome() {
 }
 
 // =====================
-// Категории → типы фандомов
+// Категории -> типы фандомов
 // =====================
 function renderFandomTypes() {
   view.innerHTML = `
@@ -464,7 +476,7 @@ function renderFandomList(type) {
 }
 
 // =====================
-// Страница фандома → товары сеткой 2× (с фотками)
+// Страница фандома -> товары сеткой 2x (с фото)
 // =====================
 function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
@@ -597,7 +609,7 @@ function openExamples() {
 }
 
 // =====================
-// Поиск (только сверху) — товары тоже с фотками
+// Поиск (только сверху)
 // =====================
 function renderSearch(q) {
   const query = (q || "").toLowerCase().trim();
@@ -682,15 +694,13 @@ function renderProduct(productId) {
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
-  // Покрытие / база (используем existing settings)
   const overlayDelta = Number(settings.overlay_price_delta) || 0;
   const holoDelta = Number(settings.holo_base_price_delta) || 0;
 
   const isSticker = (p.product_type || "") === "sticker";
 
-  // состояние выбора
   let selectedOverlay = "none";
-  let selectedBase = "normal"; // normal | holo (для наклеек)
+  let selectedBase = "normal"; // normal | holo
 
   function calcPrice() {
     let price = Number(p.price) || 0;
@@ -704,27 +714,32 @@ function renderProduct(productId) {
   function inFav() {
     return fav.includes(p.id);
   }
+
   function favToggle() {
     if (inFav()) setFav(fav.filter((id) => id !== p.id));
     else setFav([...fav, p.id]);
-    render(); // перерисуем кнопку
+    render();
   }
 
   function addToCart() {
     const item = {
       id: p.id,
       qty: 1,
-      // сохраняем опции (чтобы заказ сформировался корректно)
       overlay: isSticker ? selectedOverlay : "",
       base: isSticker ? selectedBase : "",
     };
-    const existing = cart.find((x) => x.id === item.id && (x.overlay || "") === (item.overlay || "") && (x.base || "") === (item.base || ""));
+
+    const existing = cart.find(
+      (x) => x.id === item.id && (x.overlay || "") === (item.overlay || "") && (x.base || "") === (item.base || "")
+    );
+
     if (existing) {
       existing.qty = (Number(existing.qty) || 0) + 1;
       setCart([...cart]);
     } else {
       setCart([...cart, item]);
     }
+
     toast("Добавлено в корзину", "good");
   }
 
@@ -792,5 +807,409 @@ function renderProduct(productId) {
           syncBtns();
         };
       });
+
       ovRow.querySelectorAll("[data-ov]").forEach((b) => {
         b.onclick = () => {
+          selectedOverlay = b.dataset.ov;
+          syncBtns();
+        };
+      });
+
+
+      // стартовые состояния
+      syncBtns();
+    }
+
+    syncNav();
+    syncBottomSpace();
+  }
+
+  render();
+}
+
+// =====================
+// Favorites
+// =====================
+function renderFavorites() {
+  const items = (fav || [])
+    .map((id) => getProductById(id))
+    .filter(Boolean);
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Избранное</div>
+      <div class="small">Товары, которые ты отметила сердечком.</div>
+      <hr>
+
+      <div class="list" id="favList">
+        ${
+          items.length
+            ? items
+                .map((p) => {
+                  const img = firstImageUrl(p);
+                  return `
+                    <div class="item" data-open="${p.id}">
+                      <div class="title">${p.name}</div>
+                      <div class="meta">${money(p.price)} · ${typeLabel(p.product_type)}${img ? " · есть фото" : ""}</div>
+                      <div class="row" style="margin-top:10px">
+                        <button class="btn" data-remove="${p.id}">Убрать</button>
+                        <button class="btn is-active" data-to-cart="${p.id}">В корзину</button>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join("")
+            : `<div class="small">Пока пусто. Открой товар и нажми “♡ В избранное”.</div>`
+        }
+      </div>
+    </div>
+  `;
+
+  view.querySelectorAll("[data-open]").forEach((el) => {
+    el.onclick = (e) => {
+      // если кликнули по кнопкам — не открываем карточку
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      openPage(() => renderProduct(el.dataset.open));
+    };
+  });
+
+  view.querySelectorAll("[data-remove]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.dataset.remove;
+      setFav((fav || []).filter((x) => x !== id));
+      toast("Убрано из избранного", "warn");
+      renderFavorites();
+    };
+  });
+
+  view.querySelectorAll("[data-to-cart]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.dataset.toCart;
+      // в избранном опций (покрытие/основа) нет — добавляем базовый вариант
+      const existing = cart.find((x) => x.id === id && !(x.overlay || "") && !(x.base || ""));
+      if (existing) {
+        existing.qty = (Number(existing.qty) || 0) + 1;
+        setCart([...cart]);
+      } else {
+        setCart([...cart, { id, qty: 1, overlay: "", base: "" }]);
+      }
+      toast("Добавлено в корзину", "good");
+      renderFavorites();
+    };
+  });
+
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Cart
+// =====================
+function optionLabelForCartItem(ci) {
+  const parts = [];
+  if ((ci.base || "") === "holo") parts.push("Основа: голографическая");
+  else if ((ci.base || "") === "normal") parts.push("Основа: обычная");
+
+  if (ci.overlay && ci.overlay !== "none") parts.push(`Покрытие: ${OVERLAY_LABELS[ci.overlay] || ci.overlay}`);
+  else if (ci.overlay === "none") parts.push("Покрытие: без");
+
+  return parts.length ? parts.join(" · ") : "";
+}
+
+function calcCartTotal() {
+  let total = 0;
+  const overlayDelta = Number(settings.overlay_price_delta) || 0;
+  const holoDelta = Number(settings.holo_base_price_delta) || 0;
+
+  (cart || []).forEach((ci) => {
+    const p = getProductById(ci.id);
+    if (!p) return;
+    let price = Number(p.price) || 0;
+    if ((p.product_type || "") === "sticker") {
+      if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
+      if ((ci.base || "") === "holo") price += holoDelta;
+    }
+    total += price * (Number(ci.qty) || 0);
+  });
+
+  return total;
+}
+
+function renderCart() {
+  const items = (cart || []).filter((ci) => getProductById(ci.id));
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Корзина</div>
+      <div class="small">Тут собирается твой заказ.</div>
+      <hr>
+
+      <div class="list" id="cartList">
+        ${
+          items.length
+            ? items
+                .map((ci, idx) => {
+                  const p = getProductById(ci.id);
+                  const opt = optionLabelForCartItem(ci);
+                  return `
+                    <div class="item" data-idx="${idx}">
+                      <div class="title">${p.name}</div>
+                      <div class="meta">${money(p.price)} · ${typeLabel(p.product_type)}${opt ? ` · ${opt}` : ""}</div>
+
+                      <div class="row" style="margin-top:10px; align-items:center">
+                        <button class="btn" data-dec="${idx}">−</button>
+                        <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
+                        <button class="btn" data-inc="${idx}">+</button>
+                        <div style="flex:1"></div>
+                        <button class="btn" data-rm="${idx}">Удалить</button>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join("")
+            : `<div class="small">Корзина пустая. Открой фандом → товар → “Добавить в корзину”.</div>`
+        }
+      </div>
+
+      ${
+        items.length
+          ? `
+        <hr>
+        <div class="small">Итого: <b>${money(calcCartTotal())}</b></div>
+        <div style="height:10px"></div>
+        <div class="row">
+          <button class="btn" id="btnClear">Очистить</button>
+          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
+        </div>
+      `
+          : ""
+      }
+    </div>
+  `;
+
+  view.querySelectorAll("[data-inc]").forEach((b) => {
+    b.onclick = () => {
+      const i = Number(b.dataset.inc);
+      const next = [...cart];
+      next[i].qty = (Number(next[i].qty) || 0) + 1;
+      setCart(next);
+      renderCart();
+    };
+  });
+
+  view.querySelectorAll("[data-dec]").forEach((b) => {
+    b.onclick = () => {
+      const i = Number(b.dataset.dec);
+      const next = [...cart];
+      const q = (Number(next[i].qty) || 1) - 1;
+      if (q <= 0) next.splice(i, 1);
+      else next[i].qty = q;
+      setCart(next);
+      renderCart();
+    };
+  });
+
+  view.querySelectorAll("[data-rm]").forEach((b) => {
+    b.onclick = () => {
+      const i = Number(b.dataset.rm);
+      const next = [...cart];
+      next.splice(i, 1);
+      setCart(next);
+      toast("Удалено", "warn");
+      renderCart();
+    };
+  });
+
+  const btnClear = document.getElementById("btnClear");
+  if (btnClear) {
+    btnClear.onclick = () => {
+      setCart([]);
+      toast("Корзина очищена", "warn");
+      renderCart();
+    };
+  }
+
+  const btnCheckout = document.getElementById("btnCheckout");
+  if (btnCheckout) btnCheckout.onclick = () => openPage(renderCheckout);
+
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Checkout
+// =====================
+const LS_CHECKOUT = "lespaw_checkout_v1";
+let checkout = loadJSON(LS_CHECKOUT, {
+  name: "",
+  contact: "",
+  city: "",
+  delivery: "",
+  comment: "",
+});
+
+function saveCheckout(next) {
+  checkout = next;
+  saveJSON(LS_CHECKOUT, checkout);
+}
+
+function buildOrderText() {
+  const lines = [];
+  lines.push("🛍 Заказ LesPaw");
+
+  if (checkout.name) lines.push(`👤 Имя: ${checkout.name}`);
+  if (checkout.contact) lines.push(`📱 Контакт: ${checkout.contact}`);
+  if (checkout.city) lines.push(`🏙 Город: ${checkout.city}`);
+  if (checkout.delivery) lines.push(`🚚 Доставка/ПВЗ: ${checkout.delivery}`);
+  if (checkout.comment) lines.push(`📝 Комментарий: ${checkout.comment}`);
+
+  lines.push("\n📦 Товары:");
+
+  const overlayDelta = Number(settings.overlay_price_delta) || 0;
+  const holoDelta = Number(settings.holo_base_price_delta) || 0;
+
+  let total = 0;
+
+  (cart || []).forEach((ci) => {
+    const p = getProductById(ci.id);
+    if (!p) return;
+
+    const fandom = getFandomById(p.fandom_id);
+
+    let price = Number(p.price) || 0;
+    if ((p.product_type || "") === "sticker") {
+      if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
+      if ((ci.base || "") === "holo") price += holoDelta;
+    }
+
+    const qty = Number(ci.qty) || 1;
+    total += price * qty;
+
+    const opt = optionLabelForCartItem(ci);
+    const fandomName = fandom?.fandom_name ? ` — ${fandom.fandom_name}` : "";
+    lines.push(`• ${p.name}${fandomName}`);
+    if (opt) lines.push(`  ${opt}`);
+    lines.push(`  ${qty} шт · ${money(price)} за шт`);
+  });
+
+  lines.push(`\n💜 Итого: ${money(total)}`);
+  lines.push(`\nСвязь: @${MANAGER_USERNAME}`);
+
+  return lines.join("\n");
+}
+
+function renderCheckout() {
+  if (!cart || !cart.length) {
+    view.innerHTML = `
+      <div class="card">
+        <div class="h2">Оформление</div>
+        <div class="small">Корзина пустая — нечего оформлять.</div>
+        <hr>
+        <button class="btn is-active" id="goHome">На главную</button>
+      </div>
+    `;
+    document.getElementById("goHome").onclick = () => resetToHome();
+    syncNav();
+    syncBottomSpace();
+    return;
+  }
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Оформление заказа</div>
+      <div class="small">Заполни данные — и нажми «Отправить заказ».</div>
+      <hr>
+
+      <div class="small"><b>Имя</b></div>
+      <input class="searchInput" id="cName" placeholder="Как к тебе обращаться" value="${(checkout.name || "").replace(/"/g, "&quot;")}">
+      <div style="height:10px"></div>
+
+      <div class="small"><b>Контакт</b></div>
+      <input class="searchInput" id="cContact" placeholder="@ник или телефон" value="${(checkout.contact || "").replace(/"/g, "&quot;")}">
+      <div style="height:10px"></div>
+
+      <div class="small"><b>Город</b></div>
+      <input class="searchInput" id="cCity" placeholder="Город" value="${(checkout.city || "").replace(/"/g, "&quot;")}">
+      <div style="height:10px"></div>
+
+      <div class="small"><b>Доставка / ПВЗ</b></div>
+      <input class="searchInput" id="cDelivery" placeholder="Напр. Яндекс ПВЗ / 5post + адрес/код" value="${(checkout.delivery || "").replace(/"/g, "&quot;")}">
+      <div style="height:10px"></div>
+
+      <div class="small"><b>Комментарий</b></div>
+      <input class="searchInput" id="cComment" placeholder="Если нужно" value="${(checkout.comment || "").replace(/"/g, "&quot;")}">
+
+      <hr>
+
+      <label class="small" style="display:flex; gap:10px; align-items:flex-start; user-select:none">
+        <input type="checkbox" id="agree" style="margin-top:2px">
+        <span>Я ознакомилась с «Важной информацией» (оплата, сроки, доставка) и согласна с условиями.</span>
+      </label>
+
+      <div style="height:12px"></div>
+
+      <div class="row">
+        <button class="btn" id="btnPreview">Посмотреть текст заказа</button>
+        <button class="btn is-active" id="btnSend">Отправить заказ менеджерке</button>
+      </div>
+
+      <div id="preview" style="display:none; margin-top:12px">
+        <hr>
+        <div class="small" style="white-space:pre-wrap" id="orderText"></div>
+      </div>
+    </div>
+  `;
+
+  const cName = document.getElementById("cName");
+  const cContact = document.getElementById("cContact");
+  const cCity = document.getElementById("cCity");
+  const cDelivery = document.getElementById("cDelivery");
+  const cComment = document.getElementById("cComment");
+
+  function syncCheckout() {
+    saveCheckout({
+      name: cName.value || "",
+      contact: cContact.value || "",
+      city: cCity.value || "",
+      delivery: cDelivery.value || "",
+      comment: cComment.value || "",
+    });
+  }
+
+  [cName, cContact, cCity, cDelivery, cComment].forEach((el) => el.addEventListener("input", syncCheckout));
+
+  const btnPreview = document.getElementById("btnPreview");
+  const btnSend = document.getElementById("btnSend");
+  const agree = document.getElementById("agree");
+
+  btnPreview.onclick = () => {
+    syncCheckout();
+    const box = document.getElementById("preview");
+    const textEl = document.getElementById("orderText");
+    textEl.textContent = buildOrderText();
+    box.style.display = "";
+    syncBottomSpace();
+  };
+
+  btnSend.onclick = () => {
+    syncCheckout();
+
+    if (!agree.checked) {
+      toast("Поставь галочку, пожалуйста: нужно подтвердить условия 😿", "warn");
+      return;
+    }
+
+    const text = buildOrderText();
+    // Открываем чат с менеджеркой и подставляем текст.
+    // В Telegram поле ввода в любом случае можно редактировать — но внутри приложения мы НЕ даём редактируемое поле.
+    const link = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(text)}`;
+    tg?.openTelegramLink(link);
+    toast("Открываю чат с менеджеркой…", "good");
+  };
+
+  syncNav();
+  syncBottomSpace();
+}
