@@ -6,7 +6,9 @@
   <title>LesPaw • Фандомная Атрибутика</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="styles.css?v=47" />
+  <link rel="stylesheet" href="styles.css?v=49" />
+  <link rel="preconnect" href="https://docs.google.com" />
+  <link rel="preconnect" href="https://lh3.googleusercontent.com" />
 </head>
 
 <body>
@@ -54,32 +56,6 @@
     </button>
   </nav>
 
-  <!-- Boot diagnostics: покажет "Загрузка" и объяснит, если app.js не подцепился/упал -->
-  <script>
-    (function () {
-      var v = document.getElementById('view');
-      if (v) {
-        v.innerHTML = '' +
-          '<div class="card">' +
-          '  <div class="h2">Загрузка…</div>' +
-          '  <div class="small">Если этот экран не исчезает — значит, app.js не загрузился или упал с ошибкой.</div>' +
-          '</div>';
-      }
-
-      window.addEventListener('error', function (e) {
-        var msg = (e && (e.message || (e.error && e.error.message))) || 'Неизвестная ошибка';
-        var src = (e && e.filename) ? ('\n' + e.filename + ':' + e.lineno) : '';
-        if (v) {
-          v.innerHTML = '' +
-            '<div class="card">' +
-            '  <div class="h2">Ошибка JavaScript</div>' +
-            '  <div class="small" style="white-space:pre-wrap">' + msg + src + '</div>' +
-            '</div>';
-        }
-      });
-    })();
-  </script>
-
-  <script src="app.js?v=46" onerror="document.getElementById('view').innerHTML='<div class=\"card\"><div class=\"h2\">app.js не загрузился</div><div class=\"small\">Проверь, что файл app.js реально лежит рядом с index.html и GitHub Pages отдал его без 404.</div></div>'"></script>
+  <script src="app.js?v=49"></script>
 </body>
 </html>
