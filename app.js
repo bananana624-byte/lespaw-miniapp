@@ -248,31 +248,31 @@ const LAMINATION_EXAMPLES = [
     id: "sugar",
     title: "Сахар",
     subtitle: "Микрорельеф, блестящая крошка",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Сахар.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%A1%D0%B0%D1%85%D0%B0%D1%80.jpg"],
   },
   {
     id: "stars",
     title: "Звёздочки",
     subtitle: "Мелкие звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Звёздочки.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%97%D0%B2%D1%91%D0%B7%D0%B4%D0%BE%D1%87%D0%BA%D0%B8.jpg"],
   },
   {
     id: "snowflakes_small",
     title: "Маленькие снежинки",
     subtitle: "Зимний эффект",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Маленькие%20снежинки.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%9C%D0%B0%D0%BB%D0%B5%D0%BD%D1%8C%D0%BA%D0%B8%D0%B5%20%D1%81%D0%BD%D0%B5%D0%B6%D0%B8%D0%BD%D0%BA%D0%B8.jpg"],
   },
   {
     id: "stars_big",
     title: "Большие звёзды",
     subtitle: "Крупные звёзды",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/Ламинация%20Большие%20звёзды.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%91%D0%BE%D0%BB%D1%8C%D1%88%D0%B8%D0%B5%20%D0%B7%D0%B2%D1%91%D0%B7%D0%B4%D1%8B.jpg"],
   },
   {
     id: "holo_overlay",
     title: "Голографическая ламинация",
     subtitle: "Радужные переливы",
-    images: [],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%93%D0%BE%D0%BB%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%8F%20%D0%B1%D0%B5%D0%B7%20%D1%80%D0%B8%D1%81%D1%83%D0%BD%D0%BA%D0%B0.jpg"],
   },
   {
     id: "holo_base",
@@ -280,6 +280,22 @@ const LAMINATION_EXAMPLES = [
     subtitle: "Сама наклейка — голографическая",
     images: [],
   },
+
+  {
+    id: "film_glossy",
+    title: "Стандартная глянцевая плёнка",
+    subtitle: "Базовая плёнка — всегда глянец",
+    description: "Это стандартная плёнка с глянцевой поверхностью. Она всегда глянцевая по своей природе и даёт ровный, чистый блеск без дополнительных эффектов.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
+  },
+  {
+    id: "film_holo",
+    title: "Голографическая плёнка",
+    subtitle: "Самая яркая голография (за счёт текстуры плёнки)",
+    description: "Тут эффект голографии обычно заметнее и «сочнее», потому что сама плёнка уже голографическая по текстуре. А голографическая ламинация — это прозрачное покрытие с эффектом сверху: оно тоже красиво переливается, но выглядит мягче, потому что основа остаётся прозрачной.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"],
+  },
+
 ];
 
 function truthy(v) {
@@ -731,7 +747,9 @@ function renderLaminationExampleDetail(exId) {
     <div class="card">
       <div class="h2">${safeText(ex.title)}</div>
       ${ex.subtitle ? `<div class="small">${safeText(ex.subtitle)}</div>` : ``}
-      <hr>
+      
+      ${ex.description ? `<div class="small" style="margin-top:8px">${safeText(ex.description)}</div>` : ``}
+<hr>
 
       ${imgs.length
         ? `<div class="exBig">
@@ -980,7 +998,6 @@ function renderProduct(productId) {
 
   render();
 }
-
 // =====================
 // Favorites
 // =====================
