@@ -212,6 +212,77 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   text-overflow:ellipsis;
 }
 
+/* lamination examples */
+.exGrid{ margin-top:10px; }
+.exCard{
+  background:rgba(0,0,0,.04);
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:16px;
+  padding:12px;
+  cursor:pointer;
+  overflow:hidden;
+}
+.exImg{
+  width:100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius:12px;
+  display:block;
+  margin-bottom:8px;
+  background:rgba(0,0,0,.06);
+}
+.exTitle{
+  font-weight:1000;
+  font-size:14px;
+  line-height:1.2;
+  color:#0b0b12;
+}
+.exMeta{
+  margin-top:6px;
+  font-size:12px;
+  line-height:1.25;
+  color:rgba(11,11,18,.68);
+}
+.exStub{
+  width:100%;
+  aspect-ratio: 4/3;
+  border-radius:12px;
+  background:rgba(0,0,0,.06);
+  display:grid;
+  place-items:center;
+  position:relative;
+  overflow:hidden;
+  margin-bottom:8px;
+}
+.exStubGlow{
+  position:absolute;
+  inset:-40%;
+  background: radial-gradient(circle at 50% 50%, rgba(190,120,255,.55), transparent 55%);
+  filter: blur(10px);
+}
+.exStubText{
+  position:relative;
+  font-weight:1000;
+  font-size:12px;
+  color:rgba(11,11,18,.72);
+  text-transform:uppercase;
+  letter-spacing:.7px;
+}
+
+.exBig{ display:grid; gap:12px; }
+.exBigBtn{
+  border:none;
+  padding:0;
+  background:transparent;
+  cursor:pointer;
+}
+.exBigImg{
+  width:100%;
+  border-radius:14px;
+  display:block;
+  background:rgba(0,0,0,.06);
+}
+
 /* bottom nav */
 .navBar{
   position:fixed;
