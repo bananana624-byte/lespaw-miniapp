@@ -239,38 +239,56 @@ const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
 // =====================
 const LAMINATION_EXAMPLES = [
   {
+    id: "none",
+    title: "Без покрытия",
+    subtitle: "Матовая/обычная поверхность",
+    images: [],
+  },
+  {
     id: "sugar",
+    kind: "lamination",
     title: "Сахар",
     subtitle: "Микрорельеф, блестящая крошка",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%A1%D0%B0%D1%85%D0%B0%D1%80.jpg"],
   },
   {
     id: "stars",
+    kind: "lamination",
     title: "Звёздочки",
     subtitle: "Мелкие звёзды",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%97%D0%B2%D1%91%D0%B7%D0%B4%D0%BE%D1%87%D0%BA%D0%B8.jpg"],
   },
   {
     id: "snowflakes_small",
+    kind: "lamination",
     title: "Маленькие снежинки",
     subtitle: "Зимний эффект",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%9C%D0%B0%D0%BB%D0%B5%D0%BD%D1%8C%D0%BA%D0%B8%D0%B5%20%D1%81%D0%BD%D0%B5%D0%B6%D0%B8%D0%BD%D0%BA%D0%B8.jpg"],
   },
   {
     id: "stars_big",
+    kind: "lamination",
     title: "Большие звёзды",
     subtitle: "Крупные звёзды",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%91%D0%BE%D0%BB%D1%8C%D1%88%D0%B8%D0%B5%20%D0%B7%D0%B2%D1%91%D0%B7%D0%B4%D1%8B.jpg"],
   },
   {
     id: "holo_overlay",
+    kind: "lamination",
     title: "Голографическая ламинация",
     subtitle: "Радужные переливы",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/%D0%9B%D0%B0%D0%BC%D0%B8%D0%BD%D0%B0%D1%86%D0%B8%D1%8F%20%D0%93%D0%BE%D0%BB%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%8F%20%D0%B1%D0%B5%D0%B7%20%D1%80%D0%B8%D1%81%D1%83%D0%BD%D0%BA%D0%B0.jpg"],
   },
+  {
+    id: "holo_base",
+    title: "Голографическая основа",
+    subtitle: "Сама наклейка — голографическая",
+    images: [],
+  },
 
   {
     id: "film_glossy",
+    kind: "film",
     title: "Стандартная глянцевая плёнка",
     subtitle: "Базовая плёнка — всегда глянец",
     description: "Это стандартная плёнка с глянцевой поверхностью. Она всегда глянцевая по своей природе и даёт ровный, чистый блеск без дополнительных эффектов.",
@@ -278,6 +296,7 @@ const LAMINATION_EXAMPLES = [
   },
   {
     id: "film_holo",
+    kind: "film",
     title: "Голографическая плёнка",
     subtitle: "Самая яркая голография (за счёт текстуры плёнки)",
     description: "Тут эффект голографии обычно заметнее и «сочнее», потому что сама плёнка уже голографическая по текстуре. А голографическая ламинация — это прозрачное покрытие с эффектом сверху: оно тоже красиво переливается, но выглядит мягче, потому что основа остаётся прозрачной.",
@@ -680,35 +699,46 @@ function openExamples() {
 }
 
 function renderLaminationExamples() {
+  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
+  const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
+
+  const renderGrid = (items) =>
+    `
+      <div class="grid2 exGrid" id="exGrid">
+        ${items
+          .map((ex) => {
+            const img = ex.images?.[0] || "";
+            const imgHTML = img
+              ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
+              : `<div class="exStub" aria-hidden="true">
+                  <div class="exStubGlow"></div>
+                  <div class="exStubText">Нет фото</div>
+                </div>`;
+            return `
+              <div class="exCard" data-exid="${ex.id}">
+                ${imgHTML}
+                <div class="exTitle">${safeText(ex.title)}</div>
+                ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Примеры ламинации и пленки</div>
+      <div class="h2">Примеры ламинации и плёнки</div>
       <div class="small">Все примеры — прямо здесь, без перехода в Telegram.</div>
       <hr>
-      <div class="small"><b>Подсказка:</b> нажми на пример, чтобы открыть его крупно.</div>
-      <div class="grid2 exGrid" id="exGrid">
-        ${LAMINATION_EXAMPLES.map((ex) => {
-          const img = ex.images?.[0] || "";
-          const imgHTML = img
-            ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy">`
-            : `<div class="exStub" aria-hidden="true">
-                <div class="exStubGlow"></div>
-                <div class="exStubText">Нет фото</div>
-              </div>`;
-          return `
-            <div class="exCard" data-exid="${ex.id}">
-              ${imgHTML}
-              <div class="exTitle">${safeText(ex.title)}</div>
-              ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
-            </div>
-          `;
-        }).join("")}
-      </div>
 
-      <hr>
-      <div class="small">
-        Если хочешь, я могу вынести эти примеры в отдельную Google-таблицу (CSV), чтобы ты меняла их без правок кода.
-      </div>
+      <div class="h3" style="margin-top:2px">Ламинация</div>
+      ${renderGrid(laminations)}
+
+      <hr style="margin:16px 0">
+
+      <div class="h3" style="margin-top:2px">Плёнка</div>
+      ${renderGrid(films)}
     </div>
   `;
 
@@ -735,23 +765,22 @@ function renderLaminationExampleDetail(exId) {
     <div class="card">
       <div class="h2">${safeText(ex.title)}</div>
       ${ex.subtitle ? `<div class="small">${safeText(ex.subtitle)}</div>` : ``}
-      
+
       ${ex.description ? `<div class="small" style="margin-top:8px">${safeText(ex.description)}</div>` : ``}
-<hr>
+      <hr>
 
       ${imgs.length
         ? `<div class="exBig">
             ${imgs
               .map(
                 (u) => `
-              <button class="exBigBtn" type="button" data-openimg="${u}">
+              <div class="exBigBtn" style="cursor:default">
                 <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy">
-              </button>
+              </div>
             `
               )
               .join("")}
-          </div>
-          <div class="small">Нажми на фото, чтобы открыть отдельно (если нужно приблизить).</div>`
+          </div>`
         : `<div class="small">Фото для этого примера пока не добавлено.</div>`}
 
       <hr>
@@ -760,9 +789,8 @@ function renderLaminationExampleDetail(exId) {
   `;
 
   document.getElementById("exBack").onclick = () => goBack();
-  view.querySelectorAll("[data-openimg]").forEach((b) => {
-    b.onclick = () => openExternal(b.dataset.openimg);
-  });
+
+  // Никаких открытий "отдельно" — это не нужно для примеров ламинации/плёнки.
 
   syncNav();
   syncBottomSpace();
