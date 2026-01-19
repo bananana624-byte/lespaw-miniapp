@@ -466,34 +466,26 @@ function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
-  const typeTabs = ["all", "sticker", "pin", "poster", "box"];
-  const tabNames = { all: "Все", sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
+  // порядок секций (можно менять)
+  const order = ["sticker", "pin", "poster", "box"];
+  const labels = {
+    sticker: "Наклейки",
+    pin: "Значки",
+    poster: "Постеры",
+    box: "Боксы",
+  };
 
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">${f?.fandom_name || "Фандом"}</div>
-      <div class="row" id="tabs">
-        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
-      </div>
-      <hr>
-      <div class="grid2" id="prodList"></div>
-    </div>
-  `;
+  const activeTypes = order.filter((t) => all.some((p) => p.product_type === t));
 
-  let currentTab = "all";
+  function sectionHTML(t) {
+    const items = all.filter((p) => p.product_type === t);
+    if (!items.length) return "";
 
-  function setActiveTab() {
-    document.querySelectorAll("#tabs .btn").forEach((b) => {
-      b.classList.toggle("is-active", b.dataset.t === currentTab);
-    });
-  }
-
-  function renderList() {
-    const filtered = all.filter((p) => (currentTab === "all" ? true : p.product_type === currentTab));
-    const prodList = document.getElementById("prodList");
-
-    prodList.innerHTML = filtered.length
-      ? filtered
+    return `
+      <div class="small" style="margin-top:2px"><b>${labels[t] || typeLabel(t) || t}</b></div>
+      <div style="height:10px"></div>
+      <div class="grid2">
+        ${items
           .map(
             (p) => `
           <div class="pcard" data-id="${p.id}">
@@ -503,26 +495,32 @@ function renderFandomPage(fandomId) {
           </div>
         `
           )
-          .join("")
-      : `<div class="small">Пока нет товаров.</div>`;
-
-    prodList.querySelectorAll("[data-id]").forEach((el) => {
-      el.onclick = () => openPage(() => renderProduct(el.dataset.id));
-    });
-
-    syncBottomSpace();
+          .join("")}
+      </div>
+    `;
   }
 
-  document.querySelectorAll("#tabs .btn").forEach((b) => {
-    b.onclick = () => {
-      currentTab = b.dataset.t;
-      setActiveTab();
-      renderList();
-    };
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">${f?.fandom_name || "Фандом"}</div>
+      <div class="small">Товары сгруппированы по типам</div>
+      <hr>
+
+      ${
+        all.length
+          ? activeTypes
+              .map((t, idx) => `${sectionHTML(t)}${idx < activeTypes.length - 1 ? "<hr>" : ""}`)
+              .join("")
+          : `<div class="small">Пока нет товаров.</div>`
+      }
+    </div>
+  `;
+
+  // клики по карточкам
+  view.querySelectorAll("[data-id]").forEach((el) => {
+    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
   });
 
-  setActiveTab();
-  renderList();
   syncNav();
   syncBottomSpace();
 }
