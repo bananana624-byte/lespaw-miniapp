@@ -283,3 +283,13 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 }
 .toast.good{ box-shadow: 0 18px 44px rgba(0,0,0,.35), 0 0 26px rgba(114,255,182,.25); }
 .toast.warn{ box-shadow: 0 18px 44px rgba(0,0,0,.35), 0 0 26px rgba(255,92,122,.25); }
+
+/* inputs inside white cards (checkout) */
+.card .searchInput{
+  color:#0b0b12;
+  background:rgba(0,0,0,.04);
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:14px;
+  padding:12px 14px;
+}
+.card .searchInput::placeholder{ color:rgba(11,11,18,.55); }
