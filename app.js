@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v54
+// LesPaw Mini App — app.js v56
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -22,6 +22,12 @@ const CSV_PRODUCTS_URL =
 
 const CSV_SETTINGS_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=2041657059&single=true&output=csv";
+
+// Отзывы (CSV)
+// Колонки в листе reviews: is_active, author, text, date, rating, photo_url, source_url
+// Если ссылка пустая — вкладка «Отзывы» откроет Telegram-пост.
+const CSV_REVIEWS_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=1255489745&single=true&output=csv";
 
 // менеджерка (без @)
 const MANAGER_USERNAME = "LesPaw_manager";
@@ -143,6 +149,8 @@ function syncNav() {
 // =====================
 let fandoms = [];
 let products = [];
+let reviews = [];
+let reviewsVisibleCount = 8;
 let settings = {
   overlay_price_delta: 100,
   holo_base_price_delta: 100,
@@ -160,6 +168,7 @@ let settings = {
 const LS_CSV_CACHE_FANDOMS = "lespaw_csv_cache_fandoms_v1";
 const LS_CSV_CACHE_PRODUCTS = "lespaw_csv_cache_products_v1";
 const LS_CSV_CACHE_SETTINGS = "lespaw_csv_cache_settings_v1";
+const LS_CSV_CACHE_REVIEWS = "lespaw_csv_cache_reviews_v1";
 const CSV_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 часов
 
 function loadCsvCache(key) {
@@ -380,6 +389,67 @@ function money(n) {
   return `${Number(n) || 0} ₽`;
 }
 
+// =====================
+// Reviews helpers
+// =====================
+function parseReviewRating(v) {
+  const n = Number(String(v || "").replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(5, Math.round(n)));
+}
+
+function parseReviewDateToTs(s) {
+  const raw = String(s || "").trim();
+  if (!raw) return 0;
+
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const d = new Date(`${raw}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+
+  // DD.MM.YYYY
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) {
+    const [dd, mm, yyyy] = raw.split(".");
+    const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function formatReviewDate(s) {
+  const raw = String(s || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split("-");
+    return `${d}.${m}.${y}`;
+  }
+  return raw;
+}
+
+function normalizeReviews(rows) {
+  const arr = (rows || [])
+    .map((r) => {
+      const isActive = r.is_active === "" || r.is_active == null ? true : truthy(r.is_active);
+      const author = safeText(r.author || r.name || r.user || "Покупательница");
+      const text = safeText(r.text || r.review || r.message || "");
+      const date = safeText(r.date || r.created_at || r.time || "");
+      const rating = parseReviewRating(r.rating);
+      const photo_url = safeText(r.photo_url || r.photo || r.image || "");
+      const source_url = safeText(r.source_url || r.source || "");
+      const ts = parseReviewDateToTs(date);
+      return { isActive, author, text, date, ts, rating, photo_url, source_url };
+    })
+    .filter((x) => x.isActive)
+    .filter((x) => x.text || x.photo_url);
+
+  // свежие сверху; если даты нет — в конец
+  arr.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return arr;
+}
+
 // поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
@@ -489,6 +559,7 @@ async function init() {
       const cachedF = loadCsvCache(LS_CSV_CACHE_FANDOMS);
       const cachedP = loadCsvCache(LS_CSV_CACHE_PRODUCTS);
       const cachedS = loadCsvCache(LS_CSV_CACHE_SETTINGS);
+      const cachedR = loadCsvCache(LS_CSV_CACHE_REVIEWS);
       if (cachedF?.data?.length) fandoms = cachedF.data;
       if (cachedP?.data?.length) products = cachedP.data;
       if (cachedS?.data?.length) {
@@ -501,16 +572,18 @@ async function init() {
           else settings[k] = v;
         });
       }
+      if (cachedR?.data?.length) reviews = normalizeReviews(cachedR.data);
     } catch {}
 
     updateBadges();
     resetToHome(); // уже можно открыть меню
 
     // Параллельно грузим свежие CSV (быстрее, чем по очереди)
-    const [fFresh, pFresh, sFresh] = await Promise.all([
+    const [fFresh, pFresh, sFresh, rFresh] = await Promise.all([
       fetchCSVWithCache(CSV_FANDOMS_URL, LS_CSV_CACHE_FANDOMS),
       fetchCSVWithCache(CSV_PRODUCTS_URL, LS_CSV_CACHE_PRODUCTS),
       fetchCSVWithCache(CSV_SETTINGS_URL, LS_CSV_CACHE_SETTINGS),
+      CSV_REVIEWS_URL ? fetchCSVWithCache(CSV_REVIEWS_URL, LS_CSV_CACHE_REVIEWS) : Promise.resolve([]),
     ]);
 
     fandoms = fFresh || [];
@@ -529,6 +602,8 @@ async function init() {
       if (k === "overlay_price_delta" || k === "holo_base_price_delta") settings[k] = Number(v);
       else settings[k] = v;
     });
+
+    reviews = normalizeReviews(rFresh || []);
 
     // Если пользователька уже в каталоге/поиске — перерисуем текущий экран с обновлёнными данными
     try {
@@ -782,15 +857,165 @@ function renderInfo() {
 }
 
 function renderReviews() {
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Отзывы</div>
-      <div class="small">Откроется пост с отзывами в Telegram.</div>
-      <hr>
-      <button class="btn" id="openReviews">Открыть отзывы</button>
-    </div>
-  `;
-  document.getElementById("openReviews").onclick = () => tg?.openTelegramLink(REVIEWS_URL);
+  // Фильтры на уровне экрана (не сохраняем в storage — просто UX)
+  let mode = "all"; // all | photos | 5
+
+  const render = () => {
+    const all = Array.isArray(reviews) ? reviews : [];
+    const filtered = all
+      .filter((r) => {
+        if (mode === "photos") return !!r.photo_url;
+        if (mode === "5") return (Number(r.rating) || 0) >= 5;
+        return true;
+      })
+      .slice(0, reviewsVisibleCount);
+
+    const totalCount = all.length;
+    const avg = totalCount
+      ? Math.round((all.reduce((s, r) => s + (Number(r.rating) || 0), 0) / totalCount) * 10) / 10
+      : 0;
+
+    const chips = `
+      <div class="chips">
+        <button class="chip ${mode === "all" ? "is-active" : ""}" data-mode="all">Все</button>
+        <button class="chip ${mode === "photos" ? "is-active" : ""}" data-mode="photos">С фото</button>
+        <button class="chip ${mode === "5" ? "is-active" : ""}" data-mode="5">5★</button>
+      </div>
+    `;
+
+    const listHtml = filtered.length
+      ? `<div class="reviewList">
+          ${filtered
+            .map((r, idx) => {
+              const dateText = formatReviewDate(r.date);
+              const stars = r.rating
+                ? `<div class="stars" aria-label="Оценка ${r.rating} из 5">
+                    ${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}
+                  </div>`
+                : ``;
+
+              const photoHtml = r.photo_url
+                ? `<button class="reviewPhotoBtn" data-photo="${encodeURIComponent(r.photo_url)}" aria-label="Открыть фото">
+                     <img class="reviewPhoto" src="${r.photo_url}" alt="Фото отзыва" loading="lazy" decoding="async">
+                   </button>`
+                : ``;
+
+              const sourceBtn = r.source_url
+                ? `<button class="btn btnMini" data-source="${encodeURIComponent(r.source_url)}">К оригиналу</button>`
+                : ``;
+
+              return `
+                <div class="reviewCard">
+                  <div class="reviewTop">
+                    <div class="reviewAvatar" aria-hidden="true">${safeText(r.author).slice(0, 1).toUpperCase() || "★"}</div>
+                    <div class="reviewHead">
+                      <div class="reviewAuthor">${safeText(r.author) || "Покупательница"}</div>
+                      <div class="reviewMeta">
+                        ${dateText ? `<span class="reviewDate">${dateText}</span>` : ``}
+                        ${stars}
+                      </div>
+                    </div>
+                  </div>
+
+                  ${photoHtml}
+
+                  ${
+                    r.text
+                      ? `<div class="reviewText" data-expand="${idx}">${safeText(r.text)}</div>`
+                      : ``
+                  }
+
+                  ${sourceBtn ? `<div class="reviewActions">${sourceBtn}</div>` : ``}
+                </div>
+              `;
+            })
+            .join("")}
+        </div>`
+      : `<div class="small" style="margin-top:6px">Пока нет отзывов для отображения в этом режиме.</div>`;
+
+    const moreBtn =
+      (mode === "all" ? reviewsVisibleCount < all.length : reviewsVisibleCount < all.filter((r) => (mode === "photos" ? !!r.photo_url : (Number(r.rating) || 0) >= 5)).length)
+        ? `<button class="btn" id="revMore">Показать ещё</button>`
+        : ``;
+
+    const hasCsv = !!String(CSV_REVIEWS_URL || "").trim();
+
+    view.innerHTML = `
+      <div class="card">
+        <div class="h2">Отзывы</div>
+        <div class="revHero">
+          <div class="revStat">
+            <div class="revStatBig">${avg || 0}</div>
+            <div class="revStatSmall">средняя оценка</div>
+          </div>
+          <div class="revStat">
+            <div class="revStatBig">${totalCount}</div>
+            <div class="revStatSmall">отзывов</div>
+          </div>
+        </div>
+
+        ${chips}
+
+        ${
+          hasCsv
+            ? ``
+            : `<div class="small" style="margin-top:10px">Подключи CSV-лист reviews — и отзывы будут отображаться прямо здесь.</div>`
+        }
+
+        ${listHtml}
+
+        ${moreBtn ? `<div class="row" style="margin-top:12px">${moreBtn}</div>` : ``}
+
+        <hr>
+        <div class="row">
+          <button class="btn" id="openReviews">Открыть все отзывы в Telegram</button>
+          <button class="btn" id="leaveReview">Оставить отзыв</button>
+        </div>
+      </div>
+    `;
+
+    // chips
+    view.querySelectorAll("[data-mode]").forEach((b) => {
+      b.onclick = () => {
+        mode = b.dataset.mode || "all";
+        reviewsVisibleCount = 8;
+        render();
+      };
+    });
+
+    // open all / leave
+    document.getElementById("openReviews")?.addEventListener("click", () => tg?.openTelegramLink(REVIEWS_URL));
+    document.getElementById("leaveReview")?.addEventListener("click", () => tg?.openTelegramLink(REVIEWS_URL));
+
+    document.getElementById("revMore")?.addEventListener("click", () => {
+      reviewsVisibleCount += 8;
+      render();
+    });
+
+    // open photo
+    view.querySelectorAll("[data-photo]").forEach((el) => {
+      el.onclick = () => {
+        const url = decodeURIComponent(el.dataset.photo || "");
+        openExternal(url);
+      };
+    });
+
+    // open source
+    view.querySelectorAll("[data-source]").forEach((el) => {
+      el.onclick = () => {
+        const url = decodeURIComponent(el.dataset.source || "");
+        openExternal(url);
+      };
+    });
+
+    // expand text on tap (folded by CSS)
+    view.querySelectorAll("[data-expand]").forEach((el) => {
+      el.onclick = () => el.classList.toggle("is-open");
+    });
+  };
+
+  // Если отзывы ещё не успели подгрузиться, всё равно покажем UI и дадим кнопки.
+  render();
   syncNav();
   syncBottomSpace();
 }
