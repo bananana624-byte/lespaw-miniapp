@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js (v31, ref-like UI, pages + bottom nav, favorites+cart persisted)
+// LesPaw Mini App — app.js v41 (grid 2x products, safe nav, pages, persisted fav/cart)
 
 // =====================
 // CSV ссылки (твои)
@@ -15,7 +15,7 @@ const CSV_SETTINGS_URL =
 // менеджерка (без @)
 const MANAGER_USERNAME = "LesPaw_manager";
 
-// ссылки из важной инфы
+// ссылки
 const REVIEWS_URL = "https://t.me/LesPaw/114";
 const MAIN_CHANNEL_URL = "https://t.me/LessWolf";
 const SUGGEST_URL = "https://t.me/LesPaw/280";
@@ -43,20 +43,14 @@ const cartCount = document.getElementById("cartCount");
 // =====================
 // Storage
 // =====================
-const LS_CART = "lespaw_cart_v31";
-const LS_FAV = "lespaw_fav_v31";
+const LS_CART = "lespaw_cart_v41";
+const LS_FAV = "lespaw_fav_v41";
 
 function loadJSON(key, fallback) {
-  try {
-    const v = JSON.parse(localStorage.getItem(key));
-    return v ?? fallback;
-  } catch {
-    return fallback;
-  }
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
 }
-function saveJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
+function saveJSON(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
 
 let cart = loadJSON(LS_CART, []);
 let fav = loadJSON(LS_FAV, []);
@@ -64,7 +58,7 @@ let fav = loadJSON(LS_FAV, []);
 // =====================
 // Toast
 // =====================
-function toast(msg, kind = "") {
+function toast(msg, kind="") {
   const el = document.createElement("div");
   el.className = `toast ${kind}`.trim();
   el.textContent = msg;
@@ -73,7 +67,7 @@ function toast(msg, kind = "") {
 }
 
 // =====================
-// Navigation (pages + back)
+// Navigation stack
 // =====================
 const navStack = [];
 let currentRender = null;
@@ -131,36 +125,26 @@ function parseCSV(text) {
     if (inQuotes) {
       if (c === '"') {
         const next = s[i + 1];
-        if (next === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
+        if (next === '"') { field += '"'; i++; }
+        else inQuotes = false;
       } else field += c;
     } else {
       if (c === '"') inQuotes = true;
-      else if (c === ",") {
-        row.push(field);
-        field = "";
-      } else if (c === "\n") {
-        row.push(field);
-        rows.push(row);
-        row = [];
-        field = "";
-      } else field += c;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+      else field += c;
     }
   }
   row.push(field);
   rows.push(row);
 
-  const cleaned = rows.filter((r) => r.some((cell) => String(cell).trim() !== ""));
+  const cleaned = rows.filter(r => r.some(cell => String(cell).trim() !== ""));
   if (!cleaned.length) return [];
 
-  const headers = cleaned[0].map((h) => String(h).trim());
-  return cleaned.slice(1).map((r) => {
+  const headers = cleaned[0].map(h => String(h).trim());
+  return cleaned.slice(1).map(r => {
     const obj = {};
-    headers.forEach((h, idx) => (obj[h] = (r[idx] ?? "").toString().trim()));
+    headers.forEach((h, idx) => obj[h] = (r[idx] ?? "").toString().trim());
     return obj;
   });
 }
@@ -175,66 +159,39 @@ async function fetchCSV(url) {
 // Helpers
 // =====================
 const FANDOM_TYPES = [
-  "Фильмы",
-  "Игры",
-  "Сериалы",
-  "Актрисы и певицы",
-  "Аниме",
-  "Мультсериалы",
-  "Манхвы / манги",
-  "Лакорны",
-  "Что-то тематическое",
+  "Фильмы","Игры","Сериалы","Актрисы и певицы","Аниме","Мультсериалы",
+  "Манхвы / манги","Лакорны","Что-то тематическое"
 ];
 
 const OVERLAY_OPTIONS = [
-  ["none", "Без покрытия"],
-  ["sugar", "Сахар"],
-  ["stars", "Звёздочки"],
-  ["snowflakes_small", "Маленькие снежинки"],
-  ["stars_big", "Большие звёзды"],
-  ["holo_overlay", "Голографическая ламинация"],
+  ["none","Без покрытия"],
+  ["sugar","Сахар"],
+  ["stars","Звёздочки"],
+  ["snowflakes_small","Маленькие снежинки"],
+  ["stars_big","Большие звёзды"],
+  ["holo_overlay","Голографическая ламинация"],
 ];
 const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
 
-function truthy(v) {
-  return String(v || "")
-    .trim()
-    .toUpperCase() === "TRUE";
-}
-function money(n) {
-  return `${Number(n) || 0} ₽`;
-}
-function splitList(s) {
-  return (s || "")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-function isDigitStart(name) {
-  return /^[0-9]/.test((name || "").trim());
+function truthy(v){ return String(v||"").trim().toUpperCase() === "TRUE"; }
+function money(n){ return `${Number(n)||0} ₽`; }
+function splitList(s){ return (s||"").split(",").map(x=>x.trim()).filter(Boolean); }
+function isDigitStart(name){ return /^[0-9]/.test((name||"").trim()); }
+
+function typeLabel(t){
+  const map = { sticker:"Наклейки", pin:"Набор значков", poster:"Постеры", box:"Боксы" };
+  return map[t] || t || "";
 }
 
-function getFandomById(id) {
-  return fandoms.find((f) => f.fandom_id === id);
-}
-function getProductById(id) {
-  return products.find((p) => p.id === id);
-}
+function getFandomById(id){ return fandoms.find(f => f.fandom_id === id); }
+function getProductById(id){ return products.find(p => p.id === id); }
 
-function setCart(next) {
-  cart = next;
-  saveJSON(LS_CART, cart);
-  updateBadges();
-}
-function setFav(next) {
-  fav = next;
-  saveJSON(LS_FAV, fav);
-  updateBadges();
-}
+function setCart(next){ cart = next; saveJSON(LS_CART, cart); updateBadges(); }
+function setFav(next){ fav = next; saveJSON(LS_FAV, fav); updateBadges(); }
 
 function updateBadges() {
   const favN = fav.length;
-  const cartN = cart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+  const cartN = cart.reduce((sum,it)=>sum + (Number(it.qty)||0), 0);
 
   if (favN > 0) {
     favCount.style.display = "";
@@ -252,24 +209,21 @@ function updateBadges() {
 // =====================
 async function init() {
   try {
-    // bind nav
     navBack.onclick = () => goBack();
     navFav.onclick = () => openPage(renderFavorites);
     navCart.onclick = () => openPage(renderCart);
 
-    // search only on top
     globalSearch.addEventListener("input", (e) => {
       const q = e.target.value || "";
       if (q.trim()) openPage(() => renderSearch(q));
       else resetToHome();
     });
 
-    // load data
     fandoms = await fetchCSV(CSV_FANDOMS_URL);
     products = await fetchCSV(CSV_PRODUCTS_URL);
 
     const s = await fetchCSV(CSV_SETTINGS_URL);
-    s.forEach((row) => {
+    s.forEach(row => {
       const k = row.key;
       const v = row.value;
       if (!k) return;
@@ -293,7 +247,7 @@ async function init() {
 init();
 
 // =====================
-// HOME — плитки (как на рефе)
+// HOME (плитки)
 // =====================
 function renderHome() {
   view.innerHTML = `
@@ -327,7 +281,7 @@ function renderHome() {
 }
 
 // =====================
-// Категории → список типов
+// Категории → типы фандомов
 // =====================
 function renderFandomTypes() {
   view.innerHTML = `
@@ -336,19 +290,17 @@ function renderFandomTypes() {
       <div class="small">Выбери тип фандома</div>
       <hr>
       <div class="list">
-        ${FANDOM_TYPES.map(
-          (t) => `
-          <div class="item" data-type="${t}">
+        ${FANDOM_TYPES.map(t => `
+          <div class="listItem item" data-type="${t}">
             <div class="title">${t}</div>
             <div class="meta">Открыть список фандомов</div>
           </div>
-        `
-        ).join("")}
+        `).join("")}
       </div>
     </div>
   `;
 
-  view.querySelectorAll("[data-type]").forEach((el) => {
+  view.querySelectorAll("[data-type]").forEach(el => {
     el.onclick = () => openPage(() => renderFandomList(el.dataset.type));
   });
 
@@ -356,16 +308,16 @@ function renderFandomTypes() {
 }
 
 // =====================
-// Список фандомов внутри типа (алфавит + цифры в конце)
+// Список фандомов (алфавит + цифры в конце)
 // =====================
 function renderFandomList(type) {
   const list = fandoms
-    .filter((f) => truthy(f.is_active))
-    .filter((f) => f.fandom_type === type)
-    .sort((a, b) => (a.fandom_name || "").localeCompare(b.fandom_name || "", "ru"));
+    .filter(f => truthy(f.is_active))
+    .filter(f => f.fandom_type === type)
+    .sort((a,b) => (a.fandom_name||"").localeCompare(b.fandom_name||"", "ru"));
 
-  const letters = list.filter((f) => !isDigitStart(f.fandom_name));
-  const digits = list.filter((f) => isDigitStart(f.fandom_name));
+  const letters = list.filter(f => !isDigitStart(f.fandom_name));
+  const digits  = list.filter(f =>  isDigitStart(f.fandom_name));
 
   view.innerHTML = `
     <div class="card">
@@ -373,34 +325,26 @@ function renderFandomList(type) {
       <div class="small">Фандомы по алфавиту</div>
       <hr>
       <div class="list">
-        ${letters
-          .map(
-            (f) => `
+        ${letters.map(f => `
           <div class="item" data-id="${f.fandom_id}">
             <div class="title">${f.fandom_name}</div>
             <div class="meta">Открыть товары фандома</div>
           </div>
-        `
-          )
-          .join("")}
+        `).join("")}
 
         ${digits.length ? `<div class="small">0–9</div>` : ""}
 
-        ${digits
-          .map(
-            (f) => `
+        ${digits.map(f => `
           <div class="item" data-id="${f.fandom_id}">
             <div class="title">${f.fandom_name}</div>
             <div class="meta">Открыть товары фандома</div>
           </div>
-        `
-          )
-          .join("")}
+        `).join("")}
       </div>
     </div>
   `;
 
-  view.querySelectorAll("[data-id]").forEach((el) => {
+  view.querySelectorAll("[data-id]").forEach(el => {
     el.onclick = () => openPage(() => renderFandomPage(el.dataset.id));
   });
 
@@ -408,62 +352,54 @@ function renderFandomList(type) {
 }
 
 // =====================
-// Страница фандома — товары + фильтр по типу товара (без отдельного поиска)
+// Страница фандома → товары сеткой 2×
 // =====================
 function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
-  const all = products.filter((p) => p.fandom_id === fandomId);
+  const all = products.filter(p => p.fandom_id === fandomId);
 
-  const typeTabs = ["all", "sticker", "pin", "poster", "box"];
-  const tabNames = { all: "Все", sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
+  const typeTabs = ["all","sticker","pin","poster","box"];
+  const tabNames = { all:"Все", sticker:"Наклейки", pin:"Значки", poster:"Постеры", box:"Боксы" };
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">${f?.fandom_name || "Фандом"}</div>
       <div class="row" id="tabs">
-        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
+        ${typeTabs.map(t => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
       </div>
       <hr>
-      <div class="list" id="prodList"></div>
+      <div class="grid2" id="prodList"></div>
     </div>
   `;
 
   let currentTab = "all";
 
-  function setActiveTab() {
-    document.querySelectorAll("#tabs .btn").forEach((b) => {
+  function setActiveTab(){
+    document.querySelectorAll("#tabs .btn").forEach(b => {
       b.classList.toggle("is-active", b.dataset.t === currentTab);
     });
   }
 
-  function renderList() {
-    const filtered = all.filter((p) => (currentTab === "all" ? true : p.product_type === currentTab));
+  function renderList(){
+    const filtered = all.filter(p => currentTab === "all" ? true : p.product_type === currentTab);
     const prodList = document.getElementById("prodList");
 
     prodList.innerHTML = filtered.length
-      ? filtered
-          .map(
-            (p) => `
-        <div class="item" data-id="${p.id}">
-          <div class="title">${p.name}</div>
-          <div class="meta">${money(p.price)} · ${p.product_type}</div>
-        </div>
-      `
-          )
-          .join("")
+      ? filtered.map(p => `
+          <div class="pcard" data-id="${p.id}">
+            <div class="pcardTitle">${p.name}</div>
+            <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
+          </div>
+        `).join("")
       : `<div class="small">Пока нет товаров.</div>`;
 
-    prodList.querySelectorAll("[data-id]").forEach((el) => {
+    prodList.querySelectorAll("[data-id]").forEach(el => {
       el.onclick = () => openPage(() => renderProduct(el.dataset.id));
     });
   }
 
-  document.querySelectorAll("#tabs .btn").forEach((btn) => {
-    btn.onclick = () => {
-      currentTab = btn.dataset.t;
-      setActiveTab();
-      renderList();
-    };
+  document.querySelectorAll("#tabs .btn").forEach(btn => {
+    btn.onclick = () => { currentTab = btn.dataset.t; setActiveTab(); renderList(); };
   });
 
   setActiveTab();
@@ -485,34 +421,28 @@ function renderProduct(productId) {
   let selBase = "standard";
   let selOverlay = "none";
 
-  function calcUnitPrice() {
-    let total = Number(p.price) || 0;
+  function calcUnitPrice(){
+    let total = Number(p.price)||0;
     if (isSticker && enableBase && selBase === "holo_base") total += settings.holo_base_price_delta;
     if (isSticker && enableOverlay && selOverlay !== "none") total += settings.overlay_price_delta;
     return total;
   }
 
-  function render() {
+  function render(){
     const unit = calcUnitPrice();
     const imgs = splitList(p.images);
     const favOn = fav.includes(productId);
 
-    const gallery = imgs.length
-      ? `
+    const gallery = imgs.length ? `
       <div class="list">
-        ${imgs
-          .map(
-            (u) => `
+        ${imgs.map(u => `
           <div class="item" style="cursor:default; padding:10px;">
             <img class="thumb" src="${u}" alt="Фото товара">
           </div>
-        `
-          )
-          .join("")}
+        `).join("")}
       </div>
       <hr>
-    `
-      : "";
+    ` : "";
 
     view.innerHTML = `
       <div class="card">
@@ -533,7 +463,7 @@ function renderProduct(productId) {
           ` : ""}
 
           ${enableOverlay ? `
-            <div class="row" id="ovRow" style="margin-top:10px;">
+            <div class="row" style="margin-top:10px;">
               ${OVERLAY_OPTIONS.map(([id,label]) => `
                 <button class="btn ${selOverlay===id?"is-active":""}" data-ov="${id}">
                   ${label}${id==="none" ? " (+0)" : ` (+${settings.overlay_price_delta})`}
@@ -564,40 +494,30 @@ function renderProduct(productId) {
       </div>
     `;
 
-    if (isSticker && enableBase) {
-      document.getElementById("baseStd").onclick = () => {
-        selBase = "standard";
-        render();
-      };
-      document.getElementById("baseHolo").onclick = () => {
-        selBase = "holo_base";
-        render();
-      };
+    if (isSticker && enableBase){
+      document.getElementById("baseStd").onclick = () => { selBase="standard"; render(); };
+      document.getElementById("baseHolo").onclick = () => { selBase="holo_base"; render(); };
     }
 
-    if (isSticker && enableOverlay) {
-      view.querySelectorAll("[data-ov]").forEach((b) => {
-        b.onclick = () => {
-          selOverlay = b.dataset.ov;
-          render();
-        };
+    if (isSticker && enableOverlay){
+      view.querySelectorAll("[data-ov]").forEach(b => {
+        b.onclick = () => { selOverlay = b.dataset.ov; render(); };
       });
       document.getElementById("btnExamples2").onclick = () => openExamples();
     }
 
     document.getElementById("btnFav").onclick = () => {
-      const next = fav.includes(productId) ? fav.filter((x) => x !== productId) : [...fav, productId];
+      const next = fav.includes(productId) ? fav.filter(x=>x!==productId) : [...fav, productId];
       setFav(next);
       toast(next.includes(productId) ? "Добавлено в избранное ✨" : "Убрано из избранного", "good");
       render();
     };
 
-    // НЕ открываем корзину автоматически — только тост
     document.getElementById("btnAdd").onclick = () => {
       const key = `${productId}::${selBase}::${selOverlay}`;
-      const existing = cart.find((it) => `${it.productId}::${it.base}::${it.overlay}` === key);
+      const existing = cart.find(it => `${it.productId}::${it.base}::${it.overlay}` === key);
 
-      if (existing) existing.qty = (Number(existing.qty) || 1) + 1;
+      if (existing) existing.qty = (Number(existing.qty)||1) + 1;
       else cart.push({ productId, qty: 1, base: selBase, overlay: selOverlay });
 
       setCart([...cart]);
@@ -611,23 +531,23 @@ function renderProduct(productId) {
 }
 
 // =====================
-// Корзина
+// Корзина / оформление
 // =====================
-function calcUnitForCartItem(it) {
+function calcUnitForCartItem(it){
   const p = getProductById(it.productId);
-  if (!p) return 0;
+  if(!p) return 0;
 
   const isSticker = p.product_type === "sticker";
-  let unit = Number(p.price) || 0;
+  let unit = Number(p.price)||0;
 
-  if (isSticker && truthy(p.enable_print_base) && it.base === "holo_base") unit += settings.holo_base_price_delta;
-  if (isSticker && truthy(p.enable_overlay) && it.overlay !== "none") unit += settings.overlay_price_delta;
+  if (isSticker && truthy(p.enable_print_base) && it.base==="holo_base") unit += settings.holo_base_price_delta;
+  if (isSticker && truthy(p.enable_overlay) && it.overlay!=="none") unit += settings.overlay_price_delta;
 
   return unit;
 }
 
-function renderCart() {
-  if (!cart.length) {
+function renderCart(){
+  if(!cart.length){
     view.innerHTML = `
       <div class="card">
         <div class="h2">Корзина</div>
@@ -645,18 +565,20 @@ function renderCart() {
     const f = p ? getFandomById(p.fandom_id) : null;
 
     const unit = calcUnitForCartItem(it);
-    const qty = Number(it.qty) || 1;
+    const qty = Number(it.qty)||1;
     const line = unit * qty;
     total += line;
 
     const isSticker = p?.product_type === "sticker";
     const overlayText =
-      it.overlay === "none" ? "без" : `${OVERLAY_LABELS[it.overlay] || it.overlay} (+${settings.overlay_price_delta})`;
+      it.overlay === "none"
+        ? "без"
+        : `${OVERLAY_LABELS[it.overlay] || it.overlay} (+${settings.overlay_price_delta})`;
 
     return `
       <div class="item" style="cursor:default">
         <div class="title">${p?.name || it.productId}</div>
-        <div class="meta">${f?.fandom_name || ""} · ${p?.product_type || ""}</div>
+        <div class="meta">${f?.fandom_name || ""} · ${typeLabel(p?.product_type || "")}</div>
         ${isSticker ? `<div class="meta">Основа: ${it.base==="holo_base" ? `голографическая (+${settings.holo_base_price_delta})` : "стандарт"}</div>` : ""}
         ${isSticker ? `<div class="meta">Покрытие: ${overlayText}</div>` : ""}
         <div class="meta">Цена за 1: ${money(unit)} · Кол-во: ${qty} · Сумма: ${money(line)}</div>
@@ -680,36 +602,33 @@ function renderCart() {
     </div>
   `;
 
-  view.querySelectorAll("[data-dec]").forEach((b) => (b.onclick = () => {
+  view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
     const i = Number(b.dataset.dec);
     const it = cart[i];
-    it.qty = Math.max(1, (Number(it.qty) || 1) - 1);
+    it.qty = Math.max(1, (Number(it.qty)||1) - 1);
     setCart([...cart]);
     renderCart();
-  }));
+  });
 
-  view.querySelectorAll("[data-inc]").forEach((b) => (b.onclick = () => {
+  view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => {
     const i = Number(b.dataset.inc);
     const it = cart[i];
-    it.qty = (Number(it.qty) || 1) + 1;
+    it.qty = (Number(it.qty)||1) + 1;
     setCart([...cart]);
     renderCart();
-  }));
+  });
 
-  view.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => {
+  view.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     const i = Number(b.dataset.del);
-    setCart(cart.filter((_, idx) => idx !== i));
+    setCart(cart.filter((_,idx)=>idx!==i));
     renderCart();
-  }));
+  });
 
   document.getElementById("checkout").onclick = () => openPage(() => renderCheckout(total));
   syncNav();
 }
 
-// =====================
-// Оформление (галочка обязательна + уведомление)
-// =====================
-function renderCheckout(total) {
+function renderCheckout(total){
   view.innerHTML = `
     <div class="card">
       <div class="h2">Оформление</div>
@@ -719,14 +638,7 @@ function renderCheckout(total) {
       </div>
       <hr>
 
-      <div class="small"><b>Поля для доставки (Яндекс / 5post)</b></div>
-      <div class="small">ФИО · Телефон · Адрес пункта выдачи</div>
-      <hr>
-
-      <label class="small">
-        <input type="checkbox" id="agree" />
-        Я ознакомилась с важной информацией (оплата/сроки/доставка)
-      </label>
+      <label class="small"><input type="checkbox" id="agree" /> Я ознакомилась с важной информацией</label>
       <hr>
 
       <input class="btn" style="width:100%" id="fio" placeholder="ФИО *" />
@@ -749,11 +661,11 @@ function renderCheckout(total) {
     const pvz = document.getElementById("pvz").value.trim();
     const comment = document.getElementById("comment").value.trim();
 
-    if (!agree) {
+    if(!agree){
       toast("Нужно поставить галочку и ознакомиться с важной информацией 💚", "warn");
       return;
     }
-    if (!fio || !phone || !pvz) {
+    if(!fio || !phone || !pvz){
       toast("Заполни обязательные поля: ФИО, телефон и ПВЗ ✍️", "warn");
       return;
     }
@@ -774,15 +686,15 @@ function renderCheckout(total) {
       const isSticker = p?.product_type === "sticker";
 
       const unit = calcUnitForCartItem(it);
-      const qty = Number(it.qty) || 1;
+      const qty = Number(it.qty)||1;
       const lineTotal = unit * qty;
       computedTotal += lineTotal;
 
-      lines.push(`${idx + 1}) ${p?.name || it.productId} ×${qty} — ${money(lineTotal)}`);
+      lines.push(`${idx+1}) ${p?.name || it.productId} ×${qty} — ${money(lineTotal)}`);
 
-      if (isSticker) {
-        lines.push(`   Основа: ${it.base === "holo_base" ? `голографическая (+${settings.holo_base_price_delta} ₽)` : "стандарт"}`);
-        const ov = it.overlay === "none" ? "без" : `${OVERLAY_LABELS[it.overlay] || it.overlay} (+${settings.overlay_price_delta} ₽)`;
+      if(isSticker){
+        lines.push(`   Основа: ${it.base==="holo_base" ? `голографическая (+${settings.holo_base_price_delta} ₽)` : "стандарт"}`);
+        const ov = it.overlay==="none" ? "без" : `${OVERLAY_LABELS[it.overlay] || it.overlay} (+${settings.overlay_price_delta} ₽)`;
         lines.push(`   Покрытие: ${ov}`);
       }
     });
@@ -797,7 +709,6 @@ function renderCheckout(total) {
 
     const orderText = lines.join("\n");
     const url = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(orderText)}`;
-
     tg?.openTelegramLink(url);
   };
 
@@ -805,41 +716,37 @@ function renderCheckout(total) {
 }
 
 // =====================
-// Избранное (сохраняется)
+// Избранное
 // =====================
-function renderFavorites() {
-  if (!fav.length) {
+function renderFavorites(){
+  if(!fav.length){
     view.innerHTML = `
       <div class="card">
         <div class="h2">Избранное</div>
-        <div class="small">Пока ничего нет. Добавь сердечком на карточке товара 💜</div>
+        <div class="small">Пока ничего нет. Добавляй сердечком на карточке товара 💜</div>
       </div>
     `;
     syncNav();
     return;
   }
 
-  const items = fav.map((pid) => getProductById(pid)).filter(Boolean);
+  const items = fav.map(pid => getProductById(pid)).filter(Boolean);
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">Избранное</div>
-      <div class="list">
-        ${items
-          .map(
-            (p) => `
-          <div class="item" data-id="${p.id}">
-            <div class="title">${p.name}</div>
-            <div class="meta">${money(p.price)} · ${p.product_type}</div>
+      <div class="grid2">
+        ${items.map(p => `
+          <div class="pcard" data-id="${p.id}">
+            <div class="pcardTitle">${p.name}</div>
+            <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
           </div>
-        `
-          )
-          .join("")}
+        `).join("")}
       </div>
     </div>
   `;
 
-  view.querySelectorAll("[data-id]").forEach((el) => {
+  view.querySelectorAll("[data-id]").forEach(el => {
     el.onclick = () => openPage(() => renderProduct(el.dataset.id));
   });
 
@@ -847,9 +754,9 @@ function renderFavorites() {
 }
 
 // =====================
-// Важная информация / отзывы / примеры покрытий
+// Инфо / отзывы / примеры
 // =====================
-function renderInfo() {
+function renderInfo(){
   view.innerHTML = `
     <div class="card">
       <div class="h2">Важная информация</div>
@@ -859,26 +766,23 @@ function renderInfo() {
 
         💚 <b>Сроки</b><br>
         ⏳ Сборка и отправка — <b>4–5 дней</b>.<br>
-        🚚 Доставка — <b>5–15 дней</b> (в зависимости от города).<br><br>
+        🚚 Доставка — <b>5–15 дней</b>.<br><br>
 
         💚 <b>Доставка</b><br>
-        📦 Отправляем через Яндекс Доставку:<br>
-        — ПВЗ Яндекс<br>
-        — 5post в «Пятёрочке»<br>
-        💰 Стоимость доставки рассчитывается при оформлении.<br>
-        ⏳ Хранение — <b>6 дней</b> (следите за уведомлениями).<br><br>
+        📦 Яндекс Доставка: ПВЗ Яндекс / 5post.<br>
+        ⏳ Хранение — <b>6 дней</b>.<br><br>
 
         💚 <b>Возврат</b><br>
-        ❌ Возврат невозможен — всё изготавливается индивидуально под заказ.<br><br>
+        ❌ Возврат невозможен (под заказ).<br><br>
 
         💚 <b>Печать</b><br>
-        🖨 Струйная печать — цвета могут немного отличаться от экрана.<br><br>
+        🖨 Струйная печать, цвета могут чуть отличаться.<br><br>
 
         💚 <b>Наклейки</b><br>
-        ✂️ Наклейки не вырезаны по контуру — их нужно вырезать самостоятельно.<br><br>
+        ✂️ Не вырезаны по контуру — нужно вырезать самостоятельно.<br><br>
 
         💚 <b>Индивидуальный заказ</b><br>
-        Можно сделать значки/наклейки по вашим картинкам 👉 <b>@LesPaw_manager</b>
+        👉 <b>@LesPaw_manager</b>
       </div>
       <hr>
       <div class="row">
@@ -894,7 +798,7 @@ function renderInfo() {
   syncNav();
 }
 
-function renderReviews() {
+function renderReviews(){
   view.innerHTML = `
     <div class="card">
       <div class="h2">Отзывы</div>
@@ -907,27 +811,26 @@ function renderReviews() {
   syncNav();
 }
 
-function openExamples() {
+function openExamples(){
   const url = settings.examples_url || "https://t.me/LesPaw";
   tg?.openTelegramLink(url);
 }
 
 // =====================
 // Поиск (только сверху)
-// Ищет по: названию товара, tags, description_short, типу товара + фандомам
 // =====================
-function renderSearch(q) {
-  const query = (q || "").toLowerCase().trim();
+function renderSearch(q){
+  const query = (q||"").toLowerCase().trim();
 
   const fHits = fandoms
-    .filter((f) => truthy(f.is_active))
-    .filter((f) => (f.fandom_name || "").toLowerCase().includes(query))
+    .filter(f => truthy(f.is_active))
+    .filter(f => (f.fandom_name||"").toLowerCase().includes(query))
     .slice(0, 20);
 
   const pHits = products
-    .filter((p) => {
+    .filter(p => {
       const typeName = (p.product_type || "").toLowerCase();
-      const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
+      const hay = `${p.name||""} ${p.description_short||""} ${p.tags||""} ${typeName}`.toLowerCase();
       return hay.includes(query);
     })
     .slice(0, 40);
@@ -938,50 +841,35 @@ function renderSearch(q) {
 
       <div class="small"><b>Фандомы</b></div>
       <div class="list">
-        ${
-          fHits.length
-            ? fHits
-                .map(
-                  (f) => `
-            <div class="item" data-fid="${f.fandom_id}">
-              <div class="title">${f.fandom_name}</div>
-              <div class="meta">${f.fandom_type}</div>
-            </div>
-          `
-                )
-                .join("")
-            : `<div class="small">Ничего не найдено</div>`
-        }
+        ${fHits.length ? fHits.map(f => `
+          <div class="item" data-fid="${f.fandom_id}">
+            <div class="title">${f.fandom_name}</div>
+            <div class="meta">${f.fandom_type}</div>
+          </div>
+        `).join("") : `<div class="small">Ничего не найдено</div>`}
       </div>
 
       <hr>
 
       <div class="small"><b>Товары</b></div>
-      <div class="list">
-        ${
-          pHits.length
-            ? pHits
-                .map(
-                  (p) => `
-            <div class="item" data-pid="${p.id}">
-              <div class="title">${p.name}</div>
-              <div class="meta">${money(p.price)} · ${p.product_type}</div>
-            </div>
-          `
-                )
-                .join("")
-            : `<div class="small">Ничего не найдено</div>`
-        }
+      <div class="grid2">
+        ${pHits.length ? pHits.map(p => `
+          <div class="pcard" data-pid="${p.id}">
+            <div class="pcardTitle">${p.name}</div>
+            <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
+          </div>
+        `).join("") : `<div class="small">Ничего не найдено</div>`}
       </div>
     </div>
   `;
 
-  view.querySelectorAll("[data-fid]").forEach((el) => {
-    el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid));
-  });
-  view.querySelectorAll("[data-pid]").forEach((el) => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.pid));
-  });
+  view.querySelectorAll("[data-fid]").forEach(el => el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid)));
+  view.querySelectorAll("[data-pid]").forEach(el => el.onclick = () => openPage(() => renderProduct(el.dataset.pid)));
 
   syncNav();
 }
+
+// =====================
+// badges init update
+// =====================
+updateBadges();
