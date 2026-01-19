@@ -1,52 +1,58 @@
-/* LESPAW STYLE v31 — ref-like */
+/* LESPAW STYLE v41 — ref-like + fixed bottom bar safe area */
 
-/* базовые */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
-body {
-  margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  color: #fff;
 
-  /* Фиолетовый неоновый фон как на рефе */
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  color:#fff;
+
+  min-height: 100vh;
+
+  /* Фиолетовый неоновый фон */
   background:
     radial-gradient(1000px 700px at 50% -10%, rgba(190,120,255,.65), transparent 58%),
     radial-gradient(900px 700px at 50% 35%, rgba(125,60,255,.45), transparent 62%),
     radial-gradient(850px 650px at 50% 110%, rgba(190,120,255,.22), transparent 60%),
     linear-gradient(180deg, #3a007a 0%, #170047 55%, #070018 100%);
+
+  background-attachment: fixed;
 }
 
 /* ===== TOP ===== */
-.top {
-  padding: 18px 16px 10px;
+.top{
+  padding: 14px 16px 8px;
 }
 
-.titleGlow {
-  font-weight: 1000;
-  font-size: 26px;
-  line-height: 1.1;
-  letter-spacing: .3px;
+.titleGlow{
+  font-weight: 900;
+  font-size: 18px;           /* меньше и минималистично */
+  letter-spacing: .2px;
+
+  white-space: nowrap;       /* в одну строку */
+  overflow: hidden;
+  text-overflow: ellipsis;
+
   text-shadow:
-    0 0 10px rgba(255,255,255,.35),
-    0 0 24px rgba(190,120,255,.65),
-    0 0 48px rgba(125,60,255,.55);
-  margin-bottom: 14px;
+    0 0 12px rgba(190,120,255,.55),
+    0 0 24px rgba(125,60,255,.40);
+  margin-bottom: 10px;
 }
 
 /* ===== SEARCH ===== */
-.searchWrap {
+.searchWrap{
   position: relative;
   width: 100%;
   border-radius: 18px;
 
-  /* белая рамка как на рефе */
   border: 2px solid rgba(255,255,255,.55);
   background: rgba(0,0,0,.22);
   box-shadow: 0 0 28px rgba(125,60,255,.35);
   overflow: hidden;
 }
 
-.searchInput {
+.searchInput{
   width: 100%;
   border: none;
   outline: none;
@@ -56,43 +62,42 @@ body {
   font-size: 16px;
 }
 
-.searchInput::placeholder {
-  color: rgba(255,255,255,.72);
-}
+.searchInput::placeholder{ color: rgba(255,255,255,.72); }
 
-.searchIcon {
-  position: absolute;
+.searchIcon{
+  position:absolute;
   right: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: rgba(255,255,255,.95);
   width: 26px;
   height: 26px;
-  display: grid;
-  place-items: center;
+  display:grid;
+  place-items:center;
 }
 
-.ico { width: 22px; height: 22px; }
+.ico{ width:22px; height:22px; }
 
 /* ===== LAYOUT ===== */
-.wrap {
+.wrap{
   max-width: 860px;
   margin: 0 auto;
-  padding: 12px 16px 150px; /* место под нижнюю панель */
+
+  /* безопасная зона под нижнюю панель */
+  padding: 12px 16px calc(110px + env(safe-area-inset-bottom));
 }
 
-.view {
-  display: grid;
-  gap: 16px;
+.view{
+  display:grid;
+  gap:16px;
 }
 
-/* ===== HOME TILES (белые плашки) ===== */
-.tile {
+/* ===== HOME TILES ===== */
+.tile{
   background: rgba(255,255,255,.96);
   border-radius: 18px;
   padding: 18px 18px 16px;
 
-  /* белая окантовка + неон */
   border: 2px solid rgba(255,255,255,.55);
   box-shadow:
     0 18px 44px rgba(0,0,0,.35),
@@ -103,7 +108,7 @@ body {
   transition: transform .08s ease, box-shadow .18s ease, filter .18s ease;
 }
 
-.tile:active {
+.tile:active{
   transform: scale(.99);
   filter: brightness(1.02);
   box-shadow:
@@ -112,16 +117,16 @@ body {
     0 0 46px rgba(190,120,255,.78);
 }
 
-.tileTitle {
-  color: #0b0b12;
+.tileTitle{
+  color:#0b0b12;
   font-weight: 1000;
-  font-size: 28px;
+  font-size: 26px;
   letter-spacing: .9px;
   text-transform: uppercase;
   line-height: 1.05;
 }
 
-.tileSub {
+.tileSub{
   margin-top: 8px;
   color: #7c2dff;
   font-weight: 900;
@@ -130,8 +135,8 @@ body {
   font-size: 13px;
 }
 
-/* ===== CARD PAGES ===== */
-.card {
+/* ===== CARDS ===== */
+.card{
   background: rgba(255,255,255,.96);
   border-radius: 18px;
   padding: 16px;
@@ -144,87 +149,110 @@ body {
   color: #0b0b12;
 }
 
-.h2 {
+.h2{
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 1000;
   letter-spacing: .4px;
 }
 
-.small {
+.small{
   font-size: 13px;
   line-height: 1.45;
   color: rgba(11,11,18,.78);
 }
 
-.muted { color: rgba(11,11,18,.62); }
-
-hr {
-  border: 0;
+hr{
+  border:0;
   border-top: 1px solid rgba(0,0,0,.14);
   margin: 12px 0;
 }
 
-.row { display: flex; gap: 10px; flex-wrap: wrap; }
-.list { display: grid; gap: 10px; }
+.row{ display:flex; gap:10px; flex-wrap:wrap; }
+.list{ display:grid; gap:10px; }
 
-/* ===== LIST ITEM ===== */
-.item {
-  background: rgba(0,0,0,.04);
-  border: 1px solid rgba(0,0,0,.12);
-  border-radius: 16px;
-  padding: 12px;
-  cursor: pointer;
-  transition: transform .08s ease, box-shadow .18s ease, border-color .18s ease;
-}
-
-.item:active { transform: scale(.995); }
-.item .title { font-weight: 1000; }
-.item .meta { margin-top: 4px; font-size: 13px; color: rgba(11,11,18,.68); }
-
-/* ===== BUTTONS ===== */
-.btn {
+.btn{
   padding: 11px 12px;
   border-radius: 14px;
   border: 1px solid rgba(0,0,0,.14);
   background: rgba(0,0,0,.04);
   color: #0b0b12;
-  cursor: pointer;
+  cursor:pointer;
   transition: transform .08s ease, box-shadow .18s ease, filter .18s ease;
 }
 
-.btn:active {
+.btn:active{
   transform: scale(.985);
   box-shadow: 0 0 0 3px rgba(125,60,255,.20), 0 0 26px rgba(190,120,255,.35);
   filter: brightness(1.03);
 }
 
-.btn.is-active {
+.btn.is-active{
   border-color: rgba(125,60,255,.35);
   box-shadow: 0 0 0 3px rgba(125,60,255,.22), 0 0 30px rgba(190,120,255,.40);
 }
 
-/* ===== PRODUCT IMG ===== */
-.thumb {
-  width: 100%;
-  display: block;
+/* ===== PRODUCT IMAGE ===== */
+.thumb{
+  width:100%;
+  display:block;
   border-radius: 14px;
 }
 
-/* ===== BOTTOM NAV (3 белых кнопки) ===== */
-.navBar {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  transform: translateX(-50%);
-  z-index: 50;
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  justify-content: center;
+/* ===== PRODUCTS GRID 2x ===== */
+.grid2{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.navBtn {
+@media (max-width: 360px){
+  .grid2{ grid-template-columns: 1fr; }
+}
+
+.pcard{
+  background: rgba(0,0,0,.04);
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 16px;
+  padding: 12px;
+  cursor:pointer;
+  overflow:hidden;
+}
+
+.pcardTitle{
+  font-weight: 1000;
+  font-size: 14px;
+  line-height: 1.15;
+  color:#0b0b12;
+  display:-webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow:hidden;
+}
+
+.pcardMeta{
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(11,11,18,.68);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== BOTTOM NAV ===== */
+.navBar{
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
+  display:flex;
+  gap: 18px;
+  align-items:center;
+  justify-content:center;
+}
+
+.navBtn{
   position: relative;
   width: 74px;
   height: 66px;
@@ -242,7 +270,7 @@ hr {
   transition: transform .08s ease, box-shadow .18s ease, filter .18s ease;
 }
 
-.navBtn:active {
+.navBtn:active{
   transform: scale(.985);
   filter: brightness(1.02);
   box-shadow:
@@ -250,25 +278,25 @@ hr {
     0 0 46px rgba(190,120,255,.90);
 }
 
-.navBtn.is-active {
+.navBtn.is-active{
   box-shadow:
     0 18px 44px rgba(0,0,0,.40),
     0 0 52px rgba(125,60,255,.95);
 }
 
-.navIco { width: 30px; height: 30px; }
+.navIco{ width: 30px; height: 30px; }
 
-/* ===== BADGES (светящийся пузырёк) ===== */
-.badge {
-  position: absolute;
+/* badges */
+.badge{
+  position:absolute;
   top: -10px;
   right: -10px;
   min-width: 22px;
   height: 22px;
   padding: 0 7px;
   border-radius: 999px;
-  display: grid;
-  place-items: center;
+  display:grid;
+  place-items:center;
 
   font-size: 12px;
   font-weight: 1000;
@@ -280,11 +308,11 @@ hr {
     0 0 26px rgba(190,120,255,.70);
 }
 
-/* ===== TOAST ===== */
-.toast {
+/* toast */
+.toast{
   position: fixed;
   left: 50%;
-  bottom: 118px;
+  bottom: calc(118px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 999;
 
@@ -302,13 +330,12 @@ hr {
   font-size: 13px;
 }
 
-.toast.good {
+.toast.good{
   box-shadow:
     0 18px 44px rgba(0,0,0,.35),
     0 0 26px rgba(114,255,182,.25);
 }
-
-.toast.warn {
+.toast.warn{
   box-shadow:
     0 18px 44px rgba(0,0,0,.35),
     0 0 26px rgba(255,92,122,.25);
