@@ -1,15 +1,10 @@
-// LesPaw Mini App — app.js v50
-// Полная рабочая версия (фикс: прошлый app.js был обрезан -> из-за синтаксической ошибки главное меню не отображалось)
+// LesPaw Mini App — app.js v44 (thumbs in grid cards + robust safe bottom space)
 //
-// Фичи:
-// - Глобальный поиск только сверху
-// - Нижний навбар: назад / избранное / корзина (бейджи)
-// - Категории -> типы фандомов -> список -> страница фандома
-// - Страница фандома: автогруппировка товаров по типам (без вкладок)
-// - Сетка товаров 2× + превью (если есть image/images/...)
-// - Карточка товара: избранное, добавить в корзину; для наклеек — основа/покрытие + доплаты из settings
-// - Корзина: управление количеством, удаление, сумма
-// - Оформление: обязательная галочка; отправка предзаполненного текста менеджерке @LesPaw_manager
+// IMPORTANT:
+// - Мини-карточки товара с фото (если есть ссылки)
+// - splitList поддерживает: запятая, ;, переносы строк
+// - images берём из: images / image / image_url / photo / img (fallback)
+// - Нижний отступ под навбар рассчитываем JS (чтобы не перекрывалось)
 
 // =====================
 // CSV ссылки (твои)
@@ -35,12 +30,8 @@ const SUGGEST_URL = "https://t.me/LesPaw/280";
 // Telegram init
 // =====================
 const tg = window.Telegram?.WebApp;
-try {
-  tg?.ready();
-  tg?.expand();
-} catch {
-  // no-op for browser
-}
+tg?.ready();
+tg?.expand();
 
 // =====================
 // DOM
@@ -49,6 +40,7 @@ const view = document.getElementById("view");
 const globalSearch = document.getElementById("globalSearch");
 
 const navBack = document.getElementById("navBack");
+const navHome = document.getElementById("navHome");
 const navFav = document.getElementById("navFav");
 const navCart = document.getElementById("navCart");
 
@@ -59,7 +51,7 @@ const wrapEl = document.querySelector(".wrap");
 const navBarEl = document.querySelector(".navBar");
 
 // =====================
-// Storage
+// Storage (оставила прежние ключи, чтобы не сбросить корзину/избранное у людей)
 // =====================
 const LS_CART = "lespaw_cart_v41";
 const LS_FAV = "lespaw_fav_v41";
@@ -90,11 +82,12 @@ function toast(msg, kind = "") {
 }
 
 // =====================
-// Safe bottom space
+// Safe bottom space (nav must NOT cover content)
 // =====================
 function syncBottomSpace() {
   if (!wrapEl || !navBarEl) return;
   const h = navBarEl.offsetHeight || 70;
+  // 18px bottom gap + glow/air + nav height; safe-area учитываем через env()
   wrapEl.style.paddingBottom = `calc(${h + 80}px + env(safe-area-inset-bottom))`;
 }
 window.addEventListener("resize", syncBottomSpace);
@@ -124,6 +117,7 @@ function goBack() {
 function resetToHome() {
   navStack.length = 0;
   currentRender = renderHome;
+  if (globalSearch) globalSearch.value = "";
   syncNav();
   renderHome();
   syncBottomSpace();
@@ -131,6 +125,7 @@ function resetToHome() {
 
 function syncNav() {
   navBack.classList.toggle("is-active", navStack.length > 0);
+  navHome.classList.toggle("is-active", currentRender === renderHome && navStack.length === 0);
   navFav.classList.toggle("is-active", currentRender === renderFavorites);
   navCart.classList.toggle("is-active", currentRender === renderCart);
 }
@@ -194,7 +189,7 @@ function parseCSV(text) {
 }
 
 async function fetchCSV(url) {
-  const res = await fetch(url, { cache: "default" });
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`);
   return parseCSV(await res.text());
 }
@@ -222,16 +217,16 @@ const OVERLAY_OPTIONS = [
   ["stars_big", "Большие звёзды"],
   ["holo_overlay", "Голографическая ламинация"],
 ];
+const OVERLAY_LABELS = Object.fromEntries(OVERLAY_OPTIONS);
 
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
 }
-
 function money(n) {
   return `${Number(n) || 0} ₽`;
 }
 
-// поддержка: запятая, ;, переносы строк
+// ✅ ВАЖНО: поддержка " , ; \n "
 function splitList(s) {
   return (s || "")
     .split(/[,;\n]+/g)
@@ -241,30 +236,6 @@ function splitList(s) {
 
 function isDigitStart(name) {
   return /^[0-9]/.test((name || "").trim());
-}
-
-// Нормализуем тип товара из CSV (на случай, если там русские названия или мн. число)
-function normalizeProductType(t) {
-  const s = String(t || '').trim().toLowerCase();
-  if (!s) return '';
-
-  // sticker
-  if (['sticker', 'stickers', 'stикер', 'stikers'].includes(s)) return 'sticker';
-  if (['наклейка', 'наклейки', 'стикер', 'стикеры'].includes(s)) return 'sticker';
-
-  // pin (значки)
-  if (['pin', 'pins', 'badge', 'badges'].includes(s)) return 'pin';
-  if (['значок', 'значки', 'набор значков', 'наборы значков'].includes(s)) return 'pin';
-
-  // poster
-  if (['poster', 'posters'].includes(s)) return 'poster';
-  if (['постер', 'постеры'].includes(s)) return 'poster';
-
-  // box
-  if (['box', 'boxes'].includes(s)) return 'box';
-  if (['бокс', 'боксы'].includes(s)) return 'box';
-
-  return s;
 }
 
 function typeLabel(t) {
@@ -306,55 +277,16 @@ function updateBadges() {
 }
 
 // ===== thumbnails helpers =====
-// ===== Lazy images (loads only when visible) =====
-let imgObserver = null;
-
-function ensureImgObserver() {
-  if (imgObserver) return imgObserver;
-  if (!("IntersectionObserver" in window)) return null;
-
-  imgObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const img = entry.target;
-        imgObserver.unobserve(img);
-        const src = img.getAttribute("data-src");
-        if (src) img.src = src;
-      });
-    },
-    { root: null, rootMargin: "220px 0px", threshold: 0.01 }
-  );
-  return imgObserver;
-}
-
-function mountLazyImages(scope = document) {
-  const imgs = scope.querySelectorAll("img.lazyImg[data-src]");
-  if (!imgs.length) return;
-
-  const ob = ensureImgObserver();
-  imgs.forEach((img) => {
-    img.decoding = "async";
-    img.loading = "lazy";
-    img.fetchPriority = "low";
-    img.addEventListener(
-      "load",
-      () => img.classList.add("is-loaded"),
-      { once: true }
-    );
-
-    // if no IntersectionObserver — load immediately
-    if (!ob) {
-      const src = img.getAttribute("data-src");
-      if (src) img.src = src;
-      return;
-    }
-    ob.observe(img);
-  });
-}
-
 function imagesField(p) {
-  return p?.images || p?.image || p?.image_url || p?.photo || p?.img || "";
+  // пробуем несколько названий колонок
+  return (
+    p?.images ||
+    p?.image ||
+    p?.image_url ||
+    p?.photo ||
+    p?.img ||
+    ""
+  );
 }
 
 function firstImageUrl(p) {
@@ -364,134 +296,54 @@ function firstImageUrl(p) {
 
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
-  if (!u) return "";
-  // data-src + lazy observer to avoid loading 400+ images сразу
-  return `<img class="pcardImg lazyImg" data-src="${u}" alt="Фото товара">`;
-}
-
-function safeText(s) {
-  return String(s || "").replace(/[<>]/g, "");
-}
-
-function openTelegram(url) {
-  try {
-    tg?.openTelegramLink(url);
-  } catch {
-    window.open(url, "_blank");
-  }
+  if (!u) return ""; // если пусто — просто без картинки (не ломаем сетку)
+  return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy">`;
 }
 
 // =====================
 // Init
 // =====================
 async function init() {
-  // Навигация (сразу)
-  navBack.onclick = () => goBack();
-  navFav.onclick = () => openPage(renderFavorites);
-  navCart.onclick = () => openPage(renderCart);
-
-  // Сразу рисуем главное меню (чтобы не было "пусто")
-  // Данные догружаются фоном
   try {
-    globalSearch.disabled = true;
-    globalSearch.placeholder = "Загрузка…";
-  } catch {}
+    navBack.onclick = () => goBack();
+    navHome.onclick = () => resetToHome();
+    navFav.onclick = () => openPage(renderFavorites);
+    navCart.onclick = () => openPage(renderCart);
 
-  resetToHome();
-  syncBottomSpace();
+    globalSearch.addEventListener("input", (e) => {
+      const q = e.target.value || "";
+      if (q.trim()) openPage(() => renderSearch(q));
+      else resetToHome();
+    });
 
-  globalSearch.addEventListener("input", (e) => {
-    const q = e.target.value || "";
-    if (q.trim()) openPage(() => renderSearch(q));
-    else resetToHome();
-  });
+    fandoms = await fetchCSV(CSV_FANDOMS_URL);
+    products = await fetchCSV(CSV_PRODUCTS_URL);
 
-  // ===== Data loader (cache + parallel) =====
-  async function loadAllData() {
-    // 1) try cache
-    try {
-      const cached = JSON.parse(localStorage.getItem(LS_CACHE) || "null");
-      if (cached && cached.ts && Date.now() - cached.ts < CACHE_TTL_MS) {
-        fandoms = Array.isArray(cached.fandoms) ? cached.fandoms : [];
-        products = Array.isArray(cached.products) ? cached.products : [];
-        settings = cached.settings && typeof cached.settings === "object" ? cached.settings : settings;
-        return { fromCache: true };
-      }
-    } catch {}
-
-    // 2) fetch in parallel
-    const [fRows, pRows, sRows] = await Promise.all([
-      fetchCSV(CSV_FANDOMS_URL),
-      fetchCSV(CSV_PRODUCTS_URL),
-      fetchCSV(CSV_SETTINGS_URL),
-    ]);
-
-    fandoms = fRows;
-
-    const rawProducts = pRows;
-    products = rawProducts.map((p) => ({
-      ...p,
-      product_type_raw: p.product_type,
-      product_type: normalizeProductType(p.product_type),
-    }));
-
-    // settings
-    const nextSettings = { ...settings };
-    sRows.forEach((row) => {
+    const s = await fetchCSV(CSV_SETTINGS_URL);
+    s.forEach((row) => {
       const k = row.key;
       const v = row.value;
       if (!k) return;
-      if (k === "overlay_price_delta" || k === "holo_base_price_delta") nextSettings[k] = Number(v);
-      else nextSettings[k] = v;
+      if (k === "overlay_price_delta" || k === "holo_base_price_delta") settings[k] = Number(v);
+      else settings[k] = v;
     });
-    settings = nextSettings;
 
-    // save cache
-    try {
-      localStorage.setItem(
-        LS_CACHE,
-        JSON.stringify({ ts: Date.now(), fandoms, products, settings })
-      );
-    } catch {}
-
-    return { fromCache: false };
-  }
-
-  try {
-    await loadAllData();
     updateBadges();
-
-    // включаем поиск
-    try {
-      globalSearch.disabled = false;
-      globalSearch.placeholder = "Поиск по фандомам и товарам…";
-    } catch {}
-
-    // если пользователь успел открыть какую-то страницу до загрузки — перерисуем её
-    if (typeof currentRender === "function") {
-      currentRender();
-      syncNav();
-      syncBottomSpace();
-    }
+    resetToHome();
+    syncBottomSpace();
   } catch (e) {
-    // остаёмся на главной, но показываем аккуратную ошибку
     view.innerHTML = `
       <div class="card">
         <div class="h2">Ошибка загрузки данных</div>
-        <div class="small">${safeText(String(e))}</div>
+        <div class="small">${String(e)}</div>
         <hr>
-        <button class="btn" id="retryLoad">Попробовать снова</button>
-        <div style="height:8px"></div>
         <div class="small">Проверь публикацию таблиц и CSV-ссылки.</div>
       </div>
     `;
-    const btn = document.getElementById("retryLoad");
-    if (btn) btn.onclick = () => init();
     syncBottomSpace();
   }
 }
 init();
-
 
 // =====================
 // HOME (плитки)
@@ -612,39 +464,40 @@ function renderFandomList(type) {
 }
 
 // =====================
-// Страница фандома → товары сеткой 2× (с фотками) + автогруппировка по типам
+// Страница фандома → товары сеткой 2× (с фотками)
 // =====================
 function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
-  // порядок секций (можно менять)
-  const order = ["sticker", "pin", "poster", "box"];
-  const labels = {
-    sticker: "Наклейки",
-    pin: "Значки",
-    poster: "Постеры",
-    box: "Боксы",
-  };
+  const typeTabs = ["all", "sticker", "pin", "poster", "box"];
+  const tabNames = { all: "Все", sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
 
-  // Если в CSV типы записаны нестандартно — они нормализуются в init().
-  // Но на всякий случай показываем и "прочие" типы, чтобы товары не пропадали.
-  const present = Array.from(new Set(all.map((p) => String(p.product_type || "").trim()).filter(Boolean)));
-  const ordered = order.filter((t) => present.includes(t));
-  const others = present.filter((t) => !order.includes(t));
-  const activeTypes = [...ordered, ...others];
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">${f?.fandom_name || "Фандом"}</div>
+      <div class="row" id="tabs">
+        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
+      </div>
+      <hr>
+      <div class="grid2" id="prodList"></div>
+    </div>
+  `;
 
-  function sectionHTML(t) {
-    const items = all.filter((p) => p.product_type === t);
-    if (!items.length) return "";
+  let currentTab = "all";
 
-    const title = labels[t] || typeLabel(t) || t;
+  function setActiveTab() {
+    document.querySelectorAll("#tabs .btn").forEach((b) => {
+      b.classList.toggle("is-active", b.dataset.t === currentTab);
+    });
+  }
 
-    return `
-      <div class="small" style="margin-top:2px"><b>${title}</b></div>
-      <div style="height:10px"></div>
-      <div class="grid2">
-        ${items
+  function renderList() {
+    const filtered = all.filter((p) => (currentTab === "all" ? true : p.product_type === currentTab));
+    const prodList = document.getElementById("prodList");
+
+    prodList.innerHTML = filtered.length
+      ? filtered
           .map(
             (p) => `
           <div class="pcard" data-id="${p.id}">
@@ -654,36 +507,29 @@ function renderFandomPage(fandomId) {
           </div>
         `
           )
-          .join("")}
-      </div>
-    `;
+          .join("")
+      : `<div class="small">Пока нет товаров.</div>`;
+
+    prodList.querySelectorAll("[data-id]").forEach((el) => {
+      el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+    });
+
+    syncBottomSpace();
   }
 
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">${f?.fandom_name || "Фандом"}</div>
-      <div class="small">Товары сгруппированы по типам</div>
-      <hr>
-
-      ${
-        all.length
-          ? activeTypes
-              .map((t, idx) => `${sectionHTML(t)}${idx < activeTypes.length - 1 ? "<hr>" : ""}`)
-              .join("")
-          : `<div class="small">Пока нет товаров.</div>`
-      }
-    </div>
-  `;
-
-  view.querySelectorAll("[data-id]").forEach((el) => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+  document.querySelectorAll("#tabs .btn").forEach((b) => {
+    b.onclick = () => {
+      currentTab = b.dataset.t;
+      setActiveTab();
+      renderList();
+    };
   });
-  mountLazyImages(view);
 
+  setActiveTab();
+  renderList();
   syncNav();
   syncBottomSpace();
 }
-
 
 // =====================
 // Инфо / отзывы / примеры
@@ -724,8 +570,8 @@ function renderInfo() {
     </div>
   `;
 
-  document.getElementById("btnMain").onclick = () => openTelegram(MAIN_CHANNEL_URL);
-  document.getElementById("btnSuggest").onclick = () => openTelegram(SUGGEST_URL);
+  document.getElementById("btnMain").onclick = () => tg?.openTelegramLink(MAIN_CHANNEL_URL);
+  document.getElementById("btnSuggest").onclick = () => tg?.openTelegramLink(SUGGEST_URL);
 
   syncNav();
   syncBottomSpace();
@@ -740,18 +586,18 @@ function renderReviews() {
       <button class="btn" id="openReviews">Открыть отзывы</button>
     </div>
   `;
-  document.getElementById("openReviews").onclick = () => openTelegram(REVIEWS_URL);
+  document.getElementById("openReviews").onclick = () => tg?.openTelegramLink(REVIEWS_URL);
   syncNav();
   syncBottomSpace();
 }
 
 function openExamples() {
   const url = settings.examples_url || "https://t.me/LesPaw";
-  openTelegram(url);
+  tg?.openTelegramLink(url);
 }
 
 // =====================
-// Поиск — товары тоже с фотками
+// Поиск (только сверху) — товары тоже с фотками
 // =====================
 function renderSearch(q) {
   const query = (q || "").toLowerCase().trim();
@@ -771,7 +617,7 @@ function renderSearch(q) {
 
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Поиск: “${safeText(q)}”</div>
+      <div class="h2">Поиск: “${q}”</div>
 
       <div class="small"><b>Фандомы</b></div>
       <div class="list">
@@ -816,43 +662,13 @@ function renderSearch(q) {
 
   view.querySelectorAll("[data-fid]").forEach((el) => (el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid))));
   view.querySelectorAll("[data-pid]").forEach((el) => (el.onclick = () => openPage(() => renderProduct(el.dataset.pid))));
-  mountLazyImages(view);
 
   syncNav();
   syncBottomSpace();
 }
 
 // =====================
-// Price helpers (options)
-// =====================
-function calcItemUnitPrice(p, item) {
-  let price = Number(p?.price) || 0;
-  if ((p?.product_type || "") === "sticker") {
-    const overlayDelta = Number(settings.overlay_price_delta) || 0;
-    const holoDelta = Number(settings.holo_base_price_delta) || 0;
-    if ((item?.overlay || "none") !== "none") price += overlayDelta;
-    if ((item?.base || "normal") === "holo") price += holoDelta;
-  }
-  return price;
-}
-
-function optionLabel(item) {
-  const p = getProductById(item?.id);
-  if (!p) return "";
-  if ((p.product_type || "") !== "sticker") return "";
-
-  const base = (item.base || "normal") === "holo" ? "Голографическая основа" : "Обычная основа";
-  const ovKey = item.overlay || "none";
-  const ov = OVERLAY_OPTIONS.find((x) => x[0] === ovKey)?.[1] || "Без покрытия";
-  return `${base}; покрытие: ${ov}`;
-}
-
-function cartKey(item) {
-  return `${item.id}__${item.base || ""}__${item.overlay || ""}`;
-}
-
-// =====================
-// Product page
+// Product page (полная карточка)
 // =====================
 function renderProduct(productId) {
   const p = getProductById(productId);
@@ -866,43 +682,49 @@ function renderProduct(productId) {
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
+  // Покрытие / база (используем existing settings)
+  const overlayDelta = Number(settings.overlay_price_delta) || 0;
+  const holoDelta = Number(settings.holo_base_price_delta) || 0;
+
   const isSticker = (p.product_type || "") === "sticker";
 
+  // состояние выбора
   let selectedOverlay = "none";
-  let selectedBase = "normal"; // normal | holo
+  let selectedBase = "normal"; // normal | holo (для наклеек)
+
+  function calcPrice() {
+    let price = Number(p.price) || 0;
+    if (isSticker) {
+      if (selectedOverlay !== "none") price += overlayDelta;
+      if (selectedBase === "holo") price += holoDelta;
+    }
+    return price;
+  }
 
   function inFav() {
     return fav.includes(p.id);
   }
-
   function favToggle() {
     if (inFav()) setFav(fav.filter((id) => id !== p.id));
     else setFav([...fav, p.id]);
-    render();
-  }
-
-  function calcPrice() {
-    return calcItemUnitPrice(p, { id: p.id, base: selectedBase, overlay: selectedOverlay });
+    render(); // перерисуем кнопку
   }
 
   function addToCart() {
     const item = {
       id: p.id,
       qty: 1,
+      // сохраняем опции (чтобы заказ сформировался корректно)
       overlay: isSticker ? selectedOverlay : "",
       base: isSticker ? selectedBase : "",
     };
-
-    const key = cartKey(item);
-    const existing = cart.find((x) => cartKey(x) === key);
-
+    const existing = cart.find((x) => x.id === item.id && (x.overlay || "") === (item.overlay || "") && (x.base || "") === (item.base || ""));
     if (existing) {
       existing.qty = (Number(existing.qty) || 0) + 1;
       setCart([...cart]);
     } else {
       setCart([...cart, item]);
     }
-
     toast("Добавлено в корзину", "good");
   }
 
@@ -972,311 +794,3 @@ function renderProduct(productId) {
       });
       ovRow.querySelectorAll("[data-ov]").forEach((b) => {
         b.onclick = () => {
-          selectedOverlay = b.dataset.ov;
-          syncBtns();
-        };
-      });
-
-      syncBtns();
-    }
-  }
-
-  render();
-  syncNav();
-  syncBottomSpace();
-}
-
-// =====================
-// Favorites
-// =====================
-function renderFavorites() {
-  const list = fav
-    .map((id) => getProductById(id))
-    .filter(Boolean);
-
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Избранное</div>
-      <div class="small">${list.length ? "Нажми на товар, чтобы открыть карточку" : "Пока пусто"}</div>
-      <hr>
-      ${
-        list.length
-          ? `<div class="grid2">
-              ${list
-                .map(
-                  (p) => `
-                <div class="pcard" data-id="${p.id}">
-                  ${cardThumbHTML(p)}
-                  <div class="pcardTitle">${p.name}</div>
-                  <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
-                </div>
-              `
-                )
-                .join("")}
-            </div>
-            <div style="height:12px"></div>
-            <button class="btn" id="btnClearFav">Очистить избранное</button>`
-          : ""
-      }
-    </div>
-  `;
-
-  view.querySelectorAll("[data-id]").forEach((el) => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
-  });
-
-  const btnClear = document.getElementById("btnClearFav");
-  if (btnClear) {
-    btnClear.onclick = () => {
-      setFav([]);
-      toast("Избранное очищено", "good");
-      renderFavorites();
-    };
-  }
-
-  syncNav();
-  syncBottomSpace();
-}
-
-// =====================
-// Cart
-// =====================
-function renderCart() {
-  const items = cart
-    .map((it) => {
-      const p = getProductById(it.id);
-      if (!p) return null;
-      return { it, p };
-    })
-    .filter(Boolean);
-
-  const total = items.reduce((sum, x) => sum + calcItemUnitPrice(x.p, x.it) * (Number(x.it.qty) || 0), 0);
-
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Корзина</div>
-      <div class="small">${items.length ? "Проверь количество и оформи заказ" : "Пока пусто"}</div>
-      <hr>
-
-      ${
-        items.length
-          ? `
-        <div class="list">
-          ${items
-            .map(({ it, p }) => {
-              const unit = calcItemUnitPrice(p, it);
-              const line = unit * (Number(it.qty) || 0);
-              const opt = optionLabel(it);
-              return `
-                <div class="item" data-key="${cartKey(it)}">
-                  <div class="title">${p.name}</div>
-                  <div class="meta">${money(unit)} за шт. · ${typeLabel(p.product_type)}${opt ? ` · ${opt}` : ""}</div>
-                  <div style="height:10px"></div>
-                  <div class="row" style="align-items:center; justify-content:space-between">
-                    <div class="row" style="gap:8px; align-items:center">
-                      <button class="btn" data-act="minus">−</button>
-                      <div class="small" style="min-width:36px; text-align:center"><b>${Number(it.qty) || 0}</b></div>
-                      <button class="btn" data-act="plus">+</button>
-                    </div>
-                    <div class="small"><b>${money(line)}</b></div>
-                    <button class="btn" data-act="remove">Удалить</button>
-                  </div>
-                </div>
-              `;
-            })
-            .join("")}
-        </div>
-
-        <hr>
-        <div class="row" style="justify-content:space-between; align-items:center">
-          <div class="small"><b>Итого</b></div>
-          <div class="h2" style="margin:0">${money(total)}</div>
-        </div>
-
-        <div style="height:10px"></div>
-        <div class="row">
-          <button class="btn" id="btnClearCart">Очистить корзину</button>
-          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
-        </div>
-      `
-          : ""
-      }
-    </div>
-  `;
-
-  // handlers
-  view.querySelectorAll(".item[data-key]").forEach((row) => {
-    const key = row.getAttribute("data-key");
-
-    row.querySelectorAll("[data-act]").forEach((b) => {
-      b.onclick = (e) => {
-        e.stopPropagation();
-        const act = b.getAttribute("data-act");
-
-        const idx = cart.findIndex((x) => cartKey(x) === key);
-        if (idx < 0) return;
-
-        const next = [...cart];
-        const cur = { ...next[idx] };
-        const q = Number(cur.qty) || 0;
-
-        if (act === "plus") cur.qty = q + 1;
-        if (act === "minus") cur.qty = Math.max(1, q - 1);
-        if (act === "remove") {
-          next.splice(idx, 1);
-          setCart(next);
-          renderCart();
-          return;
-        }
-
-        next[idx] = cur;
-        setCart(next);
-        renderCart();
-      };
-    });
-
-    // tap on row opens product
-    row.onclick = () => {
-      const id = key.split("__")[0];
-      if (id) openPage(() => renderProduct(id));
-    };
-  });
-
-  const btnClear = document.getElementById("btnClearCart");
-  if (btnClear) {
-    btnClear.onclick = () => {
-      setCart([]);
-      toast("Корзина очищена", "good");
-      renderCart();
-    };
-  }
-
-  const btnCheckout = document.getElementById("btnCheckout");
-  if (btnCheckout) btnCheckout.onclick = () => openPage(renderCheckout);
-
-  syncNav();
-  syncBottomSpace();
-}
-
-// =====================
-// Checkout
-// =====================
-function renderCheckout() {
-  if (!cart.length) {
-    view.innerHTML = `
-      <div class="card">
-        <div class="h2">Корзина пуста</div>
-        <div class="small">Добавь товары, чтобы оформить заказ.</div>
-      </div>
-    `;
-    syncNav();
-    syncBottomSpace();
-    return;
-  }
-
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Оформление заказа</div>
-      <div class="small">Заполни данные — и отправим менеджерке предзаполненное сообщение.</div>
-      <hr>
-
-      <div class="small"><b>Имя</b></div>
-      <input class="searchInput" id="cName" placeholder="Как к тебе обращаться?" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
-
-      <div style="height:12px"></div>
-      <div class="small"><b>Контакт</b></div>
-      <input class="searchInput" id="cContact" placeholder="@ник или телефон" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
-
-      <div style="height:12px"></div>
-      <div class="small"><b>Доставка</b></div>
-      <input class="searchInput" id="cDelivery" placeholder="Яндекс ПВЗ / 5post / другое" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
-
-      <div style="height:12px"></div>
-      <div class="small"><b>Адрес/ПВЗ</b></div>
-      <input class="searchInput" id="cAddr" placeholder="Город, адрес или код/адрес ПВЗ" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
-
-      <div style="height:12px"></div>
-      <div class="small"><b>Комментарий (опционально)</b></div>
-      <input class="searchInput" id="cComment" placeholder="Например: объединить в один заказ" style="background:rgba(0,0,0,.06); border-radius:14px; margin-top:8px; padding:12px 14px; color:#0b0b12" />
-
-      <hr>
-
-      <label class="item" style="display:flex; gap:10px; align-items:flex-start">
-        <input type="checkbox" id="cAgree" style="margin-top:4px" />
-        <div>
-          <div class="title">Я проверила состав заказа</div>
-          <div class="meta">Без этой галочки отправить заказ нельзя</div>
-        </div>
-      </label>
-
-      <div style="height:12px"></div>
-      <button class="btn is-active" id="cSend">Отправить заказ менеджерке</button>
-
-      <div style="height:10px"></div>
-      <div class="small">Откроется чат с @${MANAGER_USERNAME} и предзаполненным текстом.</div>
-    </div>
-  `;
-
-  document.getElementById("cSend").onclick = () => {
-    const agree = document.getElementById("cAgree").checked;
-    if (!agree) {
-      toast("Поставь галочку подтверждения", "warn");
-      return;
-    }
-
-    const name = document.getElementById("cName").value.trim();
-    const contact = document.getElementById("cContact").value.trim();
-    const delivery = document.getElementById("cDelivery").value.trim();
-    const addr = document.getElementById("cAddr").value.trim();
-    const comment = document.getElementById("cComment").value.trim();
-
-    const text = buildOrderText({ name, contact, delivery, addr, comment });
-    const url = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(text)}`;
-    openTelegram(url);
-  };
-
-  syncNav();
-  syncBottomSpace();
-}
-
-function buildOrderText({ name, contact, delivery, addr, comment }) {
-  const lines = [];
-  lines.push("🛒 Заказ LesPaw");
-  lines.push("");
-
-  if (name) lines.push(`👤 Имя: ${name}`);
-  if (contact) lines.push(`📱 Контакт: ${contact}`);
-  if (delivery) lines.push(`🚚 Доставка: ${delivery}`);
-  if (addr) lines.push(`📍 Адрес/ПВЗ: ${addr}`);
-  if (comment) lines.push(`📝 Комментарий: ${comment}`);
-
-  lines.push("");
-  lines.push("📦 Состав заказа:");
-
-  let total = 0;
-
-  cart.forEach((it, idx) => {
-    const p = getProductById(it.id);
-    if (!p) return;
-
-    const fandom = getFandomById(p.fandom_id);
-    const unit = calcItemUnitPrice(p, it);
-    const qty = Number(it.qty) || 0;
-    const lineTotal = unit * qty;
-    total += lineTotal;
-
-    const opt = optionLabel(it);
-    lines.push(`${idx + 1}) ${p.name} — ${typeLabel(p.product_type)}${fandom?.fandom_name ? ` / ${fandom.fandom_name}` : ""}`);
-    if (opt) lines.push(`   • Опции: ${opt}`);
-    lines.push(`   • Кол-во: ${qty}`);
-    lines.push(`   • Цена: ${money(unit)} / шт.`);
-    lines.push(`   • Сумма: ${money(lineTotal)}`);
-  });
-
-  lines.push("");
-  lines.push(`💳 Итого: ${money(total)}`);
-  lines.push("");
-  lines.push("✨ Отправлено из Mini App LesPaw");
-
-  return lines.join("\n");
-}
