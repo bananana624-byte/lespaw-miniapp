@@ -120,6 +120,14 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   padding-bottom:22px; /* чтобы низ карточек не прятался под навбар */
 }
 .h2{ margin:0 0 8px; font-size:22px; font-weight:1000; letter-spacing:.4px; }
+.h3{
+  margin:0;
+  font-size:15px;
+  font-weight:1000;
+  letter-spacing:.45px;
+  text-transform:uppercase;
+  color:#0b0b12;
+}
 .small{ font-size:13px; line-height:1.5; color:rgba(11,11,18,.78); }
 
 /* buttons */
@@ -516,6 +524,24 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   display:block;
 }
 
+.reviewTextWrap{ margin-top:10px; }
+
+.reviewMore{
+  margin-top:8px;
+  border:none;
+  background:transparent;
+  padding:0;
+  cursor:pointer;
+  font-weight:900;
+  font-size:13px;
+  color:#7c2dff;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.reviewMore:active{
+  filter:brightness(1.05);
+}
+
 .reviewActions{
   margin-top:10px;
   display:flex;
@@ -633,4 +659,36 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   filter:saturate(.9);
   transform:none;
   box-shadow:none;
+}
+
+/* Checkout checks */
+.checkoutGap{ height:12px; }
+
+.checkoutChecks{
+  display:grid;
+  gap:10px;
+}
+
+.checkRow{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  user-select:none;
+}
+
+.checkHint{
+  display:inline-block;
+  margin-left:6px;
+  font-weight:900;
+  color:rgba(124,45,255,.95);
+}
+
+.checkoutNote{
+  background: linear-gradient(180deg, rgba(190,120,255,.18), rgba(125,60,255,.10));
+  border:1px solid rgba(125,60,255,.35);
+  border-radius:16px;
+  padding:12px;
+  font-size:13px;
+  line-height:1.45;
+  color:rgba(11,11,18,.85);
 }
