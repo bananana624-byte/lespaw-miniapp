@@ -463,8 +463,46 @@ function isDigitStart(name) {
 }
 
 function typeLabel(t) {
-  const map = { sticker: "Наклейки", pin: "Набор значков", poster: "Постеры", box: "Боксы" };
-  return map[t] || t || "";
+  const k = normalizeTypeKey(t);
+  const map = { sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
+  return map[k] || (t || "");
+}
+
+// Нормализуем тип товара из CSV (в таблице могут быть как ключи sticker/pin,
+// так и русские подписи вроде "Наклейки", "Набор значков" и т.п.)
+function normalizeTypeKey(t) {
+  const s = String(t || "").trim().toLowerCase();
+  if (!s) return "";
+
+  // stickers
+  if (
+    s === "sticker" ||
+    s === "stickers" ||
+    s === "наклейка" ||
+    s === "наклейки" ||
+    s === "стикер" ||
+    s === "стикеры" ||
+    s.includes("наклей")
+  )
+    return "sticker";
+
+  // pins
+  if (
+    s === "pin" ||
+    s === "pins" ||
+    s === "значок" ||
+    s === "значки" ||
+    s.includes("значк")
+  )
+    return "pin";
+
+  // posters
+  if (s === "poster" || s === "posters" || s.includes("постер")) return "poster";
+
+  // boxes
+  if (s === "box" || s === "boxes" || s.includes("бокс")) return "box";
+
+  return s;
 }
 
 function getFandomById(id) {
@@ -758,10 +796,10 @@ function renderFandomPage(fandomId) {
   const knownKeys = new Set(groupsOrder.map((g) => g.key));
 
   const grouped = groupsOrder
-    .map((g) => ({ ...g, items: all.filter((p) => (p.product_type || "") === g.key) }))
+    .map((g) => ({ ...g, items: all.filter((p) => normalizeTypeKey(p.product_type) === g.key) }))
     .filter((g) => g.items.length > 0);
 
-  const other = all.filter((p) => !knownKeys.has((p.product_type || "").trim()));
+  const other = all.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
   const sectionHtml = (title, items) => {
@@ -960,7 +998,6 @@ function renderReviews() {
                       </div>
                     </div>
                   </div>
-
                   ${photoHtml}
 
                   ${
