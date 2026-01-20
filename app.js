@@ -86,42 +86,6 @@ let cart = loadJSON(LS_CART, []);
 let fav = loadJSON(LS_FAV, []);
 
 // =====================
-// Normalize storage shapes (backward compatible)
-// - cart: was {id, qty, overlay, base}; now {id, qty, film, lamination, pin_lamination}
-// - fav: was [id]; now [{id, film, lamination, pin_lamination}]
-function normalizeCartItem(ci){
-  const o = ci && typeof ci === 'object' ? ci : { id: String(ci||''), qty: 1 };
-  const id = String(o.id||'').trim();
-  let qty = Number(o.qty)||1;
-  // migrate sticker fields
-  let film = (o.film!=null? String(o.film): '');
-  let lamination = (o.lamination!=null? String(o.lamination): '');
-  let pin_lamination = (o.pin_lamination!=null? String(o.pin_lamination): '');
-  // legacy
-  const base = String(o.base||'');
-  const overlay = String(o.overlay||'');
-  if (!film && base){
-    film = base === 'holo' ? 'film_holo' : 'film_glossy';
-  }
-  if (!lamination && overlay){
-    lamination = overlay;
-  }
-  return { id, qty, film, lamination, pin_lamination };
-}
-function normalizeFavItem(x){
-  if (x && typeof x === 'object') {
-    const id = String(x.id||'').trim();
-    return { id, film: String(x.film||''), lamination: String(x.lamination||''), pin_lamination: String(x.pin_lamination||'') };
-  }
-  const id = String(x||'').trim();
-  return { id, film: '', lamination: '', pin_lamination: '' };
-}
-
-cart = Array.isArray(cart) ? cart.map(normalizeCartItem).filter(x=>x.id) : [];
-fav = Array.isArray(fav) ? fav.map(normalizeFavItem).filter(x=>x.id) : [];
-
-
-// =====================
 // Toast
 // =====================
 function toast(msg, kind = "") {
@@ -295,6 +259,18 @@ async function fetchCSVWithCache(url, cacheKey) {
 // =====================
 // Helpers
 // =====================
+const FANDOM_TYPES = [
+  "Фильмы",
+  "Игры",
+  "Сериалы",
+  "Актрисы и певицы",
+  "Аниме",
+  "Мультсериалы",
+  "Манхвы / манги",
+  "Лакорны",
+  "Что-то тематическое",
+];
+
 const CATEGORY_EMOJI = {
   "Фильмы": "🎬",
   "Игры": "🎮",
@@ -307,17 +283,26 @@ const CATEGORY_EMOJI = {
   "Что-то тематическое": "✨",
 };
 
-const FANDOM_TYPES = [
-  "Фильмы",
-  "Игры",
-  "Сериалы",
-  "Актрисы и певицы",
-  "Аниме",
-  "Мультсериалы",
-  "Манхвы / манги",
-  "Лакорны",
-  "Что-то тематическое",
-];
+const FILM_LABELS = {
+  film_glossy: "Стандартная глянцевая плёнка",
+  film_holo: "Голографическая плёнка",
+};
+const STICKER_LAM_LABELS = {
+  none: "Без ламинации",
+  sugar: "Сахар",
+  stars: "Звёздочки",
+  snowflakes_small: "Маленькие снежинки",
+  stars_big: "Большие звёзды",
+  holo_overlay: "Голографическая ламинация",
+};
+const PIN_LAM_LABELS = {
+  pin_base: "Глянцевая ламинация (базовая)",
+  sugar: "Сахар",
+  stars: "Звёздочки",
+  snowflakes_small: "Маленькие снежинки",
+  stars_big: "Большие звёзды",
+  holo_overlay: "Голографическая ламинация",
+};
 
 const OVERLAY_OPTIONS = [
   ["none", "Без покрытия"],
@@ -560,31 +545,6 @@ function getProductById(id) {
   return products.find((p) => p.id === id);
 }
 
-
-function addItemToCart(productId, opts={}) {
-  const id = String(productId||'').trim();
-  const p = getProductById(id);
-  if (!p) return;
-  const t = normalizeTypeKey(p.product_type);
-  const item = {
-    id,
-    qty: 1,
-    film: t === 'sticker' ? String(opts.film||'film_glossy') : '',
-    lamination: t === 'sticker' ? String(opts.lamination||'none') : '',
-    pin_lamination: t === 'pin' ? String(opts.pin_lamination||'base_glossy') : '',
-  };
-  const existing = (cart||[]).find((x) =>
-    x.id === item.id && String(x.film||'')===String(item.film||'') && String(x.lamination||'')===String(item.lamination||'') && String(x.pin_lamination||'')===String(item.pin_lamination||'')
-  );
-  if (existing) {
-    existing.qty = (Number(existing.qty) || 0) + 1;
-    setCart([...(cart||[])]);
-  } else {
-    setCart([...(cart||[]), item]);
-  }
-  toast('Добавлено в корзину', 'good');
-}
-
 function setCart(next) {
   cart = next;
   saveJSON(LS_CART, cart);
@@ -596,8 +556,50 @@ function setFav(next) {
   updateBadges();
 }
 
+function favIndexById(id){
+  const sid = String(id||"").trim();
+  return (fav || []).findIndex((x) => String(x?.id||"").trim() === sid);
+}
+function isFavId(id){
+  return favIndexById(id) >= 0;
+}
+
+function toggleFav(id, opts){
+  const sid = String(id||"").trim();
+  if (!sid) return;
+  const i = favIndexById(sid);
+  if (i >= 0) {
+    const next = [...(fav||[])];
+    next.splice(i, 1);
+    setFav(next);
+    toast("Убрано из избранного", "warn");
+  } else {
+    const next = [...(fav||[])];
+    next.push({ id: sid, film: String(opts?.film||""), lamination: String(opts?.lamination||""), pin_lamination: String(opts?.pin_lamination||"") });
+    setFav(next);
+    toast("Добавлено в избранное", "good");
+  }
+}
+
+function addToCartById(id, opts){
+  const sid = String(id||"").trim();
+  if (!sid) return;
+  const film = String(opts?.film||"");
+  const lamination = String(opts?.lamination||"");
+  const pin_lamination = String(opts?.pin_lamination||"");
+
+  const match = (ci) => String(ci.id) === sid && String(ci.film||"") === film && String(ci.lamination||"") === lamination && String(ci.pin_lamination||"") === pin_lamination;
+  const existing = (cart||[]).find(match);
+  if (existing) {
+    existing.qty = (Number(existing.qty)||0) + 1;
+    setCart([...(cart||[])]);
+  } else {
+    setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination }]);
+  }
+}
+
 function updateBadges() {
-  const favN = (fav||[]).length;
+  const favN = fav.length;
   const cartN = cart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
 
   if (favCount) {
@@ -615,36 +617,26 @@ function updateBadges() {
   }
 }
 
-
-// ===== favorites helpers =====
-function favFind(id, opts={}){
-  const fid = String(id||'').trim();
-  const film = String(opts.film||'');
-  const lamination = String(opts.lamination||'');
-  const pin_lamination = String(opts.pin_lamination||'');
-  return (fav||[]).findIndex(x => String(x.id||'')===fid && String(x.film||'')===film && String(x.lamination||'')===lamination && String(x.pin_lamination||'')===pin_lamination);
-}
-function favHas(id, opts={}){
-  return favFind(id, opts) >= 0;
-}
-function favAdd(id, opts={}){
-  const fid=String(id||'').trim();
-  const item={ id: fid, film: String(opts.film||''), lamination: String(opts.lamination||''), pin_lamination: String(opts.pin_lamination||'') };
-  if (favHas(fid, item)) return;
-  fav = [...(fav||[]), item];
-  saveJSON(LS_FAV, fav);
-  updateBadges();
-}
-function favRemoveAt(i){
-  const next=[...(fav||[])];
-  next.splice(i,1);
-  fav=next;
-  saveJSON(LS_FAV, fav);
-  updateBadges();
-}
 // ===== thumbnails helpers =====
 function imagesField(p) {
-  return p?.images || p?.image || p?.image_url || p?.photo || p?.img || "";
+  // Поддерживаем разные названия колонок в CSV (особенно для значков)
+  return (
+    p?.images ||
+    p?.image ||
+    p?.image_url ||
+    p?.photo ||
+    p?.img ||
+    p?.pin_image ||
+    p?.pin_photo ||
+    p?.pin_photo_url ||
+    p?.thumb ||
+    p?.thumb_url ||
+    p?.preview ||
+    p?.preview_url ||
+    p?.cover ||
+    p?.cover_url ||
+    ""
+  );
 }
 
 function firstImageUrl(p) {
@@ -806,15 +798,17 @@ function renderFandomTypes() {
       <div class="h2">Категории</div>
       <div class="small">Выбери категорию</div>
       <hr>
-      <div class="grid2 catGrid">
-        ${FANDOM_TYPES.map(
-          (t) => `
-          <button class="catBtn" type="button" data-type="${t}">
-            <div class="catTitle">${t}</div>
-            <div class="catEmoji" aria-hidden="true">${CATEGORY_EMOJI[t] || ""}</div>
-          </button>
-        `
-        ).join("")}
+
+      <div class="catGrid">
+        ${FANDOM_TYPES.map((t) => {
+          const em = CATEGORY_EMOJI[t] || "";
+          return `
+            <div class="catBtn" data-type="${t}">
+              <div class="catTitle">${t}</div>
+              ${em ? `<div class="catEmoji" aria-hidden="true">${em}</div>` : ``}
+            </div>
+          `;
+        }).join("")}
       </div>
     </div>
   `;
@@ -840,13 +834,13 @@ function renderFandomList(type) {
   const digits = list.filter((f) => isDigitStart(f.fandom_name));
 
   const renderGrid = (arr) => `
-    <div class="grid2 fandomGrid">
+    <div class="fandomGrid">
       ${arr
         .map(
           (f) => `
-        <button class="fandomBtn" type="button" data-id="${f.fandom_id}">
-          <div class="fandomBtnTitle">${f.fandom_name}</div>
-        </button>
+        <div class="fandomBtn" data-id="${f.fandom_id}">
+          <div class="fandomTitle">${f.fandom_name}</div>
+        </div>
       `
         )
         .join("")}
@@ -856,11 +850,12 @@ function renderFandomList(type) {
   view.innerHTML = `
     <div class="card">
       <div class="h2">${type}</div>
-      <div class="small">Фандомы по алфавиту</div>
+      <div class="small">Выбери фандом</div>
       <hr>
+
       ${renderGrid(letters)}
-      ${digits.length ? `<hr><div class="small">0–9</div>` : ``}
-      ${digits.length ? renderGrid(digits) : ``}
+
+      ${digits.length ? `<hr><div class="small" style="margin-top:6px">0–9</div>${renderGrid(digits)}` : ``}
     </div>
   `;
 
@@ -900,11 +895,15 @@ function renderFandomPage(fandomId) {
         (p) => `
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
-            <div class="pcardTitle">${p.name}</div>
-            <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
+            <div class="pcardTitle">${safeText(p.name)}</div>
+            <div class="pcardPrice">${money(p.price)}</div>
             <div class="pcardActions">
-              <button class="pcardActBtn" type="button" data-act="fav" data-pid="${p.id}" aria-label="В избранное">♡</button>
-              <button class="pcardActBtn is-primary" type="button" data-act="cart" data-pid="${p.id}" aria-label="В корзину">＋</button>
+              <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+                <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+              </button>
+              <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
+                <span class="plusGlyph">＋</span>
+              </button>
             </div>
           </div>
         `
@@ -933,37 +932,38 @@ function renderFandomPage(fandomId) {
     </div>
   `;
 
-  view.querySelectorAll("[data-id]").forEach((el) => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
-  });
-
-  // actions on mini cards (fav/cart)
-  view.querySelectorAll('[data-act]').forEach((b) => {
-    b.onclick = (e) => {
-      e.stopPropagation();
-      const pid = b.dataset.pid;
-      const p = getProductById(pid);
-      if (!p) return;
-      const t = normalizeTypeKey(p.product_type);
-      const defaults = { film: '', lamination: '', pin_lamination: '' };
-      if (t === 'sticker') { defaults.film = 'film_glossy'; defaults.lamination = 'none'; }
-      if (t === 'pin') { defaults.pin_lamination = 'base_glossy'; }
-      if (b.dataset.act === 'fav') {
-        if (favHas(pid, defaults)) {
-          const i = favFind(pid, defaults);
-          if (i >= 0) favRemoveAt(i);
-          toast('Убрано из избранного', 'warn');
-        } else {
-          favAdd(pid, defaults);
-          toast('Добавлено в избранное', 'good');
-        }
-        // визуально не перерисовываем весь экран — просто бейдж
-      } else {
-        addItemToCart(pid, defaults);
-      }
+  // открыть карточку по тапу на карточку
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    el.onclick = (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      openPage(() => renderProduct(el.dataset.id));
     };
   });
 
+  // мини-действия
+  view.querySelectorAll("[data-fav]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = String(b.dataset.fav || "");
+      toggleFav(id);
+      // обновим сердечки не перерисовывая весь экран
+      view.querySelectorAll(`[data-fav=\"${id}\"]`).forEach((x) => {
+        x.classList.toggle("is-active", isFavId(id));
+        const g = x.querySelector(".heartGlyph");
+        if (g) g.textContent = isFavId(id) ? "♥" : "♡";
+      });
+    };
+  });
+
+  view.querySelectorAll("[data-add]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = String(b.dataset.add || "");
+      addToCartById(id);
+      toast("Добавлено в корзину", "good");
+    };
+  });
 
   syncNav();
   syncBottomSpace();
@@ -1423,210 +1423,174 @@ function renderProduct(productId) {
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
-  const overlayDelta = Number(settings.overlay_price_delta) || 0; // доплата за ламинацию
-  const holoDelta = Number(settings.holo_base_price_delta) || 0; // доплата за голографическую плёнку
+  const overlayDelta = Number(settings.overlay_price_delta) || 100;
+  const holoDelta = Number(settings.holo_base_price_delta) || 100;
 
-  const tkey = normalizeTypeKey(p.product_type);
-  const isSticker = tkey === "sticker";
-  const isPin = tkey === "pin";
+  const typeKey = normalizeTypeKey(p.product_type);
+  const isSticker = typeKey === "sticker";
+  const isPin = typeKey === "pin";
 
-  // defaults
-  let film = isSticker ? "film_glossy" : ""; // film_glossy | film_holo
-  let lamination = isSticker ? "none" : ""; // none | sugar | ...
-  let pinLam = isPin ? "base_glossy" : ""; // base_glossy | sugar | ...
+  // --- defaults ---
+  let selectedFilm = "film_glossy"; // default
+  let selectedStickerLam = "none"; // default: без ламинации
+  let selectedPinLam = "pin_base"; // default: глянцевая базовая
 
   const FILM_OPTIONS = [
-    ["film_glossy", "Стандартная глянцевая"],
-    ["film_holo", "Голографическая плёнка"],
+    ["film_glossy", "Стандартная глянцевая плёнка", 0],
+    ["film_holo", "Голографическая плёнка", holoDelta],
   ];
-  const LAM_OPTIONS = [["none", "Без ламинации"], ...OVERLAY_OPTIONS.filter(([k]) => k !== "none")];
-  const PIN_LAM_OPTIONS = [["base_glossy", "Глянцевая ламинация (базовая)"], ...OVERLAY_OPTIONS.filter(([k]) => k !== "none")];
 
-  function ciFromSelection() {
+  const STICKER_LAM_OPTIONS = [
+    ["none", "Без ламинации", 0],
+    ["sugar", "Сахар", overlayDelta],
+    ["stars", "Звёздочки", overlayDelta],
+    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
+    ["stars_big", "Большие звёзды", overlayDelta],
+    ["holo_overlay", "Голографическая ламинация", overlayDelta],
+  ];
+
+  const PIN_LAM_OPTIONS = [
+    ["pin_base", "Глянцевая ламинация (базовая)", 0],
+    ["sugar", "Сахар", overlayDelta],
+    ["stars", "Звёздочки", overlayDelta],
+    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
+    ["stars_big", "Большие звёзды", overlayDelta],
+    ["holo_overlay", "Голографическая ламинация", overlayDelta],
+  ];
+
+  function calcPrice() {
+    let price = Number(p.price) || 0;
+    if (isSticker) {
+      const filmOpt = FILM_OPTIONS.find((x) => x[0] === selectedFilm);
+      const lamOpt = STICKER_LAM_OPTIONS.find((x) => x[0] === selectedStickerLam);
+      price += Number(filmOpt?.[2] || 0);
+      price += Number(lamOpt?.[2] || 0);
+    }
+    if (isPin) {
+      const lamOpt = PIN_LAM_OPTIONS.find((x) => x[0] === selectedPinLam);
+      price += Number(lamOpt?.[2] || 0);
+    }
+    return price;
+  }
+
+  function currentOpts() {
     return {
-      id: p.id,
-      qty: 1,
-      film: isSticker ? film : "",
-      lamination: isSticker ? lamination : "",
-      pin_lamination: isPin ? pinLam : "",
+      film: isSticker ? selectedFilm : "",
+      lamination: isSticker ? selectedStickerLam : "",
+      pin_lamination: isPin ? selectedPinLam : "",
     };
   }
 
-  function calcPrice() {
-    const ci = ciFromSelection();
-    return calcItemPrice(p, ci);
-  }
-
-  function isInFavCurrent() {
-    return (fav || []).some((x) => String(x?.id || x) === String(p.id) && JSON.stringify({
-      film: x?.film || "",
-      lamination: x?.lamination || "",
-      pin_lamination: x?.pin_lamination || "",
-    }) === JSON.stringify({
-      film: isSticker ? film : "",
-      lamination: isSticker ? lamination : "",
-      pin_lamination: isPin ? pinLam : "",
-    }));
-  }
-
-  function toggleFav() {
-    const entry = ciFromSelection();
-    entry.qty = undefined;
-    const existsIdx = (fav || []).findIndex((x) => {
-      if (!x) return false;
-      if (typeof x === "string") return false;
-      return String(x.id) === String(entry.id) && String(x.film||"")===String(entry.film||"") && String(x.lamination||"")===String(entry.lamination||"") && String(x.pin_lamination||"")===String(entry.pin_lamination||"");
-    });
-    if (existsIdx >= 0) {
-      const next = [...fav];
-      next.splice(existsIdx, 1);
-      setFav(next);
-      toast("Убрано из избранного", "warn");
-    } else {
-      setFav([...(fav || []), entry]);
-      toast("Добавлено в избранное", "good");
-    }
-    render();
-  }
-
-  function addToCart() {
-    const item = ciFromSelection();
-    const existing = (cart || []).find(
-      (x) =>
-        String(x.id) === String(item.id) &&
-        String(x.film || "") === String(item.film || "") &&
-        String(x.lamination || "") === String(item.lamination || "") &&
-        String(x.pin_lamination || "") === String(item.pin_lamination || "")
-    );
-
-    if (existing) {
-      existing.qty = (Number(existing.qty) || 0) + 1;
-      setCart([...(cart || [])]);
-    } else {
-      setCart([...(cart || []), item]);
-    }
-
-    toast("Добавлено в корзину", "good");
+  function renderOptionPanel(title, rows, selectedKey, onSelect) {
+    return `
+      <div class="optPanel">
+        <div class="optTitle"><b>${title}</b></div>
+        <div class="optList">
+          ${rows
+            .map(([key, label, delta]) => {
+              const active = key === selectedKey;
+              const deltaText = Number(delta) > 0 ? ` <span class="optDelta">+${Number(delta)}₽</span>` : ``;
+              return `
+                <button class="optItem ${active ? "is-active" : ""}" data-opt="${key}" type="button">
+                  <span class="optBox" aria-hidden="true">${active ? "✓" : ""}</span>
+                  <span class="optLabel">${label}${deltaText}</span>
+                </button>
+              `;
+            })
+            .join("")}
+        </div>
+      </div>
+    `;
   }
 
   function render() {
+    const inFavNow = isFavId(p.id);
+    const priceNow = calcPrice();
+
     view.innerHTML = `
       <div class="card">
-        <div class="prodTop">
+        <div class="prodHead">
           <div>
-            <div class="h2" style="margin:0">${p.name}</div>
-            <div class="small">${fandom?.fandom_name ? `<b>${fandom.fandom_name}</b> · ` : ""}${typeLabel(p.product_type)}</div>
+            <div class="h2">${safeText(p.name)}</div>
+            <div class="small">${fandom?.fandom_name ? `<b>${safeText(fandom.fandom_name)}</b> · ` : ""}${typeLabel(p.product_type)}</div>
           </div>
-          <button class="favIconBtn ${isInFavCurrent() ? "is-on" : ""}" type="button" id="btnFavIcon" aria-label="В избранное">${isInFavCurrent() ? "♥" : "♡"}</button>
+          <button class="prodFav ${inFavNow ? "is-active" : ""}" id="btnFav" type="button" aria-label="В избранное">
+            <span class="heartGlyph">${inFavNow ? "♥" : "♡"}</span>
+          </button>
         </div>
 
-        <hr>
+        <div class="prodPrice">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async">` : ""}
+        ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
 
         ${p.description ? `<div class="small" style="margin-top:10px">${p.description}</div>` : ""}
         ${p.description_short && !p.description ? `<div class="small" style="margin-top:10px">${p.description_short}</div>` : ""}
 
         ${(isSticker || isPin) ? `<hr>` : ``}
 
-        ${isSticker ? `
-          <div class="optBlock">
-            <div class="optTitle">Плёнка</div>
-            <div class="optDesc">Основа наклейки. По умолчанию — стандартная глянцевая.</div>
-            <div class="row" id="filmRow">
-              ${FILM_OPTIONS.map(([k, label]) => `<button class="btn" data-film="${k}">${label}</button>`).join("")}
-            </div>
-          </div>
+        ${
+          isSticker
+            ? `
+              ${renderOptionPanel("Плёнка", FILM_OPTIONS, selectedFilm)}
+              <div style="height:10px"></div>
+              ${renderOptionPanel("Ламинация", STICKER_LAM_OPTIONS, selectedStickerLam)}
+              <div style="height:10px"></div>
+              <button class="btn btnGhost" id="btnExamples" type="button">Посмотреть примеры плёнки и ламинации</button>
+            `
+            : ""
+        }
 
-          <div class="optDivider"></div>
+        ${
+          isPin
+            ? `
+              ${renderOptionPanel("Ламинация", PIN_LAM_OPTIONS, selectedPinLam)}
+              <div style="height:10px"></div>
+              <button class="btn btnGhost" id="btnExamples" type="button">Посмотреть примеры ламинации</button>
+            `
+            : ""
+        }
 
-          <div class="optBlock">
-            <div class="optTitle">Ламинация</div>
-            <div class="optDesc">Прозрачное покрытие сверху. Можно оставить без ламинации.</div>
-            <div class="row" id="lamRow">
-              ${LAM_OPTIONS.map(([k, label]) => `<button class="btn" data-lam="${k}">${label}</button>`).join("")}
-            </div>
-            <button class="btnAlt" id="btnExamples" type="button">Посмотреть примеры плёнки и ламинации</button>
-          </div>
-        ` : ``}
+        <hr>
 
-        ${isPin ? `
-          <div class="optBlock">
-            <div class="optTitle">Ламинация</div>
-            <div class="optDesc">По умолчанию: глянцевая (базовая) — значки делаются именно так.</div>
-            <div class="row" id="pinLamRow">
-              ${PIN_LAM_OPTIONS.map(([k, label]) => `<button class="btn" data-pinlam="${k}">${label}</button>`).join("")}
-            </div>
-            <button class="btnAlt" id="btnExamples" type="button">Посмотреть примеры ламинации и плёнки</button>
-          </div>
-        ` : ``}
-
-        <div class="buyBar">
-          <button class="btn is-active buyBtn" id="btnCart" type="button">Добавить в корзину · ${money(calcPrice())}</button>
-        </div>
+        <button class="btn is-active" id="btnCart" type="button">Добавить в корзину · ${money(priceNow)}</button>
       </div>
     `;
 
-    document.getElementById("btnFavIcon")?.addEventListener("click", toggleFav);
-    document.getElementById("btnCart")?.addEventListener("click", addToCart);
-    document.getElementById("btnExamples")?.addEventListener("click", () => openExamples());
+    const btnFav = document.getElementById("btnFav");
+    const btnCart = document.getElementById("btnCart");
+    const btnExamples = document.getElementById("btnExamples");
 
-    if (isSticker) {
-      const filmRow = document.getElementById("filmRow");
-      const lamRow = document.getElementById("lamRow");
-      const btnCart = document.getElementById("btnCart");
-
-      const sync = () => {
-        filmRow?.querySelectorAll(".btn").forEach((b) => b.classList.toggle("is-active", b.dataset.film === film));
-        lamRow?.querySelectorAll(".btn").forEach((b) => b.classList.toggle("is-active", b.dataset.lam === lamination));
-        if (btnCart) btnCart.textContent = `Добавить в корзину · ${money(calcPrice())}`;
-        const favBtn = document.getElementById("btnFavIcon");
-        if (favBtn) {
-          const on = isInFavCurrent();
-          favBtn.textContent = on ? "♥" : "♡";
-          favBtn.classList.toggle("is-on", on);
-        }
+    if (btnFav) {
+      btnFav.onclick = () => {
+        toggleFav(p.id, currentOpts());
+        render();
       };
-
-      filmRow?.querySelectorAll("[data-film]").forEach((b) => {
-        b.addEventListener("click", () => {
-          film = b.dataset.film || "film_glossy";
-          sync();
-        });
-      });
-      lamRow?.querySelectorAll("[data-lam]").forEach((b) => {
-        b.addEventListener("click", () => {
-          lamination = b.dataset.lam || "none";
-          sync();
-        });
-      });
-
-      sync();
     }
 
-    if (isPin) {
-      const pinLamRow = document.getElementById("pinLamRow");
-      const btnCart = document.getElementById("btnCart");
-
-      const sync = () => {
-        pinLamRow?.querySelectorAll(".btn").forEach((b) => b.classList.toggle("is-active", b.dataset.pinlam === pinLam));
-        if (btnCart) btnCart.textContent = `Добавить в корзину · ${money(calcPrice())}`;
-        const favBtn = document.getElementById("btnFavIcon");
-        if (favBtn) {
-          const on = isInFavCurrent();
-          favBtn.textContent = on ? "♥" : "♡";
-          favBtn.classList.toggle("is-on", on);
-        }
+    if (btnCart) {
+      btnCart.onclick = () => {
+        addToCartById(p.id, currentOpts());
+        toast("Добавлено в корзину", "good");
+        render();
       };
+    }
 
-      pinLamRow?.querySelectorAll("[data-pinlam]").forEach((b) => {
-        b.addEventListener("click", () => {
-          pinLam = b.dataset.pinlam || "base_glossy";
-          sync();
-        });
+    // опции (делаем радиогруппы)
+    view.querySelectorAll(".optPanel").forEach((panel) => {
+      const title = panel.querySelector(".optTitle")?.textContent?.trim() || "";
+      panel.querySelectorAll("[data-opt]").forEach((b) => {
+        b.onclick = () => {
+          const key = b.dataset.opt;
+          if (isSticker && title === "Плёнка") selectedFilm = key;
+          else if (isSticker && title === "Ламинация") selectedStickerLam = key;
+          else if (isPin && title === "Ламинация") selectedPinLam = key;
+          render();
+        };
       });
+    });
 
-      sync();
+    if (btnExamples) {
+      btnExamples.onclick = () => openExamples();
     }
 
     syncNav();
@@ -1639,119 +1603,88 @@ function renderProduct(productId) {
 // =====================
 // Favorites
 // =====================
-function favEntryLabel(p, fe) {
-  const lines = []
-  const t = normalizeTypeKey(p.product_type);
-  if (t === "sticker") {
-    const film = String(fe.film || "film_glossy");
-    const lam = String(fe.lamination || "none");
-    const filmLabel = film === "film_holo" ? "Плёнка: голографическая" : "Плёнка: стандартная глянцевая";
-    const lamLabel = lam === "none" ? "Ламинация: без" : `Ламинация: ${OVERLAY_LABELS[lam] || lam}`;
-    lines.push(filmLabel)
-    lines.push(lamLabel)
-  }
-  if (t === "pin") {
-    const lam = String(fe.pin_lamination || "base_glossy");
-    const lamLabel = lam === "base_glossy" ? "Ламинация: глянцевая (базовая)" : `Ламинация: ${OVERLAY_LABELS[lam] || lam}`;
-    lines.push(lamLabel)
-  }
-  return lines;
-}
-
 function renderFavorites() {
-  const items = (fav || []).map((fe) => {
-    if (typeof fe === "string") fe = { id: fe };
-    const p = getProductById(fe.id);
-    if (!p) return null;
-    return { fe, p };
-  }).filter(Boolean);
+  const items = (fav || []).map(normalizeFavItem).filter((x) => getProductById(x.id));
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">Избранное</div>
-      <div class="small">Товары, которые ты отметила сердечком.</div>
+      <div class="small">То, что понравилось — чтобы не потерять.</div>
       <hr>
 
-      ${items.length ? `
-        <div class="list">
-          ${items.map(({fe, p}, idx) => {
-            const img = firstImageUrl(p);
-            const price = calcItemPrice(p, { ...fe, qty: 1 });
-            const lines = optionLinesForItem(p, fe);
-            return `
-              <div class="pickRow" data-openfav="${idx}">
-                ${img ? `<img class="pickThumb" src="${img}" alt="Превью" loading="lazy" decoding="async">` : `<div class="pickThumb pickStub"></div>`}
-                <div class="pickBody">
-                  <div class="pickTitle">${p.name}</div>
-                  <div class="pickPrice">${money(price)}</div>
-                  ${lines}
-                  <div class="row" style="margin-top:10px">
-                    <button class="btn" type="button" data-fav-rm="${idx}">Убрать</button>
-                    <button class="btn is-active" type="button" data-fav-cart="${idx}">В корзину</button>
-                  </div>
-                </div>
+      <div class="list" id="favList">
+        ${
+          items.length
+            ? items
+                .map((fi, idx) => {
+                  const p = getProductById(fi.id);
+                  const img = firstImageUrl(p);
+                  const unit = calcItemUnitPrice(p, fi);
+                  const lines = optionLinesFor(fi, p);
+                  return `
+                    <div class="item" data-open="${p.id}">
+                      <div class="miniRow">
+                        ${img ? `<img class="miniThumb" src="${img}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
+                        <div class="miniBody">
+                          <div class="title">${safeText(p.name)}</div>
+                          <div class="miniPrice">${money(unit)}</div>
+                          ${lines.length ? `<div class="miniOpts">${lines.map((x)=>`<div>${x}</div>`).join("")}</div>` : ``}
+
+                          <div class="row" style="margin-top:12px">
+                            <button class="btn" data-remove="${idx}" type="button">Убрать</button>
+                            <button class="btn is-active" data-to-cart="${idx}" type="button">В корзину</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join("")
+            : `
+              <div class="emptyBox">
+                <div class="small">Избранное пока пустое ✨</div>
+                <div class="small" style="margin-top:6px">Выбери что-то, что тебе понравится — и нажми сердечко.</div>
+                <div style="height:10px"></div>
+                <button class="btn is-active" id="goCatsFromEmptyFav" type="button">Перейти в категории</button>
               </div>
-            `;
-          }).join("")}
-        </div>
-      ` : `
-        <div class="emptyBox">
-          <div class="emptyTitle">Пока пусто</div>
-          <div class="small">Зайди в категории и отметь то, что тебе понравится ✨</div>
-          <div style="height:10px"></div>
-          <button class="btn is-active" id="goCatsFav" type="button">Перейти в категории</button>
-        </div>
-      `}
+            `
+        }
+      </div>
     </div>
   `;
 
-  document.getElementById("goCatsFav")?.addEventListener("click", () => openPage(renderFandomTypes));
-
-  view.querySelectorAll("[data-openfav]").forEach((el) => {
-    el.addEventListener("click", (e) => {
+  view.querySelectorAll("[data-open]").forEach((el) => {
+    el.onclick = (e) => {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-      const idx = Number(el.dataset.openfav);
-      const obj = items[idx];
-      if (obj) openPage(() => renderProduct(obj.p.id));
-    });
+      openPage(() => renderProduct(el.dataset.open));
+    };
   });
 
-  view.querySelectorAll("[data-fav-rm]").forEach((b) => {
-    b.addEventListener("click", (e) => {
+  const goCats = document.getElementById("goCatsFromEmptyFav");
+  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
+
+  view.querySelectorAll("[data-remove]").forEach((b) => {
+    b.onclick = (e) => {
       e.stopPropagation();
-      const idx = Number(b.dataset.favRm);
-      const next = [...(fav||[])];
-      next.splice(idx, 1);
+      const i = Number(b.dataset.remove);
+      const next = [...(fav || [])];
+      next.splice(i, 1);
       setFav(next);
       toast("Убрано из избранного", "warn");
       renderFavorites();
-    });
+    };
   });
 
-  view.querySelectorAll("[data-fav-cart]").forEach((b) => {
-    b.addEventListener("click", (e) => {
+  view.querySelectorAll("[data-to-cart]").forEach((b) => {
+    b.onclick = (e) => {
       e.stopPropagation();
-      const idx = Number(b.dataset.favCart);
-      const obj = items[idx];
-      if (!obj) return;
-      const fe = obj.fe;
-      const item = {
-        id: fe.id,
-        qty: 1,
-        film: fe.film || "",
-        lamination: fe.lamination || "",
-        pin_lamination: fe.pin_lamination || "",
-      };
-      const existing = (cart||[]).find((x) => String(x.id)===String(item.id) && String(x.film||"")===String(item.film||"") && String(x.lamination||"")===String(item.lamination||"") && String(x.pin_lamination||"")===String(item.pin_lamination||""));
-      if (existing) {
-        existing.qty = (Number(existing.qty)||0)+1;
-        setCart([...(cart||[])]);
-      } else {
-        setCart([...(cart||[]), item]);
-      }
+      const i = Number(b.dataset.toCart);
+      const fi = normalizeFavItem((fav || [])[i]);
+      addToCartById(fi.id, fi);
       toast("Добавлено в корзину", "good");
-    });
+      renderFavorites();
+    };
   });
 
   syncNav();
@@ -1759,51 +1692,40 @@ function renderFavorites() {
 }
 
 // =====================
-// Cart helpers
+// Cart
 // =====================
-function calcItemPrice(p, ci) {
-  const overlayDelta = Number(settings.overlay_price_delta) || 0;
-  const holoDelta = Number(settings.holo_base_price_delta) || 0;
-
+function calcItemUnitPrice(p, ci){
+  const overlayDelta = Number(settings.overlay_price_delta) || 100;
+  const holoDelta = Number(settings.holo_base_price_delta) || 100;
   let price = Number(p?.price) || 0;
   const t = normalizeTypeKey(p?.product_type);
-
   if (t === "sticker") {
-    const film = String(ci?.film || "film_glossy");
-    const lam = String(ci?.lamination || "none");
+    const film = String(ci?.film||"") || "film_glossy";
+    const lam = String(ci?.lamination||"") || "none";
     if (film === "film_holo") price += holoDelta;
-    if (lam && lam !== "none") price += overlayDelta;
+    if (lam !== "none") price += overlayDelta;
   }
-
   if (t === "pin") {
-    const lam = String(ci?.pin_lamination || "base_glossy");
-    if (lam && lam !== "base_glossy") price += overlayDelta;
+    const lam = String(ci?.pin_lamination||"") || "pin_base";
+    if (lam !== "pin_base") price += overlayDelta;
   }
-
   return price;
 }
 
-function optionLinesForItem(p, ci) {
+function optionLinesFor(ci, p){
   const t = normalizeTypeKey(p?.product_type);
   const lines = [];
-
   if (t === "sticker") {
-    const film = String(ci?.film || "film_glossy");
-    const lam = String(ci?.lamination || "none");
-    const filmLabel = film === "film_holo" ? "Голографическая плёнка" : "Стандартная глянцевая плёнка";
-    const lamLabel = lam === "none" ? "Без ламинации" : (OVERLAY_LABELS[lam] || lam);
-    lines.push(`<div class="pickOptLine"><b>Плёнка:</b> ${filmLabel}</div>`);
-    lines.push(`<div class="pickOptLine"><b>Ламинация:</b> ${lamLabel}</div>`);
+    const film = String(ci?.film||"") || "film_glossy";
+    const lam = String(ci?.lamination||"") || "none";
+    if (film !== "film_glossy") lines.push(`Плёнка: ${FILM_LABELS[film] || film}`);
+    if (lam !== "none") lines.push(`Ламинация: ${STICKER_LAM_LABELS[lam] || lam}`);
   }
-
   if (t === "pin") {
-    const lam = String(ci?.pin_lamination || "base_glossy");
-    const lamLabel = lam === "base_glossy" ? "Глянцевая (базовая)" : (OVERLAY_LABELS[lam] || lam);
-    lines.push(`<div class="pickOptLine"><b>Ламинация:</b> ${lamLabel}</div>`);
+    const lam = String(ci?.pin_lamination||"") || "pin_base";
+    if (lam !== "pin_base") lines.push(`Ламинация: ${PIN_LAM_LABELS[lam] || lam}`);
   }
-
-  if (!lines.length) return ``;
-  return `<div class="pickOpts">${lines.join("")}</div>`;
+  return lines;
 }
 
 function calcCartTotal() {
@@ -1811,8 +1733,8 @@ function calcCartTotal() {
   (cart || []).forEach((ci) => {
     const p = getProductById(ci.id);
     if (!p) return;
-    const one = calcItemPrice(p, ci);
-    total += one * (Number(ci.qty) || 0);
+    const unit = calcItemUnitPrice(p, ci);
+    total += unit * (Number(ci.qty) || 0);
   });
   return total;
 }
@@ -1826,45 +1748,44 @@ function renderCart() {
       <div class="small">Тут собирается твой заказ.</div>
       <hr>
 
-      ${
-        items.length
-          ? `<div class="list" id="cartList">
-              ${items
+      <div class="list" id="cartList">
+        ${
+          items.length
+            ? items
                 .map((ci, idx) => {
                   const p = getProductById(ci.id);
                   const img = firstImageUrl(p);
-                  const priceOne = calcItemPrice(p, ci);
-                  const priceText = `${money(priceOne)} × ${Number(ci.qty) || 1} = ${money(priceOne * (Number(ci.qty) || 1))}`;
-                  const lines = optionLinesForItem(p, ci);
-
+                  const unit = calcItemUnitPrice(p, ci);
+                  const lines = optionLinesFor(ci, p);
                   return `
-                    <div class="pickRow">
-                      ${img ? `<img class="pickThumb" src="${img}" alt="Превью" loading="lazy" decoding="async">` : `<div class="pickThumb pickStub"></div>`}
-                      <div class="pickBody">
-                        <div class="pickTitle">${p.name}</div>
-                        <div class="pickPrice">${priceText}</div>
-                        ${lines}
-
-                        <div class="qtyRow">
-                          <button class="btn" type="button" data-dec="${idx}">−</button>
-                          <div class="qtyNum"><b>${Number(ci.qty) || 1}</b></div>
-                          <button class="btn" type="button" data-inc="${idx}">+</button>
+                    <div class="item" data-idx="${idx}">
+                      <div class="miniRow">
+                        ${img ? `<img class="miniThumb" src="${img}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
+                        <div class="miniBody">
+                          <div class="title">${safeText(p.name)}</div>
+                          <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
+                          ${lines.length ? `<div class="miniOpts">${lines.map((x)=>`<div>${x}</div>`).join("")}</div>` : ``}
                         </div>
+                      </div>
+
+                      <div class="row" style="margin-top:12px; align-items:center">
+                        <button class="btn" data-dec="${idx}">−</button>
+                        <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
+                        <button class="btn" data-inc="${idx}">+</button>
                       </div>
                     </div>
                   `;
                 })
-                .join("")}
-            </div>`
-          : `
-            <div class="emptyBox">
-              <div class="emptyTitle">Корзина пустая</div>
-              <div class="small">Зайди в категории и выбери то, что тебе понравится ✨</div>
-              <div style="height:10px"></div>
-              <button class="btn is-active" id="goCats" type="button">Перейти в категории</button>
-            </div>
-          `
-      }
+                .join("")
+            : `
+              <div class="emptyBox">
+                <div class="small">Корзина пока пустая ✨</div>
+                <div style="height:10px"></div>
+                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в категории</button>
+              </div>
+            `
+        }
+      </div>
 
       ${
         items.length
@@ -1873,8 +1794,8 @@ function renderCart() {
         <div class="small">Итого: <b>${money(calcCartTotal())}</b></div>
         <div style="height:10px"></div>
         <div class="row">
-          <button class="btn" id="btnClear" type="button">Очистить</button>
-          <button class="btn is-active" id="btnCheckout" type="button">Оформить заказ</button>
+          <button class="btn" id="btnClear">Очистить</button>
+          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
         </div>
       `
           : ""
@@ -1882,37 +1803,42 @@ function renderCart() {
     </div>
   `;
 
-  document.getElementById("goCats")?.addEventListener("click", () => openPage(renderFandomTypes));
-
   view.querySelectorAll("[data-inc]").forEach((b) => {
-    b.addEventListener("click", () => {
+    b.onclick = () => {
       const i = Number(b.dataset.inc);
-      const next = [...(cart || [])];
+      const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
       setCart(next);
       renderCart();
-    });
+    };
   });
 
   view.querySelectorAll("[data-dec]").forEach((b) => {
-    b.addEventListener("click", () => {
+    b.onclick = () => {
       const i = Number(b.dataset.dec);
-      const next = [...(cart || [])];
+      const next = [...cart];
       const q = (Number(next[i].qty) || 1) - 1;
       if (q <= 0) next.splice(i, 1);
       else next[i].qty = q;
       setCart(next);
       renderCart();
-    });
+    };
   });
 
-  document.getElementById("btnClear")?.addEventListener("click", () => {
-    setCart([]);
-    toast("Корзина очищена", "warn");
-    renderCart();
-  });
+  const goCats = document.getElementById("goCatsFromEmptyCart");
+  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
 
-  document.getElementById("btnCheckout")?.addEventListener("click", () => openCheckout());
+  const btnClear = document.getElementById("btnClear");
+  if (btnClear) {
+    btnClear.onclick = () => {
+      setCart([]);
+      toast("Корзина очищена", "warn");
+      renderCart();
+    };
+  }
+
+  const btnCheckout = document.getElementById("btnCheckout");
+  if (btnCheckout) btnCheckout.onclick = () => openCheckout();
 
   syncNav();
   syncBottomSpace();
@@ -1923,11 +1849,11 @@ function renderCart() {
 // =====================
 const LS_CHECKOUT = "lespaw_checkout_v1";
 let checkout = loadJSON(LS_CHECKOUT, {
-  full_name: '',
-  phone: '',
-  delivery_method: 'yandex',
-  pickup_address: '',
-  comment: '',
+  name: "",
+  contact: "",
+  city: "",
+  delivery: "",
+  comment: "",
 });
 
 // Гейт: галочки можно ставить только после перехода в «Важную информацию» из оформления
@@ -1944,50 +1870,46 @@ function saveCheckout(next) {
 }
 
 function buildOrderText() {
-  const dm = checkout.delivery_method === "5post" ? "Пункт 5post" : "Пункт Яндекса";
-
   const lines = [];
-  lines.push("🛍️ Заказ LesPaw");
-  lines.push("");
-  lines.push(`ФИО: ${safeText(checkout.full_name)}`);
-  lines.push(`Телефон: ${safeText(checkout.phone)}`);
-  lines.push(`Доставка: ${dm}`);
-  lines.push(`Адрес ПВЗ: ${safeText(checkout.pickup_address)}`);
-  if (safeText(checkout.comment)) lines.push(`Комментарий: ${safeText(checkout.comment)}`);
+  lines.push("🛍 Заказ LesPaw");
 
-  lines.push("");
-  lines.push("Позиции:");
+  if (checkout.name) lines.push(`👤 Имя: ${checkout.name}`);
+  if (checkout.contact) lines.push(`📱 Контакт: ${checkout.contact}`);
+  if (checkout.city) lines.push(`🏙 Город: ${checkout.city}`);
+  if (checkout.delivery) lines.push(`🚚 Доставка/ПВЗ: ${checkout.delivery}`);
+  if (checkout.comment) lines.push(`📝 Комментарий: ${checkout.comment}`);
 
-  let n = 1;
+  lines.push("\n📦 Товары:");
+
+  const overlayDelta = Number(settings.overlay_price_delta) || 0;
+  const holoDelta = Number(settings.holo_base_price_delta) || 0;
+
+  let total = 0;
+
   (cart || []).forEach((ci) => {
     const p = getProductById(ci.id);
     if (!p) return;
-    const one = calcItemPrice(p, ci);
-    const sum = one * (Number(ci.qty) || 0);
-    lines.push(`${n}. ${p.name} × ${Number(ci.qty) || 1} — ${money(sum)}`);
 
-    const opts = [];
-    const t = normalizeTypeKey(p.product_type);
-    if (t === "sticker") {
-      const film = String(ci.film || "film_glossy");
-      const lam = String(ci.lamination || "none");
-      const filmLabel = film === "film_holo" ? "Голографическая плёнка" : "Стандартная глянцевая плёнка";
-      const lamLabel = lam === "none" ? "Без ламинации" : (OVERLAY_LABELS[lam] || lam);
-      opts.push(`   • Плёнка: ${filmLabel}`);
-      opts.push(`   • Ламинация: ${lamLabel}`);
-    }
-    if (t === "pin") {
-      const lam = String(ci.pin_lamination || "base_glossy");
-      const lamLabel = lam === "base_glossy" ? "Глянцевая ламинация (базовая)" : (OVERLAY_LABELS[lam] || lam);
-      opts.push(`   • Ламинация: ${lamLabel}`);
-    }
-    if (opts.length) lines.push(...opts);
+    const fandom = getFandomById(p.fandom_id);
 
-    n++;
+    let price = Number(p.price) || 0;
+    if ((p.product_type || "") === "sticker") {
+      if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
+      if ((ci.base || "") === "holo") price += holoDelta;
+    }
+
+    const qty = Number(ci.qty) || 1;
+    total += price * qty;
+
+    const opt = optionLabelForCartItem(ci);
+    const fandomName = fandom?.fandom_name ? ` — ${fandom.fandom_name}` : "";
+    lines.push(`• ${p.name}${fandomName}`);
+    if (opt) lines.push(`  ${opt}`);
+    lines.push(`  ${qty} шт · ${money(price)} за шт`);
   });
 
-  lines.push("");
-  lines.push(`Итого (без доставки): ${money(calcCartTotal())}`);
+  lines.push(`\n💜 Итого: ${money(total)}`);
+  lines.push(`\nСвязь: @${MANAGER_USERNAME}`);
 
   return lines.join("\n");
 }
@@ -1999,16 +1921,14 @@ function renderCheckout() {
         <div class="h2">Оформление</div>
         <div class="small">Корзина пустая — нечего оформлять.</div>
         <hr>
-        <button class="btn is-active" id="goCats">Перейти в категории</button>
+        <button class="btn is-active" id="goHome">На главную</button>
       </div>
     `;
-    document.getElementById("goCats").onclick = () => openPage(renderFandomTypes);
+    document.getElementById("goHome").onclick = () => resetToHome();
     syncNav();
     syncBottomSpace();
     return;
   }
-
-  const safeVal = (s) => String(s || "").replace(/"/g, "&quot;");
 
   view.innerHTML = `
     <div class="card">
@@ -2016,27 +1936,24 @@ function renderCheckout() {
       <div class="small">Заполни данные — и нажми «Отправить заказ».</div>
       <hr>
 
-      <div class="small"><b>ФИО</b></div>
-      <input class="searchInput" id="cFullName" placeholder="Фамилия Имя" value="${safeVal(checkout.full_name)}">
+      <div class="small"><b>Имя</b></div>
+      <input class="searchInput" id="cName" placeholder="Как к тебе обращаться" value="${(checkout.name || "").replace(/"/g, "&quot;")}">
       <div style="height:10px"></div>
 
-      <div class="small"><b>Номер телефона</b></div>
-      <input class="searchInput" id="cPhone" placeholder="+7…" value="${safeVal(checkout.phone)}">
+      <div class="small"><b>Контакт</b></div>
+      <input class="searchInput" id="cContact" placeholder="@ник или телефон" value="${(checkout.contact || "").replace(/"/g, "&quot;")}">
       <div style="height:10px"></div>
 
-      <div class="small"><b>Доставка</b></div>
-      <div class="segmented" id="deliverySeg">
-        <button class="segBtn" data-del="yandex">Пункт Яндекса</button>
-        <button class="segBtn" data-del="5post">Пункт 5post</button>
-      </div>
+      <div class="small"><b>Город</b></div>
+      <input class="searchInput" id="cCity" placeholder="Город" value="${(checkout.city || "").replace(/"/g, "&quot;")}">
       <div style="height:10px"></div>
 
-      <div class="small"><b>Адрес пункта выдачи</b></div>
-      <input class="searchInput" id="cPickup" placeholder="Область, город, улица, дом" value="${safeVal(checkout.pickup_address)}">
+      <div class="small"><b>Доставка / ПВЗ</b></div>
+      <input class="searchInput" id="cDelivery" placeholder="Напр. Яндекс ПВЗ / 5post + адрес/код" value="${(checkout.delivery || "").replace(/"/g, "&quot;")}">
       <div style="height:10px"></div>
 
       <div class="small"><b>Комментарий</b></div>
-      <input class="searchInput" id="cComment" placeholder="необязательно" value="${safeVal(checkout.comment)}">
+      <input class="searchInput" id="cComment" placeholder="Если нужно" value="${(checkout.comment || "").replace(/"/g, "&quot;")}">
 
       <hr>
 
@@ -2052,13 +1969,13 @@ function renderCheckout() {
           <input type="checkbox" id="agree" style="margin-top:2px" ${checkoutInfoVisitedFromCheckout ? "" : "disabled"}>
           <span>
             Я ознакомилась с «Важной информацией» и понимаю порядок оформления и оплаты заказа.
-            ${checkoutInfoVisitedFromCheckout ? "" : '<span class="checkHint">(сначала прочитай важную инфу)</span>'}
+            ${checkoutInfoVisitedFromCheckout ? "" : '<span class="checkHint">(сначала открой блок выше)</span>'}
           </span>
         </label>
 
         <label class="checkRow small">
           <input type="checkbox" id="confirmItems" style="margin-top:2px" ${checkoutInfoVisitedFromCheckout ? "" : "disabled"}>
-          <span>Я проверила позиции в заказе — всё верно.</span>
+          <span>Я проверила позиции в заказе (количество, варианты плёнки/ламинации, фандомы) — всё верно.</span>
         </label>
 
         <div class="checkoutNote">
@@ -2070,46 +1987,39 @@ function renderCheckout() {
       <div style="height:12px"></div>
 
       <div class="row">
-        <button class="btn is-active" id="btnSend">Отправить заказ</button>
+        <button class="btn" id="btnPreview">Посмотреть текст заказа</button>
+        <button class="btn is-active" id="btnSend">Отправить заказ менеджерке</button>
+      </div>
+
+      <div id="preview" style="display:none; margin-top:12px">
+        <hr>
+        <div class="small" style="white-space:pre-wrap" id="orderText"></div>
       </div>
     </div>
   `;
 
-  const cFullName = document.getElementById("cFullName");
-  const cPhone = document.getElementById("cPhone");
-  const cPickup = document.getElementById("cPickup");
+  const cName = document.getElementById("cName");
+  const cContact = document.getElementById("cContact");
+  const cCity = document.getElementById("cCity");
+  const cDelivery = document.getElementById("cDelivery");
   const cComment = document.getElementById("cComment");
-
-  const seg = document.getElementById("deliverySeg");
-  const btnSend = document.getElementById("btnSend");
-  const agree = document.getElementById("agree");
-  const confirmItems = document.getElementById("confirmItems");
-
-  function setDelivery(method) {
-    checkout.delivery_method = method;
-    saveCheckout(checkout);
-    seg?.querySelectorAll('[data-del]').forEach((b) => b.classList.toggle('is-active', b.dataset.del === method));
-  }
-
-  // init delivery
-  if (!checkout.delivery_method) checkout.delivery_method = 'yandex';
-  setDelivery(checkout.delivery_method);
-
-  seg?.querySelectorAll('[data-del]').forEach((b) => {
-    b.onclick = () => setDelivery(b.dataset.del);
-  });
 
   function syncCheckout() {
     saveCheckout({
-      full_name: cFullName.value || "",
-      phone: cPhone.value || "",
-      delivery_method: checkout.delivery_method || "yandex",
-      pickup_address: cPickup.value || "",
+      name: cName.value || "",
+      contact: cContact.value || "",
+      city: cCity.value || "",
+      delivery: cDelivery.value || "",
       comment: cComment.value || "",
     });
   }
 
-  [cFullName, cPhone, cPickup, cComment].forEach((el) => el.addEventListener("input", syncCheckout));
+  [cName, cContact, cCity, cDelivery, cComment].forEach((el) => el.addEventListener("input", syncCheckout));
+
+  const btnPreview = document.getElementById("btnPreview");
+  const btnSend = document.getElementById("btnSend");
+  const agree = document.getElementById("agree");
+  const confirmItems = document.getElementById("confirmItems");
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   if (openInfoFromCheckout)
@@ -2126,16 +2036,25 @@ function renderCheckout() {
       btnSend.classList.toggle("is-disabled", !ok);
     }
   }
-
   agree?.addEventListener("change", syncSendState);
   confirmItems?.addEventListener("change", syncSendState);
+  // стартовое состояние
   syncSendState();
+
+  btnPreview.onclick = () => {
+    syncCheckout();
+    const box = document.getElementById("preview");
+    const textEl = document.getElementById("orderText");
+    textEl.textContent = buildOrderText();
+    box.style.display = "";
+    syncBottomSpace();
+  };
 
   btnSend.onclick = () => {
     syncCheckout();
 
     if (!checkoutInfoVisitedFromCheckout) {
-      toast("Сначала прочитай «Важную информацию» — кнопка выше 👆", "warn");
+      toast("Сначала открой «Важную информацию» и ознакомься — кнопка выше 👆", "warn");
       return;
     }
     if (!agree.checked) {
@@ -2148,6 +2067,8 @@ function renderCheckout() {
     }
 
     const text = buildOrderText();
+    // Открываем чат с менеджеркой и подставляем текст.
+    // В Telegram поле ввода в любом случае можно редактировать — но внутри приложения мы НЕ даём редактируемое поле.
     const link = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(text)}`;
     tg?.openTelegramLink(link);
     toast("Открываю чат с менеджеркой…", "good");
