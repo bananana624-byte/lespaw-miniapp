@@ -977,9 +977,9 @@ function renderReviews() {
                 : ``;
 
               const photoHtml = r.photo_url
-                ? `<button class="reviewPhotoBtn" data-photo="${encodeURIComponent(r.photo_url)}" aria-label="Открыть фото">
+                ? `<div class="reviewPhotoWrap">
                      <img class="reviewPhoto" src="${r.photo_url}" alt="Фото отзыва" loading="lazy" decoding="async">
-                   </button>`
+                   </div>`
                 : ``;
 
               const sourceBtn = r.source_url
@@ -1079,14 +1079,6 @@ function renderReviews() {
     document.getElementById("revMore")?.addEventListener("click", () => {
       reviewsVisibleCount += 8;
       render();
-    });
-
-    // open photo
-    view.querySelectorAll("[data-photo]").forEach((el) => {
-      el.onclick = () => {
-        const url = decodeURIComponent(el.dataset.photo || "");
-        openExternal(url);
-      };
     });
 
     // open source
