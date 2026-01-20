@@ -749,63 +749,61 @@ function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
-  const typeTabs = ["all", "sticker", "pin", "poster", "box"];
-  const tabNames = { all: "Все", sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
+  const groupsOrder = [
+    { key: "sticker", title: "Наклейки" },
+    { key: "pin", title: "Значки" },
+    { key: "poster", title: "Постеры" },
+    { key: "box", title: "Боксы" },
+  ];
+  const knownKeys = new Set(groupsOrder.map((g) => g.key));
 
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">${f?.fandom_name || "Фандом"}</div>
-      <div class="row" id="tabs">
-        ${typeTabs.map((t) => `<button class="btn" data-t="${t}">${tabNames[t]}</button>`).join("")}
-      </div>
-      <hr>
-      <div class="grid2" id="prodList"></div>
-    </div>
-  `;
+  const grouped = groupsOrder
+    .map((g) => ({ ...g, items: all.filter((p) => (p.product_type || "") === g.key) }))
+    .filter((g) => g.items.length > 0);
 
-  let currentTab = "all";
+  const other = all.filter((p) => !knownKeys.has((p.product_type || "").trim()));
+  if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
-  function setActiveTab() {
-    document.querySelectorAll("#tabs .btn").forEach((b) => {
-      b.classList.toggle("is-active", b.dataset.t === currentTab);
-    });
-  }
-
-  function renderList() {
-    const filtered = all.filter((p) => (currentTab === "all" ? true : p.product_type === currentTab));
-    const prodList = document.getElementById("prodList");
-
-    prodList.innerHTML = filtered.length
-      ? filtered
-          .map(
-            (p) => `
+  const sectionHtml = (title, items) => {
+    const cards = items
+      .map(
+        (p) => `
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${p.name}</div>
             <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
           </div>
         `
-          )
-          .join("")
-      : `<div class="small">Пока нет товаров.</div>`;
+      )
+      .join("");
 
-    prodList.querySelectorAll("[data-id]").forEach((el) => {
-      el.onclick = () => openPage(() => renderProduct(el.dataset.id));
-    });
+    return `
+      <div class="fGroup">
+        <div class="h3">${title}</div>
+        <div class="grid2" style="margin-top:10px">${cards}</div>
+      </div>
+    `;
+  };
 
-    syncBottomSpace();
-  }
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">${f?.fandom_name || "Фандом"}</div>
+      <div class="small">Товары сгруппированы по виду</div>
+      <hr>
+      ${
+        grouped.length
+          ? grouped
+              .map((g, i) => sectionHtml(g.title, g.items) + (i < grouped.length - 1 ? "<hr>" : ""))
+              .join("")
+          : `<div class="small">Пока нет товаров.</div>`
+      }
+    </div>
+  `;
 
-  document.querySelectorAll("#tabs .btn").forEach((b) => {
-    b.onclick = () => {
-      currentTab = b.dataset.t;
-      setActiveTab();
-      renderList();
-    };
+  view.querySelectorAll("[data-id]").forEach((el) => {
+    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
   });
 
-  setActiveTab();
-  renderList();
   syncNav();
   syncBottomSpace();
 }
@@ -878,7 +876,10 @@ function renderInfo() {
 
         <div class="infoSection">
           <div class="infoTitle">Индивидуальные заказы и вопросы</div>
-          <div class="infoNote">По всем вопросам и индивидуальным заказам можно написать менеджерке:</div>
+          <div class="infoNote">
+            Хочешь товары с фандомом, которого нет у нас в ассортименте? Мы можем сделать их <b>под заказ</b>.
+            А ещё по любым вопросам (варианты плёнки/ламинации, сроки, доставка) можно написать менеджерке:
+          </div>
           <button class="infoLinkBtn" id="btnManager" type="button">@${MANAGER_USERNAME}</button>
         </div>
       </div>
@@ -964,7 +965,16 @@ function renderReviews() {
 
                   ${
                     r.text
-                      ? `<div class="reviewText" data-expand="${idx}">${safeText(r.text)}</div>`
+                      ? (() => {
+                          const txt = safeText(r.text);
+                          const showMore = txt.length > 180; // эвристика: если отзыв длинный — показываем подсказку
+                          return `
+                            <div class="reviewTextWrap">
+                              <div class="reviewText" data-expand="${idx}">${txt}</div>
+                              ${showMore ? `<button class="reviewMore" type="button" data-more="${idx}">Показать полностью</button>` : ``}
+                            </div>
+                          `;
+                        })()
                       : ``
                   }
 
@@ -1050,9 +1060,23 @@ function renderReviews() {
       };
     });
 
+    function toggleReview(idx) {
+      const i = String(idx);
+      const textEl = view.querySelector(`.reviewText[data-expand="${i}"]`);
+      if (!textEl) return;
+      const isOpen = textEl.classList.toggle("is-open");
+      const btn = view.querySelector(`.reviewMore[data-more="${i}"]`);
+      if (btn) btn.textContent = isOpen ? "Свернуть" : "Показать полностью";
+    }
+
     // expand text on tap (folded by CSS)
     view.querySelectorAll("[data-expand]").forEach((el) => {
-      el.onclick = () => el.classList.toggle("is-open");
+      el.onclick = () => toggleReview(el.dataset.expand);
+    });
+
+    // explicit "show full" button
+    view.querySelectorAll("[data-more]").forEach((el) => {
+      el.onclick = () => toggleReview(el.dataset.more);
     });
   };
 
@@ -1153,13 +1177,8 @@ function renderLaminationExampleDetail(exId) {
             </div>`
           : `<div class="small">Фото для этого примера пока не добавлено.</div>`
       }
-
-      <hr>
-      <button class="btn" id="exBack">К списку примеров</button>
     </div>
   `;
-
-  document.getElementById("exBack").onclick = () => goBack();
 
   syncNav();
   syncBottomSpace();
@@ -1590,7 +1609,7 @@ function renderCart() {
   }
 
   const btnCheckout = document.getElementById("btnCheckout");
-  if (btnCheckout) btnCheckout.onclick = () => openPage(renderCheckout);
+  if (btnCheckout) btnCheckout.onclick = () => openCheckout();
 
   syncNav();
   syncBottomSpace();
@@ -1607,6 +1626,14 @@ let checkout = loadJSON(LS_CHECKOUT, {
   delivery: "",
   comment: "",
 });
+
+// Гейт: галочки можно ставить только после перехода в «Важную информацию» из оформления
+let checkoutInfoVisitedFromCheckout = false;
+
+function openCheckout() {
+  checkoutInfoVisitedFromCheckout = false;
+  openPage(renderCheckout);
+}
 
 function saveCheckout(next) {
   checkout = next;
@@ -1706,10 +1733,27 @@ function renderCheckout() {
         <button class="mustReadBtn" id="openInfoFromCheckout" type="button">Открыть важную информацию</button>
       </div>
 
-      <label class="small" style="display:flex; gap:10px; align-items:flex-start; user-select:none">
-        <input type="checkbox" id="agree" style="margin-top:2px">
-        <span>Я ознакомилась с «Важной информацией» и понимаю порядок оформления и оплаты заказа.</span>
-      </label>
+      <div class="checkoutGap"></div>
+
+      <div class="checkoutChecks">
+        <label class="checkRow small">
+          <input type="checkbox" id="agree" style="margin-top:2px" ${checkoutInfoVisitedFromCheckout ? "" : "disabled"}>
+          <span>
+            Я ознакомилась с «Важной информацией» и понимаю порядок оформления и оплаты заказа.
+            ${checkoutInfoVisitedFromCheckout ? "" : '<span class="checkHint">(сначала открой блок выше)</span>'}
+          </span>
+        </label>
+
+        <label class="checkRow small">
+          <input type="checkbox" id="confirmItems" style="margin-top:2px" ${checkoutInfoVisitedFromCheckout ? "" : "disabled"}>
+          <span>Я проверила позиции в заказе (количество, варианты плёнки/ламинации, фандомы) — всё верно.</span>
+        </label>
+
+        <div class="checkoutNote">
+          После нажатия <b>«Отправить заказ»</b> тебя перебросит в чат с менеджеркой — там уже будет готовый текст заказа.
+          Пожалуйста, отправь его <b>без изменений</b>.
+        </div>
+      </div>
 
       <div style="height:12px"></div>
 
@@ -1746,18 +1790,25 @@ function renderCheckout() {
   const btnPreview = document.getElementById("btnPreview");
   const btnSend = document.getElementById("btnSend");
   const agree = document.getElementById("agree");
+  const confirmItems = document.getElementById("confirmItems");
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
-  if (openInfoFromCheckout) openInfoFromCheckout.onclick = () => openPage(renderInfo);
+  if (openInfoFromCheckout)
+    openInfoFromCheckout.onclick = () => {
+      checkoutInfoVisitedFromCheckout = true;
+      openPage(renderInfo);
+    };
 
   function syncSendState() {
-    const ok = !!agree?.checked;
+    const gateOk = !!checkoutInfoVisitedFromCheckout;
+    const ok = gateOk && !!agree?.checked && !!confirmItems?.checked;
     if (btnSend) {
       btnSend.disabled = !ok;
       btnSend.classList.toggle("is-disabled", !ok);
     }
   }
   agree?.addEventListener("change", syncSendState);
+  confirmItems?.addEventListener("change", syncSendState);
   // стартовое состояние
   syncSendState();
 
@@ -1773,8 +1824,16 @@ function renderCheckout() {
   btnSend.onclick = () => {
     syncCheckout();
 
+    if (!checkoutInfoVisitedFromCheckout) {
+      toast("Сначала открой «Важную информацию» и ознакомься — кнопка выше 👆", "warn");
+      return;
+    }
     if (!agree.checked) {
-      toast("Поставь галочку, пожалуйста: нужно подтвердить условия 😿", "warn");
+      toast("Нужно подтвердить, что ты ознакомилась с условиями 😿", "warn");
+      return;
+    }
+    if (!confirmItems.checked) {
+      toast("Пожалуйста, подтверди, что проверила позиции заказа 😿", "warn");
       return;
     }
 
