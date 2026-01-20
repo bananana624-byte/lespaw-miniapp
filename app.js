@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v57
+// LesPaw Mini App — app.js v84
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -271,8 +271,25 @@ const FANDOM_TYPES = [
   "Что-то тематическое",
 ];
 
+const CATEGORY_META = [
+  { key: 'Фильмы', icon: '🎬' },
+  { key: 'Игры', icon: '🎮' },
+  { key: 'Сериалы', icon: '📺' },
+  { key: 'Актрисы и певицы', icon: '🎤' },
+  { key: 'Аниме', icon: '📘' },
+  { key: 'Мультсериалы', icon: '🌈' },
+  { key: 'Манхвы / манги', icon: '🌸' },
+  { key: 'Лакорны', icon: '💋' },
+  { key: 'Что-то тематическое', icon: '✨' },
+];
+
+function getCategoryIcon(name){
+  const hit = (CATEGORY_META||[]).find(x=>x.key===name);
+  return hit?hit.icon:'✨';
+}
+
 const OVERLAY_OPTIONS = [
-  ["none", "Без покрытия"],
+  ["none", "Без ламинации"],
   ["sugar", "Сахар"],
   ["stars", "Звёздочки"],
   ["snowflakes_small", "Маленькие снежинки"],
@@ -704,15 +721,16 @@ function renderFandomTypes() {
   view.innerHTML = `
     <div class="card">
       <div class="h2">Категории</div>
-      <div class="small">Выбери тип фандома</div>
+      <div class="small">Выбери категорию</div>
       <hr>
-      <div class="list">
+
+      <div class="catGrid">
         ${FANDOM_TYPES.map(
           (t) => `
-          <div class="item" data-type="${t}">
-            <div class="title">${t}</div>
-            <div class="meta">Открыть список фандомов</div>
-          </div>
+          <button class="catBtn" type="button" data-type="${t}">
+            <div class="catIco" aria-hidden="true">${getCategoryIcon(t)}</div>
+            <div class="catTitle">${t}</div>
+          </button>
         `
         ).join("")}
       </div>
@@ -739,36 +757,29 @@ function renderFandomList(type) {
   const letters = list.filter((f) => !isDigitStart(f.fandom_name));
   const digits = list.filter((f) => isDigitStart(f.fandom_name));
 
+  const renderGrid = (arr) => `
+    <div class="fanGrid">
+      ${arr
+        .map(
+          (f) => `
+        <button class="fanBtn" type="button" data-id="${f.fandom_id}">
+          <div class="fanTitle">${f.fandom_name}</div>
+        </button>
+      `
+        )
+        .join("")}
+    </div>
+  `;
+
   view.innerHTML = `
     <div class="card">
       <div class="h2">${type}</div>
       <div class="small">Фандомы по алфавиту</div>
       <hr>
-      <div class="list">
-        ${letters
-          .map(
-            (f) => `
-          <div class="item" data-id="${f.fandom_id}">
-            <div class="title">${f.fandom_name}</div>
-            <div class="meta">Открыть товары фандома</div>
-          </div>
-        `
-          )
-          .join("")}
 
-        ${digits.length ? `<div class="small">0–9</div>` : ""}
+      ${letters.length ? renderGrid(letters) : `<div class="small">Пока пусто.</div>`}
 
-        ${digits
-          .map(
-            (f) => `
-          <div class="item" data-id="${f.fandom_id}">
-            <div class="title">${f.fandom_name}</div>
-            <div class="meta">Открыть товары фандома</div>
-          </div>
-        `
-          )
-          .join("")}
-      </div>
+      ${digits.length ? `<hr><div class="small"><b>0–9</b></div>${renderGrid(digits)}` : ``}
     </div>
   `;
 
@@ -807,7 +818,15 @@ function renderFandomPage(fandomId) {
       .map(
         (p) => `
           <div class="pcard" data-id="${p.id}">
-            ${cardThumbHTML(p)}
+            <div class="pcardTop">
+              ${cardThumbHTML(p)}
+              <div class="pcardMiniActions">
+                <button class="miniBtn" type="button" data-fav="${p.id}" aria-label="В избранное">
+                  ${fav.includes(p.id) ? "♥" : "♡"}
+                </button>
+                <button class="miniBtn" type="button" data-add="${p.id}" aria-label="В корзину">＋</button>
+              </div>
+            </div>
             <div class="pcardTitle">${p.name}</div>
             <div class="pcardMeta">${money(p.price)} · ${typeLabel(p.product_type)}</div>
           </div>
@@ -826,7 +845,6 @@ function renderFandomPage(fandomId) {
   view.innerHTML = `
     <div class="card">
       <div class="h2">${f?.fandom_name || "Фандом"}</div>
-      <div class="small">Товары сгруппированы по виду</div>
       <hr>
       ${
         grouped.length
@@ -838,8 +856,60 @@ function renderFandomPage(fandomId) {
     </div>
   `;
 
-  view.querySelectorAll("[data-id]").forEach((el) => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+  // open product
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    el.onclick = (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      openPage(() => renderProduct(el.dataset.id));
+    };
+  });
+
+  // fav toggle
+  view.querySelectorAll("[data-fav]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.dataset.fav;
+      if (fav.includes(id)) setFav(fav.filter((x) => x !== id));
+      else setFav([...fav, id]);
+      renderFandomPage(fandomId);
+    };
+  });
+
+  // quick add to cart
+  view.querySelectorAll("[data-add]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.dataset.add;
+      const p = getProductById(id);
+      if (!p) return;
+
+      const t = normalizeTypeKey(p.product_type);
+      const item = {
+        id,
+        qty: 1,
+        overlay: t === "sticker" ? "none" : "",
+        base: t === "sticker" ? "normal" : "",
+        pin_lam: t === "pin" ? "base" : "",
+      };
+
+      const same = cart.find(
+        (x) =>
+          x.id === item.id &&
+          (x.overlay || "") === (item.overlay || "") &&
+          (x.base || "") === (item.base || "") &&
+          (x.pin_lam || "") === (item.pin_lam || "")
+      );
+
+      if (same) {
+        same.qty = (Number(same.qty) || 0) + 1;
+        setCart([...cart]);
+      } else {
+        setCart([...cart, item]);
+      }
+
+      toast("Добавлено в корзину", "good");
+    };
   });
 
   syncNav();
@@ -1300,22 +1370,17 @@ function renderProduct(productId) {
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
+  const typeKey = normalizeTypeKey(p.product_type);
+  const isSticker = typeKey === "sticker";
+  const isPin = typeKey === "pin";
+
   const overlayDelta = Number(settings.overlay_price_delta) || 0;
   const holoDelta = Number(settings.holo_base_price_delta) || 0;
 
-  const isSticker = (p.product_type || "") === "sticker";
-
-  let selectedOverlay = "none";
-  let selectedBase = "normal"; // normal | holo
-
-  function calcPrice() {
-    let price = Number(p.price) || 0;
-    if (isSticker) {
-      if (selectedOverlay !== "none") price += overlayDelta;
-      if (selectedBase === "holo") price += holoDelta;
-    }
-    return price;
-  }
+  // defaults
+  let selectedFilm = "glossy"; // glossy | holo
+  let selectedLam = "none"; // for stickers: none + fancy
+  let selectedPinLam = "base"; // base + fancy
 
   function inFav() {
     return fav.includes(p.id);
@@ -1327,16 +1392,36 @@ function renderProduct(productId) {
     render();
   }
 
+  function calcPrice() {
+    let price = Number(p.price) || 0;
+
+    if (isSticker) {
+      if (selectedFilm === "holo") price += holoDelta;
+      if (selectedLam !== "none") price += overlayDelta;
+    }
+
+    if (isPin) {
+      if (selectedPinLam !== "base") price += overlayDelta;
+    }
+
+    return price;
+  }
+
   function addToCart() {
     const item = {
       id: p.id,
       qty: 1,
-      overlay: isSticker ? selectedOverlay : "",
-      base: isSticker ? selectedBase : "",
+      overlay: isSticker ? selectedLam : "",
+      base: isSticker ? (selectedFilm === "holo" ? "holo" : "normal") : "",
+      pin_lam: isPin ? selectedPinLam : "",
     };
 
     const existing = cart.find(
-      (x) => x.id === item.id && (x.overlay || "") === (item.overlay || "") && (x.base || "") === (item.base || "")
+      (x) =>
+        x.id === item.id &&
+        (x.overlay || "") === (item.overlay || "") &&
+        (x.base || "") === (item.base || "") &&
+        (x.pin_lam || "") === (item.pin_lam || "")
     );
 
     if (existing) {
@@ -1349,11 +1434,20 @@ function renderProduct(productId) {
     toast("Добавлено в корзину", "good");
   }
 
+  const lamOptions = OVERLAY_OPTIONS.filter(([k]) => k !== "none");
+
   function render() {
+    const price = calcPrice();
+
     view.innerHTML = `
       <div class="card">
-        <div class="h2">${p.name}</div>
-        <div class="small">${fandom?.fandom_name ? `<b>${fandom.fandom_name}</b> · ` : ""}${typeLabel(p.product_type)}</div>
+        <div class="pHead">
+          <div class="pHeadMain">
+            <div class="h2" style="margin:0">${p.name}</div>
+            <div class="small">${fandom?.fandom_name ? `<b>${fandom.fandom_name}</b> · ` : ""}${typeLabel(p.product_type)}</div>
+          </div>
+          <button class="pFavBtn" id="btnFav" type="button" aria-label="В избранное">${inFav() ? "♥" : "♡"}</button>
+        </div>
         <hr>
 
         ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async">` : ""}
@@ -1361,89 +1455,111 @@ function renderProduct(productId) {
         ${p.description ? `<div class="small" style="margin-top:10px">${p.description}</div>` : ""}
         ${p.description_short && !p.description ? `<div class="small" style="margin-top:10px">${p.description_short}</div>` : ""}
 
-        <hr>
-
         ${
           isSticker
             ? `
-          <div class="small"><b>Основа</b></div>
-          <div class="row" id="baseRow">
-            <button class="btn" data-base="normal">Обычная</button>
-            <button class="btn" data-base="holo">Голографическая</button>
-          </div>
-
-          <div style="height:10px"></div>
-
-          <div class="small"><b>Покрытие</b></div>
-          <div class="row" id="ovRow">
-            ${OVERLAY_OPTIONS.map(([k, label]) => `<button class="btn" data-ov="${k}">${label}</button>`).join("")}
-          </div>
-
           <hr>
+          <div class="optBlock">
+            <div class="optTitle">Плёнка</div>
+            <div class="optRow">
+              <button class="btn optBtn" data-film="glossy">Стандартная глянцевая</button>
+              <button class="btn optBtn" data-film="holo">Голографическая</button>
+            </div>
+
+            <div style="height:10px"></div>
+
+            <div class="optTitle">Ламинация</div>
+            <div class="optRow optRowWrap">
+              <button class="btn optBtn" data-lam="none">Без ламинации</button>
+              ${lamOptions.map(([k, label]) => `<button class="btn optBtn" data-lam="${k}">${label}</button>`).join("")}
+            </div>
+
+            <div style="height:10px"></div>
+            <button class="btn" id="openExamples" type="button">Посмотреть примеры плёнки и ламинации</button>
+          </div>
         `
             : ""
         }
 
-        <div class="row">
-          <button class="btn" id="btnFav">${inFav() ? "♥ В избранном" : "♡ В избранное"}</button>
-          <button class="btn is-active" id="btnCart">Добавить в корзину · ${money(calcPrice())}</button>
+        ${
+          isPin
+            ? `
+          <hr>
+          <div class="optBlock">
+            <div class="optTitle">Ламинация</div>
+            <div class="small" style="margin-top:6px">Базовая глянцевая ламинация есть всегда. Если хочешь — можно добавить эффект сверху.</div>
+            <div style="height:10px"></div>
+            <div class="optRow optRowWrap">
+              <button class="btn optBtn" data-pinlam="base">Глянцевая (базовая)</button>
+              ${lamOptions.map(([k, label]) => `<button class="btn optBtn" data-pinlam="${k}">${label}</button>`).join("")}
+            </div>
+            <div style="height:10px"></div>
+            <button class="btn" id="openExamples" type="button">Посмотреть примеры плёнки и ламинации</button>
+          </div>
+        `
+            : ""
+        }
+
+        <hr>
+
+        <div class="pActions">
+          <button class="pActBtn" id="btnCart" type="button">Добавить в корзину · ${money(price)}</button>
         </div>
       </div>
     `;
 
-    const btnFav = document.getElementById("btnFav");
-    const btnCart = document.getElementById("btnCart");
+    document.getElementById("btnFav")?.addEventListener("click", favToggle);
+    document.getElementById("btnCart")?.addEventListener("click", addToCart);
+    document.getElementById("openExamples")?.addEventListener("click", () => openExamples());
 
-    btnFav.onclick = () => favToggle();
-    btnCart.onclick = () => addToCart();
+    // sticker film
+    view.querySelectorAll("[data-film]").forEach((b) => {
+      b.classList.toggle("is-active", b.dataset.film === selectedFilm);
+      b.onclick = () => {
+        selectedFilm = b.dataset.film;
+        render();
+      };
+    });
 
-    if (isSticker) {
-      const baseRow = document.getElementById("baseRow");
-      const ovRow = document.getElementById("ovRow");
+    // sticker lam
+    view.querySelectorAll("[data-lam]").forEach((b) => {
+      b.classList.toggle("is-active", b.dataset.lam === selectedLam);
+      b.onclick = () => {
+        selectedLam = b.dataset.lam;
+        render();
+      };
+    });
 
-      function syncBtns() {
-        baseRow.querySelectorAll(".btn").forEach((b) => b.classList.toggle("is-active", b.dataset.base === selectedBase));
-        ovRow.querySelectorAll(".btn").forEach((b) => b.classList.toggle("is-active", b.dataset.ov === selectedOverlay));
-        btnCart.textContent = `Добавить в корзину · ${money(calcPrice())}`;
-      }
-
-      baseRow.querySelectorAll("[data-base]").forEach((b) => {
-        b.onclick = () => {
-          selectedBase = b.dataset.base;
-          syncBtns();
-        };
-      });
-
-      ovRow.querySelectorAll("[data-ov]").forEach((b) => {
-        b.onclick = () => {
-          selectedOverlay = b.dataset.ov;
-          syncBtns();
-        };
-      });
-
-      // стартовые состояния
-      syncBtns();
-    }
-
-    syncNav();
-    syncBottomSpace();
+    // pin lam
+    view.querySelectorAll("[data-pinlam]").forEach((b) => {
+      b.classList.toggle("is-active", b.dataset.pinlam === selectedPinLam);
+      b.onclick = () => {
+        selectedPinLam = b.dataset.pinlam;
+        render();
+      };
+    });
   }
 
+  // init defaults: stickers glossy+none; pins base
+  selectedFilm = "glossy";
+  selectedLam = "none";
+  selectedPinLam = "base";
   render();
+
+  syncNav();
+  syncBottomSpace();
 }
 
 // =====================
 // Favorites
 // =====================
 function renderFavorites() {
-  const items = (fav || [])
-    .map((id) => getProductById(id))
-    .filter(Boolean);
+  const items = (fav || []).map((id) => getProductById(id)).filter(Boolean);
 
   view.innerHTML = `
     <div class="card">
       <div class="h2">Избранное</div>
-      <div class="small">Товары, которые ты отметила сердечком.</div>
+      <div class="small">Тут живут товары, которые тебе понравились.</div>
       <hr>
 
       <div class="list" id="favList">
@@ -1464,15 +1580,23 @@ function renderFavorites() {
                   `;
                 })
                 .join("")
-            : `<div class="small">Пока пусто. Открой товар и нажми “♡ В избранное”.</div>`
+            : `
+              <div class="emptyBox">
+                <div class="emptyTitle">Пока пусто</div>
+                <div class="small">Загляни в категории и добавь то, что тебе понравится 💜</div>
+                <div style="height:12px"></div>
+                <button class="btn is-active" id="goCats" type="button">Перейти в категории</button>
+              </div>
+            `
         }
       </div>
     </div>
   `;
 
+  document.getElementById("goCats")?.addEventListener("click", () => openPage(renderFandomTypes));
+
   view.querySelectorAll("[data-open]").forEach((el) => {
     el.onclick = (e) => {
-      // если кликнули по кнопкам — не открываем карточку
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       openPage(() => renderProduct(el.dataset.open));
@@ -1493,14 +1617,33 @@ function renderFavorites() {
     b.onclick = (e) => {
       e.stopPropagation();
       const id = b.dataset.toCart;
-      // в избранном опций (покрытие/основа) нет — добавляем базовый вариант
-      const existing = cart.find((x) => x.id === id && !(x.overlay || "") && !(x.base || ""));
+      const p = getProductById(id);
+      if (!p) return;
+
+      const t = normalizeTypeKey(p.product_type);
+      const item = {
+        id,
+        qty: 1,
+        overlay: t === "sticker" ? "none" : "",
+        base: t === "sticker" ? "normal" : "",
+        pin_lam: t === "pin" ? "base" : "",
+      };
+
+      const existing = cart.find(
+        (x) =>
+          x.id === item.id &&
+          (x.overlay || "") === (item.overlay || "") &&
+          (x.base || "") === (item.base || "") &&
+          (x.pin_lam || "") === (item.pin_lam || "")
+      );
+
       if (existing) {
         existing.qty = (Number(existing.qty) || 0) + 1;
         setCart([...cart]);
       } else {
-        setCart([...cart, { id, qty: 1, overlay: "", base: "" }]);
+        setCart([...cart, item]);
       }
+
       toast("Добавлено в корзину", "good");
       renderFavorites();
     };
@@ -1515,11 +1658,17 @@ function renderFavorites() {
 // =====================
 function optionLabelForCartItem(ci) {
   const parts = [];
-  if ((ci.base || "") === "holo") parts.push("Основа: голографическая");
-  else if ((ci.base || "") === "normal") parts.push("Основа: обычная");
 
-  if (ci.overlay && ci.overlay !== "none") parts.push(`Покрытие: ${OVERLAY_LABELS[ci.overlay] || ci.overlay}`);
-  else if (ci.overlay === "none") parts.push("Покрытие: без");
+  // stickers
+  if ((ci.base || "") === "holo") parts.push("Плёнка: голографическая");
+  else if ((ci.base || "") === "normal") {
+    // базовую плёнку не пишем
+  }
+
+  if (ci.overlay && ci.overlay !== "none") parts.push(`Ламинация: ${OVERLAY_LABELS[ci.overlay] || ci.overlay}`);
+
+  // pins
+  if (ci.pin_lam && ci.pin_lam !== "base") parts.push(`Ламинация: ${OVERLAY_LABELS[ci.pin_lam] || ci.pin_lam}`);
 
   return parts.length ? parts.join(" · ") : "";
 }
@@ -1532,11 +1681,20 @@ function calcCartTotal() {
   (cart || []).forEach((ci) => {
     const p = getProductById(ci.id);
     if (!p) return;
+
+    const t = normalizeTypeKey(p.product_type);
+
     let price = Number(p.price) || 0;
-    if ((p.product_type || "") === "sticker") {
+
+    if (t === "sticker") {
       if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
       if ((ci.base || "") === "holo") price += holoDelta;
     }
+
+    if (t === "pin") {
+      if ((ci.pin_lam || "") && ci.pin_lam !== "base") price += overlayDelta;
+    }
+
     total += price * (Number(ci.qty) || 0);
   });
 
@@ -1545,6 +1703,23 @@ function calcCartTotal() {
 
 function renderCart() {
   const items = (cart || []).filter((ci) => getProductById(ci.id));
+
+  const calcItemPrice = (ci) => {
+    const p = getProductById(ci.id);
+    if (!p) return 0;
+    const overlayDelta = Number(settings.overlay_price_delta) || 0;
+    const holoDelta = Number(settings.holo_base_price_delta) || 0;
+    const t = normalizeTypeKey(p.product_type);
+    let price = Number(p.price) || 0;
+    if (t === "sticker") {
+      if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
+      if ((ci.base || "") === "holo") price += holoDelta;
+    }
+    if (t === "pin") {
+      if ((ci.pin_lam || "") && ci.pin_lam !== "base") price += overlayDelta;
+    }
+    return price;
+  };
 
   view.innerHTML = `
     <div class="card">
@@ -1559,23 +1734,35 @@ function renderCart() {
                 .map((ci, idx) => {
                   const p = getProductById(ci.id);
                   const opt = optionLabelForCartItem(ci);
+                  const img = firstImageUrl(p);
+                  const unit = calcItemPrice(ci);
                   return `
-                    <div class="item" data-idx="${idx}">
-                      <div class="title">${p.name}</div>
-                      <div class="meta">${money(p.price)} · ${typeLabel(p.product_type)}${opt ? ` · ${opt}` : ""}</div>
+                    <div class="cartItem" data-idx="${idx}">
+                      ${img ? `<img class="cartThumb" src="${img}" alt="Фото" loading="lazy" decoding="async">` : `<div class="cartThumbStub" aria-hidden="true"></div>`}
+                      <div class="cartMain">
+                        <div class="cartTitle">${p.name}</div>
+                        <div class="cartMeta">${money(unit)} за шт${opt ? ` · <span class=\"cartOpt\">${opt}</span>` : ``}</div>
 
-                      <div class="row" style="margin-top:10px; align-items:center">
-                        <button class="btn" data-dec="${idx}">−</button>
-                        <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" data-inc="${idx}">+</button>
-                        <div style="flex:1"></div>
-                        <button class="btn" data-rm="${idx}">Удалить</button>
+                        <div class="row" style="margin-top:10px; align-items:center">
+                          <button class="btn" data-dec="${idx}" aria-label="Минус">−</button>
+                          <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
+                          <button class="btn" data-inc="${idx}" aria-label="Плюс">+</button>
+                          <div style="flex:1"></div>
+                          <div class="small"><b>${money(unit * (Number(ci.qty) || 1))}</b></div>
+                        </div>
                       </div>
                     </div>
                   `;
                 })
                 .join("")
-            : `<div class="small">Корзина пустая. Открой фандом → товар → “Добавить в корзину”.</div>`
+            : `
+              <div class="emptyBox">
+                <div class="emptyTitle">Корзина пустая</div>
+                <div class="small">Выбери то, что тебе понравится — и добавь в корзину 💜</div>
+                <div style="height:12px"></div>
+                <button class="btn is-active" id="goCats" type="button">Перейти в категории</button>
+              </div>
+            `
         }
       </div>
 
@@ -1595,6 +1782,8 @@ function renderCart() {
     </div>
   `;
 
+  document.getElementById("goCats")?.addEventListener("click", () => openPage(renderFandomTypes));
+
   view.querySelectorAll("[data-inc]").forEach((b) => {
     b.onclick = () => {
       const i = Number(b.dataset.inc);
@@ -1613,17 +1802,6 @@ function renderCart() {
       if (q <= 0) next.splice(i, 1);
       else next[i].qty = q;
       setCart(next);
-      renderCart();
-    };
-  });
-
-  view.querySelectorAll("[data-rm]").forEach((b) => {
-    b.onclick = () => {
-      const i = Number(b.dataset.rm);
-      const next = [...cart];
-      next.splice(i, 1);
-      setCart(next);
-      toast("Удалено", "warn");
       renderCart();
     };
   });
@@ -1649,10 +1827,10 @@ function renderCart() {
 // =====================
 const LS_CHECKOUT = "lespaw_checkout_v1";
 let checkout = loadJSON(LS_CHECKOUT, {
-  name: "",
-  contact: "",
-  city: "",
-  delivery: "",
+  fio: "",
+  phone: "",
+  delivery_type: "yandex",
+  pickup_address: "",
   comment: "",
 });
 
@@ -1673,10 +1851,10 @@ function buildOrderText() {
   const lines = [];
   lines.push("🛍 Заказ LesPaw");
 
-  if (checkout.name) lines.push(`👤 Имя: ${checkout.name}`);
-  if (checkout.contact) lines.push(`📱 Контакт: ${checkout.contact}`);
-  if (checkout.city) lines.push(`🏙 Город: ${checkout.city}`);
-  if (checkout.delivery) lines.push(`🚚 Доставка/ПВЗ: ${checkout.delivery}`);
+  if (checkout.fio) lines.push(`👤 ФИО: ${checkout.fio}`);
+  if (checkout.phone) lines.push(`📱 Телефон: ${checkout.phone}`);
+  if (checkout.delivery_type) lines.push(`🚚 Доставка: ${checkout.delivery_type === "yandex" ? "Пункт Яндекса" : "Пункт 5post"}`);
+  if (checkout.pickup_address) lines.push(`📍 Адрес пункта выдачи: ${checkout.pickup_address}`);
   if (checkout.comment) lines.push(`📝 Комментарий: ${checkout.comment}`);
 
   lines.push("\n📦 Товары:");
@@ -1693,9 +1871,15 @@ function buildOrderText() {
     const fandom = getFandomById(p.fandom_id);
 
     let price = Number(p.price) || 0;
-    if ((p.product_type || "") === "sticker") {
+    const t = normalizeTypeKey(p.product_type);
+
+    if (t === "sticker") {
       if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
       if ((ci.base || "") === "holo") price += holoDelta;
+    }
+
+    if (t === "pin") {
+      if ((ci.pin_lam || "") && ci.pin_lam !== "base") price += overlayDelta;
     }
 
     const qty = Number(ci.qty) || 1;
@@ -1721,14 +1905,19 @@ function renderCheckout() {
         <div class="h2">Оформление</div>
         <div class="small">Корзина пустая — нечего оформлять.</div>
         <hr>
-        <button class="btn is-active" id="goHome">На главную</button>
+        <button class="btn is-active" id="goCats">Перейти в категории</button>
       </div>
     `;
-    document.getElementById("goHome").onclick = () => resetToHome();
+    document.getElementById("goCats").onclick = () => openPage(renderFandomTypes);
     syncNav();
     syncBottomSpace();
     return;
   }
+
+  const fioVal = (checkout.fio || "").replace(/"/g, "&quot;");
+  const phoneVal = (checkout.phone || "").replace(/"/g, "&quot;");
+  const addrVal = (checkout.pickup_address || "").replace(/"/g, "&quot;");
+  const commVal = (checkout.comment || "").replace(/"/g, "&quot;");
 
   view.innerHTML = `
     <div class="card">
@@ -1736,143 +1925,105 @@ function renderCheckout() {
       <div class="small">Заполни данные — и нажми «Отправить заказ».</div>
       <hr>
 
-      <div class="small"><b>Имя</b></div>
-      <input class="searchInput" id="cName" placeholder="Как к тебе обращаться" value="${(checkout.name || "").replace(/"/g, "&quot;")}">
+      <div class="small"><b>ФИО</b></div>
+      <input class="searchInput" id="cFio" placeholder="Фамилия Имя" value="${fioVal}">
       <div style="height:10px"></div>
 
-      <div class="small"><b>Контакт</b></div>
-      <input class="searchInput" id="cContact" placeholder="@ник или телефон" value="${(checkout.contact || "").replace(/"/g, "&quot;")}">
+      <div class="small"><b>Номер телефона</b></div>
+      <input class="searchInput" id="cPhone" placeholder="+7..." value="${phoneVal}">
       <div style="height:10px"></div>
 
-      <div class="small"><b>Город</b></div>
-      <input class="searchInput" id="cCity" placeholder="Город" value="${(checkout.city || "").replace(/"/g, "&quot;")}">
+      <div class="small"><b>Доставка</b></div>
+      <div class="radioRow" id="cDelRow">
+        <button class="radioBtn" type="button" data-del="yandex">Пункт Яндекса</button>
+        <button class="radioBtn" type="button" data-del="5post">Пункт 5post</button>
+      </div>
       <div style="height:10px"></div>
 
-      <div class="small"><b>Доставка / ПВЗ</b></div>
-      <input class="searchInput" id="cDelivery" placeholder="Напр. Яндекс ПВЗ / 5post + адрес/код" value="${(checkout.delivery || "").replace(/"/g, "&quot;")}">
+      <div class="small"><b>Адрес пункта выдачи</b></div>
+      <input class="searchInput" id="cAddr" placeholder="Область, город, улица, дом" value="${addrVal}">
       <div style="height:10px"></div>
 
-      <div class="small"><b>Комментарий</b></div>
-      <input class="searchInput" id="cComment" placeholder="Если нужно" value="${(checkout.comment || "").replace(/"/g, "&quot;")}">
+      <div class="small"><b>Комментарий</b> <span style="font-weight:700; opacity:.65">(необязательно)</span></div>
+      <input class="searchInput" id="cComment" placeholder="Например: удобное время" value="${commVal}">
 
       <hr>
 
-      <div class="mustRead" id="mustRead">
-        <div class="mustReadText"><b>Важно:</b> перед отправкой заказа нужно ознакомиться с условиями — особенно с порядком оформления и оплаты.</div>
-        <button class="mustReadBtn" id="openInfoFromCheckout" type="button">Открыть важную информацию</button>
-      </div>
-
-      <div class="checkoutGap"></div>
-
-      <div class="checkoutChecks">
-        <label class="checkRow small">
-          <input type="checkbox" id="agree" style="margin-top:2px" ${checkoutInfoVisitedFromCheckout ? "" : "disabled"}>
-          <span>
-            Я ознакомилась с «Важной информацией» и понимаю порядок оформления и оплаты заказа.
-            ${checkoutInfoVisitedFromCheckout ? "" : '<span class="checkHint">(сначала открой блок выше)</span>'}
-          </span>
+      <div class="checkBox">
+        <label class="checkLine">
+          <input type="checkbox" id="ckInfo" />
+          <span>Я прочитала «Важную информацию»</span>
         </label>
-
-        <label class="checkRow small">
-          <input type="checkbox" id="confirmItems" style="margin-top:2px" ${checkoutInfoVisitedFromCheckout ? "" : "disabled"}>
-          <span>Я проверила позиции в заказе (количество, варианты плёнки/ламинации, фандомы) — всё верно.</span>
-        </label>
-
-        <div class="checkoutNote">
-          После нажатия <b>«Отправить заказ»</b> тебя перебросит в чат с менеджеркой — там уже будет готовый текст заказа.
-          Пожалуйста, отправь его <b>без изменений</b>.
-        </div>
+        <div class="small" id="ckHint" style="margin-top:8px; display:none">Сначала прочитай важную инфу.</div>
+        <div style="height:8px"></div>
+        <button class="btn" id="openInfo" type="button">Открыть важную информацию</button>
       </div>
 
-      <div style="height:12px"></div>
+      <hr>
 
-      <div class="row">
-        <button class="btn" id="btnPreview">Посмотреть текст заказа</button>
-        <button class="btn is-active" id="btnSend">Отправить заказ менеджерке</button>
-      </div>
-
-      <div id="preview" style="display:none; margin-top:12px">
-        <hr>
-        <div class="small" style="white-space:pre-wrap" id="orderText"></div>
-      </div>
+      <button class="btn is-active" id="sendOrder" type="button">Отправить заказ</button>
     </div>
   `;
 
-  const cName = document.getElementById("cName");
-  const cContact = document.getElementById("cContact");
-  const cCity = document.getElementById("cCity");
-  const cDelivery = document.getElementById("cDelivery");
-  const cComment = document.getElementById("cComment");
-
-  function syncCheckout() {
-    saveCheckout({
-      name: cName.value || "",
-      contact: cContact.value || "",
-      city: cCity.value || "",
-      delivery: cDelivery.value || "",
-      comment: cComment.value || "",
-    });
-  }
-
-  [cName, cContact, cCity, cDelivery, cComment].forEach((el) => el.addEventListener("input", syncCheckout));
-
-  const btnPreview = document.getElementById("btnPreview");
-  const btnSend = document.getElementById("btnSend");
-  const agree = document.getElementById("agree");
-  const confirmItems = document.getElementById("confirmItems");
-
-  const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
-  if (openInfoFromCheckout)
-    openInfoFromCheckout.onclick = () => {
-      checkoutInfoVisitedFromCheckout = true;
-      openPage(renderInfo);
+  // set delivery active
+  const del = checkout.delivery_type || "yandex";
+  view.querySelectorAll("[data-del]").forEach((b) => {
+    b.classList.toggle("is-active", b.dataset.del === del);
+    b.onclick = () => {
+      const v = b.dataset.del;
+      saveCheckout({ ...checkout, delivery_type: v });
+      renderCheckout();
     };
+  });
 
-  function syncSendState() {
-    const gateOk = !!checkoutInfoVisitedFromCheckout;
-    const ok = gateOk && !!agree?.checked && !!confirmItems?.checked;
-    if (btnSend) {
-      btnSend.disabled = !ok;
-      btnSend.classList.toggle("is-disabled", !ok);
+  // persist inputs
+  const fioEl = document.getElementById("cFio");
+  const phoneEl = document.getElementById("cPhone");
+  const addrEl = document.getElementById("cAddr");
+  const commEl = document.getElementById("cComment");
+
+  fioEl?.addEventListener("input", (e) => saveCheckout({ ...checkout, fio: e.target.value || "" }));
+  phoneEl?.addEventListener("input", (e) => saveCheckout({ ...checkout, phone: e.target.value || "" }));
+  addrEl?.addEventListener("input", (e) => saveCheckout({ ...checkout, pickup_address: e.target.value || "" }));
+  commEl?.addEventListener("input", (e) => saveCheckout({ ...checkout, comment: e.target.value || "" }));
+
+  // Info gate
+  const ck = document.getElementById("ckInfo");
+  const hint = document.getElementById("ckHint");
+
+  document.getElementById("openInfo")?.addEventListener("click", () => {
+    checkoutInfoVisitedFromCheckout = true;
+    openPage(renderInfo);
+  });
+
+  ck?.addEventListener("change", () => {
+    if (!checkoutInfoVisitedFromCheckout && ck.checked) {
+      ck.checked = false;
+      hint.style.display = "";
+      toast("Сначала прочитай важную инфу", "warn");
+    } else {
+      hint.style.display = "none";
     }
-  }
-  agree?.addEventListener("change", syncSendState);
-  confirmItems?.addEventListener("change", syncSendState);
-  // стартовое состояние
-  syncSendState();
+  });
 
-  btnPreview.onclick = () => {
-    syncCheckout();
-    const box = document.getElementById("preview");
-    const textEl = document.getElementById("orderText");
-    textEl.textContent = buildOrderText();
-    box.style.display = "";
-    syncBottomSpace();
-  };
+  document.getElementById("sendOrder")?.addEventListener("click", () => {
+    const fio = (checkout.fio || "").trim();
+    const phone = (checkout.phone || "").trim();
+    const addr = (checkout.pickup_address || "").trim();
 
-  btnSend.onclick = () => {
-    syncCheckout();
-
-    if (!checkoutInfoVisitedFromCheckout) {
-      toast("Сначала открой «Важную информацию» и ознакомься — кнопка выше 👆", "warn");
+    if (!fio || !phone || !addr) {
+      toast("Заполни ФИО, телефон и адрес пункта выдачи", "warn");
       return;
     }
-    if (!agree.checked) {
-      toast("Нужно подтвердить, что ты ознакомилась с условиями 😿", "warn");
-      return;
-    }
-    if (!confirmItems.checked) {
-      toast("Пожалуйста, подтверди, что проверила позиции заказа 😿", "warn");
+
+    if (!ck?.checked) {
+      toast("Отметь галочку про важную информацию", "warn");
       return;
     }
 
     const text = buildOrderText();
-    // Открываем чат с менеджеркой и подставляем текст.
-    // В Telegram поле ввода в любом случае можно редактировать — но внутри приложения мы НЕ даём редактируемое поле.
-    const link = `https://t.me/${MANAGER_USERNAME}?text=${encodeURIComponent(text)}`;
-    tg?.openTelegramLink(link);
-    toast("Открываю чат с менеджеркой…", "good");
-  };
+    openTelegramText(MANAGER_USERNAME, text);
+  });
 
   syncNav();
   syncBottomSpace();
