@@ -395,6 +395,14 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   place-items:center;
   flex:0 0 auto;
 }
+.optFill{
+  width:10px;
+  height:10px;
+  border-radius:3px;
+  background:rgba(125,60,255,.85);
+  opacity:0;
+}
+.optItem.is-active .optFill{ opacity:1; }
 .optBox .tick{ font-size:12px; line-height:1; opacity:0; }
 .optItem.is-active{
   border-color:rgba(125,60,255,.32);
@@ -432,19 +440,37 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   border-radius:16px;
   padding:12px;
   cursor:pointer;
+
+  /* FIX: аккуратный центр + единая типографика */
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+
   text-align:center;
+  min-height:74px;
+  line-height:1.2;
 }
 .catBtn{ padding:11px 10px; }
 
 .catTitle,
 .fandomTitle{
+  width:100%;
   font-weight:1000;
+  font-size:14px;
   line-height:1.2;
-  display:block;
-  text-align:center;
+  letter-spacing:.2px;
+
+  /* FIX: не режем длинные названия */
   white-space:normal;
   overflow:visible;
   text-overflow:unset;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+
+  display:block;
+  text-align:center;
 }
 .catEmoji{
   display:block;
@@ -1083,3 +1109,9 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   line-height:1.45;
   color:rgba(11,11,18,.85);
 }
+
+
+/* Indent rows under thumb (Cart qty row) */
+.miniIndentRow{ margin-left: calc(56px + 12px); }
+
+.optKey{ font-weight:1000; color:#0b0b12; }
