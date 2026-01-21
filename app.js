@@ -72,6 +72,9 @@ const navBarEl = document.querySelector(".navBar");
 const LS_CART = "lespaw_cart_v41";
 const LS_FAV = "lespaw_fav_v41";
 
+// Гейт важной информации (для оформления)
+const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
+
 // облачные ключи (единые для одного Telegram-аккаунта на всех устройствах)
 const CS_CART = "lespaw_cart";
 const CS_FAV = "lespaw_fav";
@@ -769,6 +772,8 @@ async function init() {
     navBack.onclick = () => goBack();
     navHome.onclick = () => resetToHome();
     navFav.onclick = () => openPage(renderFavorites);
+    // FIX: на некоторых webview onclick может не срабатывать стабильно
+    navFav.addEventListener("click", () => openPage(renderFavorites));
     navCart.onclick = () => openPage(renderCart);
 
     globalSearch.addEventListener("input", (e) => {
@@ -1067,6 +1072,9 @@ function renderFandomPage(fandomId) {
 // Инфо / отзывы / примеры
 // =====================
 function renderInfo() {
+  // фиксируем факт ознакомления: пользователька открыла вкладку
+  infoViewed = true;
+  try { localStorage.setItem(LS_INFO_VIEWED, "1"); } catch {}
   view.innerHTML = `
     <div class="card">
       <div class="h2">Важная информация</div>
@@ -2124,7 +2132,7 @@ function renderCheckout() {
       <div style="height:10px"></div>
 
       <div class="small"><b>Адрес пункта выдачи</b></div>
-      <input class="searchInput" id="cPickupAddress" placeholder="подробный адрес ПВЗ" value="${safeVal(checkout.pickupAddress)}">
+      <input class="searchInput" id="cPickupAddress" placeholder="Область, город, улица, дом" value="${safeVal(checkout.pickupAddress)}">
       <div style="height:10px"></div>
 
       <div class="small"><b>Комментарий</b></div>
@@ -2133,8 +2141,8 @@ function renderCheckout() {
       <hr>
 
       <div class="checkoutChecks">
-        <label class="checkRow small">
-          <input type="checkbox" id="agreeInfo" style="margin-top:2px">
+        <label class="checkRow small" id="rowAgreeInfo">
+          <input type="checkbox" id="agreeInfo" style="margin-top:2px" ${infoViewed ? "" : "disabled"}>
           <span>
             Я ознакомилась с «Важной информацией».
             <span class="checkHint">обязательно ознакомься</span>
@@ -2145,7 +2153,7 @@ function renderCheckout() {
 
         <div style="height:10px"></div>
 
-        <label class="checkRow small">
+        <label class="checkRow small" id="rowConfirmItems">
           <input type="checkbox" id="confirmItems" style="margin-top:2px">
           <span>Я проверила позиции в заказе (количество, варианты плёнки/ламинации, фандомы) — всё верно.</span>
         </label>
@@ -2178,7 +2186,7 @@ function renderCheckout() {
       comment: cComment.value || "",
     });
   }
-  [cFio, cPhone, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", syncCheckout));
+  [cFio, cPhone, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", () => { el.classList.remove("field-error"); syncCheckout(); }));
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
@@ -2188,19 +2196,65 @@ function renderCheckout() {
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   openInfoFromCheckout.onclick = () => openPage(renderInfo);
 
+  // если чекбокс заблокирован — мягко подсказываем
+  if (agreeInfo) {
+    agreeInfo.addEventListener("click", (e) => {
+      if (!infoViewed) {
+        e.preventDefault();
+        e.stopPropagation();
+        toast("Сначала открой «Важную информацию» 💜", "warn");
+        rowAgreeInfo?.classList.add("is-error");
+      }
+    });
+  }
+
   const btnSend = document.getElementById("btnSend");
   const agreeInfo = document.getElementById("agreeInfo");
   const confirmItems = document.getElementById("confirmItems");
 
+  const rowAgreeInfo = document.getElementById("rowAgreeInfo");
+  const rowConfirmItems = document.getElementById("rowConfirmItems");
+  if (rowAgreeInfo && !infoViewed) rowAgreeInfo.classList.add("is-disabled");
+  agreeInfo?.addEventListener("change", () => rowAgreeInfo?.classList.remove("is-error"));
+  confirmItems?.addEventListener("change", () => rowConfirmItems?.classList.remove("is-error"));
+
   btnSend.onclick = () => {
     syncCheckout();
 
-    if (!agreeInfo.checked) {
-      toast("Пожалуйста, отметь, что ознакомилась с «Важной информацией» 💜", "warn");
-      return;
+    // сброс подсветок
+    [cFio, cPhone, cPickupAddress].forEach((el) => el?.classList.remove("field-error"));
+    rowAgreeInfo?.classList.remove("is-error");
+    rowConfirmItems?.classList.remove("is-error");
+
+    let ok = true;
+
+    const fio = (cFio?.value || "").trim();
+    const phone = (cPhone?.value || "").trim();
+    const addr = (cPickupAddress?.value || "").trim();
+
+    if (!fio) { cFio?.classList.add("field-error"); ok = false; }
+    if (!phone) { cPhone?.classList.add("field-error"); ok = false; }
+    if (!addr) { cPickupAddress?.classList.add("field-error"); ok = false; }
+
+    // гейт: без открытия важной информации нельзя подтверждать
+    if (!infoViewed) {
+      rowAgreeInfo?.classList.add("is-error");
+      ok = false;
+    } else if (!agreeInfo?.checked) {
+      rowAgreeInfo?.classList.add("is-error");
+      ok = false;
     }
-    if (!confirmItems.checked) {
-      toast("Пожалуйста, подтверди, что проверила позиции заказа 💜", "warn");
+
+    if (!confirmItems?.checked) {
+      rowConfirmItems?.classList.add("is-error");
+      ok = false;
+    }
+
+    if (!ok) {
+      toast("Проверь обязательные поля и галочки 💜", "warn");
+      // прокрутим к первому проблемному месту
+      const firstErr = view.querySelector(".field-error, .checkRow.is-error");
+      firstErr?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
