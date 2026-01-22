@@ -624,24 +624,6 @@ function normalizeTypeKey(t) {
   return s;
 }
 
-
-
-// Нормализация записей избранного/корзины (на случай старых форматов)
-function normalizeFavItem(x){
-  const o = x && typeof x === "object" ? x : { id: x };
-  return {
-    id: String(o?.id ?? "").trim(),
-    film: String(o?.film ?? "").trim(),
-    lamination: String(o?.lamination ?? "").trim(),
-    pin_lamination: String(o?.pin_lamination ?? "").trim(),
-  };
-}
-
-function optionLabelForCartItem(ci, p){
-  const pairs = optionPairsFor(ci, p);
-  if (!pairs || !pairs.length) return "";
-  return pairs.map((x) => `${x.k}: ${x.v}`).join(" · ");
-}
 function getFandomById(id) {
   return fandoms.find((f) => f.fandom_id === id);
 }
@@ -765,8 +747,7 @@ function safeText(s) {
 function openTelegramText(toUsername, text) {
   const link = `https://t.me/${toUsername}?text=${encodeURIComponent(text)}`;
   try {
-    // tg.openTelegramLink в некоторых WebView может "молчать" на ссылках с ?text,
-    // поэтому отдаём приоритет openLink (если есть).
+    // openLink works more reliably for deep links with ?text= in some Telegram WebViews
     if (tg?.openLink) tg.openLink(link);
     else if (tg?.openTelegramLink) tg.openTelegramLink(link);
     else window.open(link, "_blank", "noopener,noreferrer");
@@ -774,7 +755,6 @@ function openTelegramText(toUsername, text) {
     try { window.open(link, "_blank", "noopener,noreferrer"); } catch {}
   }
 }
-
 
 function openExternal(url) {
   const u = String(url || "").trim();
@@ -789,70 +769,40 @@ function openExternal(url) {
 // Tap helper (фикс кликов в разных WebView)
 // =====================
 function bindTap(el, handler) {
-  // В Telegram WebView (особенно iOS) иногда «умирают» обычные клики.
-  // Поэтому:
-  // - слушаем touchend / pointerup / click
-  // - фильтруем «скролл», чтобы не ловить свайпы как тап
-  // - продублируем через on* свойства (на некоторых сборках это надёжнее)
   if (!el) return;
 
-  try { el.style.touchAction = "manipulation"; } catch {}
-
-  let last = 0;
-  let tsX = 0, tsY = 0, moved = false;
+  // Telegram WebView can "eat" clicks on some devices (especially iOS),
+  // so we bind multiple end-events and guard against double-fires.
+  let lastFire = 0;
+  let touchMoved = false;
 
   const fire = (e) => {
     const now = Date.now();
-    if (now - last < 350) return; // защита от дублей
-    last = now;
-    try {
-      handler(e);
-    } catch (err) {
-      try { console.error(err); } catch {}
+    if (now - lastFire < 320) return; // защита от дублей
+    lastFire = now;
+    try { e?.preventDefault?.(); } catch {}
+    try { e?.stopPropagation?.(); } catch {}
+    try { handler(e); } catch (err) {
+      console.error(err);
       toast("Ошибка действия", "warn");
     }
   };
 
-  const onTouchStart = (e) => {
-    moved = false;
-    const t = (e.touches && e.touches[0]) || null;
-    tsX = t ? t.clientX : 0;
-    tsY = t ? t.clientY : 0;
-  };
-
-  const onTouchMove = (e) => {
-    const t = (e.touches && e.touches[0]) || null;
-    if (!t) return;
-    if (Math.abs(t.clientX - tsX) > 10 || Math.abs(t.clientY - tsY) > 10) moved = true;
-  };
-
-  const onTouchEnd = (e) => {
-    // если это был свайп/скролл — не считаем тапом
-    if (moved) return;
-    try { e.preventDefault(); } catch {}
+  // touch path
+  el.addEventListener("touchstart", () => { touchMoved = false; }, { passive: true });
+  el.addEventListener("touchmove", () => { touchMoved = true; }, { passive: true });
+  el.addEventListener("touchend", (e) => {
+    if (touchMoved) return;
     fire(e);
-  };
+  }, { passive: false });
 
-  const onPointerUp = (e) => {
-    try { e.preventDefault(); } catch {}
-    fire(e);
-  };
+  // pointer / click path
+  el.addEventListener("pointerup", fire, { passive: false });
+  el.addEventListener("click", fire, { passive: false });
 
-  // addEventListener (основной путь)
-  el.addEventListener("touchstart", onTouchStart, { passive: true });
-  el.addEventListener("touchmove", onTouchMove, { passive: true });
-  el.addEventListener("touchend", onTouchEnd, { passive: false });
-  el.addEventListener("pointerup", onPointerUp, { passive: false });
-  el.addEventListener("click", fire);
-
-  // on* (дублирующий путь)
-  try { el.ontouchstart = onTouchStart; } catch {}
-  try { el.ontouchmove = onTouchMove; } catch {}
-  try { el.ontouchend = onTouchEnd; } catch {}
-  try { el.onpointerup = onPointerUp; } catch {}
+  // fallback (some WebViews behave better with property handler)
   try { el.onclick = fire; } catch {}
 }
-
 
 // =====================
 // Init
@@ -1993,27 +1943,188 @@ function optionPairsHTML(pairs) {
 
 function calcCartTotal() {
   let total = 0;
-  (cart || []).forEach((ciRaw) => {
-    const ci = ciRaw && typeof ciRaw === "object" ? ciRaw : { id: ciRaw };
+  (cart || []).forEach((ci) => {
+    const p = getProductById(ci.id);
+    if (!p) return;
+    const unit = calcItemUnitPrice(p, ci);
+    total += unit * (Number(ci.qty) || 0);
+  });
+  return total;
+}
+
+function renderCart() {
+  const items = (cart || []).filter((ci) => getProductById(ci.id));
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Корзина</div>
+      <div class="small">Тут собирается твой заказ.</div>
+      <hr>
+
+      <div class="list" id="cartList">
+        ${
+          items.length
+            ? items
+                .map((ci, idx) => {
+                  const p = getProductById(ci.id);
+                  const img = firstImageUrl(p);
+                  const unit = calcItemUnitPrice(p, ci);
+                  const pairs = optionPairsFor(ci, p);
+                  return `
+                    <div class="item" data-idx="${idx}">
+                      <div class="miniRow">
+                        ${img ? `<img class="miniThumb" src="${img}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
+                        <div class="miniBody">
+                          <div class="title">${safeText(p.name)}</div>
+                          <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
+                          ${optionPairsHTML(pairs)}
+                        </div>
+                      </div>
+
+                      <div class="row miniIndentRow" style="margin-top:12px; align-items:center">
+                        <button class="btn" data-dec="${idx}">−</button>
+                        <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
+                        <button class="btn" data-inc="${idx}">+</button>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join("")
+            : `
+              <div class="emptyBox">
+                <div class="small">Корзина пока пустая ✨</div>
+                <div style="height:10px"></div>
+                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в категории</button>
+              </div>
+            `
+        }
+      </div>
+
+      ${
+        items.length
+          ? `
+        <hr>
+        <div class="small">Итого: <b>${money(calcCartTotal())}</b></div>
+        <div style="height:10px"></div>
+        <div class="row">
+          <button class="btn" id="btnClear">Очистить</button>
+          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
+        </div>
+      `
+          : ""
+      }
+    </div>
+  `;
+
+  view.querySelectorAll("[data-inc]").forEach((b) => {
+    b.onclick = () => {
+      const i = Number(b.dataset.inc);
+      const next = [...cart];
+      next[i].qty = (Number(next[i].qty) || 0) + 1;
+      setCart(next);
+      renderCart();
+    };
+  });
+
+  view.querySelectorAll("[data-dec]").forEach((b) => {
+    b.onclick = () => {
+      const i = Number(b.dataset.dec);
+      const next = [...cart];
+      const q = (Number(next[i].qty) || 1) - 1;
+      if (q <= 0) next.splice(i, 1);
+      else next[i].qty = q;
+      setCart(next);
+      renderCart();
+    };
+  });
+
+  const goCats = document.getElementById("goCatsFromEmptyCart");
+  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
+
+  const btnClear = document.getElementById("btnClear");
+  if (btnClear) {
+    btnClear.onclick = () => {
+      setCart([]);
+      toast("Корзина очищена", "warn");
+      renderCart();
+    };
+  }
+
+  const btnCheckout = document.getElementById("btnCheckout");
+  if (btnCheckout) btnCheckout.onclick = () => openCheckout();
+
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Checkout
+// =====================
+const LS_CHECKOUT = "lespaw_checkout_v2";
+
+// Миграция со старых полей (чтобы пользовательки не потеряли введённые данные)
+const oldCheckout = loadJSON("lespaw_checkout_v1", null);
+
+let checkout = loadJSON(LS_CHECKOUT, {
+  fio: oldCheckout?.name || "",
+  phone: oldCheckout?.contact || "",
+  pickupType: "yandex", // yandex | 5post
+  pickupAddress: (oldCheckout?.delivery || ""),
+  comment: oldCheckout?.comment || "",
+});
+
+function openCheckout() {
+  openPage(renderCheckout);
+}
+
+function saveCheckout(next) {
+  checkout = next;
+  saveJSON(LS_CHECKOUT, checkout);
+}
+
+function buildOrderText() {
+  const lines = [];
+  lines.push("🛍 Заказ LesPaw");
+
+  if (checkout.fio) lines.push(`👤 ФИО: ${checkout.fio}`);
+  if (checkout.phone) lines.push(`📱 Телефон: ${checkout.phone}`);
+
+  const pt = checkout.pickupType === "5post" ? "5Post" : "Яндекс";
+  lines.push(`📍 Пункт выдачи: ${pt}`);
+  if (checkout.pickupAddress) lines.push(`🏷 Адрес ПВЗ: ${checkout.pickupAddress}`);
+  if (checkout.comment) lines.push(`📝 Комментарий: ${checkout.comment}`);
+
+  lines.push("\n📦 Товары:");
+
+
+  const overlayDelta = Number(settings.overlay_price_delta) || 0;
+  const holoDelta = Number(settings.holo_base_price_delta) || 0;
+
+  let total = 0;
+
+  (cart || []).forEach((ci) => {
     const p = getProductById(ci.id);
     if (!p) return;
 
     const fandom = getFandomById(p.fandom_id);
 
-    const unit = calcItemUnitPrice(p, ci);
+    let price = Number(p.price) || 0;
+    if ((p.product_type || "") === "sticker") {
+      if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
+      if ((ci.base || "") === "holo") price += holoDelta;
+    }
+
     const qty = Number(ci.qty) || 1;
+    total += price * qty;
 
-    total += unit * qty;
-
-    const opt = optionLabelForCartItem(ci, p);
+    const opt = optionLabelForCartItem(ci);
     const fandomName = fandom?.fandom_name ? ` — ${fandom.fandom_name}` : "";
     lines.push(`• ${p.name}${fandomName}`);
     if (opt) lines.push(`  ${opt}`);
-    lines.push(`  ${qty} шт · ${money(unit)} за шт`);
+    lines.push(`  ${qty} шт · ${money(price)} за шт`);
   });
 
-  lines.push(`
-💜 Итого: ${money(total)}`);
+  lines.push(`\n💜 Итого: ${money(total)}`);
   lines.push(`\nСвязь: @${MANAGER_USERNAME}`);
 
   return lines.join("\n");
