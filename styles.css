@@ -148,6 +148,8 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 
 /* buttons */
 .btn{
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   padding:11px 12px;
   border-radius:14px;
   border:1px solid rgba(0,0,0,.14);
@@ -713,11 +715,12 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 
 /* bottom nav */
 .navBar{
+  pointer-events:auto;
   position:fixed;
   left:50%;
   bottom: calc(18px + env(safe-area-inset-bottom));
   transform:translateX(-50%);
-  z-index:50;
+  z-index:9999;
   display:flex;
   gap:18px;
   align-items:center;
@@ -731,6 +734,8 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   .navIco{ width:28px; height:28px; }
 }
 .navBtn{
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   position:relative;
   width:74px; height:66px;
   border-radius:18px;
