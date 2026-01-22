@@ -2356,8 +2356,7 @@ function buildOrderText() {
   lines.push(`${LBL("Пункт выдачи")} ${pt}`);
   lines.push(`${LBL("Адрес пункта выдачи")} ${asMono(checkout.pickupAddress || "")}`);
 
-  return lines.join("
-");
+  return lines.join("\n");
 }
 
 
