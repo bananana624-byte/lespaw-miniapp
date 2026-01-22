@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v115
+// LesPaw Mini App — app.js v116
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -768,22 +768,75 @@ function cardThumbHTML(p) {
 // Короткий текст для карточек в сетке (берём из CSV description_short, иначе — дефолт по типу)
 // Важно: это НЕ конфликтует с "description" в таблице — просто отдельное поле для сетки.
 function cardMetaText(p) {
-  const fromCsv = String(p?.description_short || "").trim();
+  const fromCsv = getShortDesc(p);
   if (fromCsv) return fromCsv;
 
   const typeKey = normalizeTypeKey(p?.product_type);
+  const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin") return "6 шт · 44 мм · металл";
-  if (typeKey === "sticker") return "16×25 см · глянц. плёнка · без вырубки";
-  if (typeKey === "poster") return "Рандомные фотопостеры";
-  if (typeKey === "box") return "Сюрприз-набор · внутри несколько позиций";
-
+  if (typeKey === "pin") return "6 значков · металл · 44 мм";
+  if (typeKey === "sticker") return "лист 16×25 см · глянец · цельный";
+  if (typeKey === "poster") return "рандом · выбор формата";
+  if (typeKey === "box") {
+    // оба типа идут как box, различим по названию
+    if (nm.includes("конверт")) return "компактный набор · сюрприз";
+    return "много наполнения · сюрприз";
+  }
   return "";
 }
 
-function safeText(s) {(s) {
+function safeText(s) {
   return String(s ?? "").trim();
 }
+
+function escapeHTML(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Render multiline text as readable blocks (blank lines -> separate blocks)
+function renderTextBlocks(raw) {
+  const t = String(raw ?? "").replace(/\r/g, "").trim();
+  if (!t) return "";
+  const blocks = t.split(/\n\s*\n+/g).map((x) => x.trim()).filter(Boolean);
+  return blocks
+    .map((b) => `<div class="dBlock">${escapeHTML(b).replace(/\n/g, "<br>")}</div>`)
+    .join("");
+}
+
+// Flexible getters for CSV columns (to avoid header mismatches)
+function getShortDesc(p) {
+  const cand = [
+    p?.description_short,
+    p?.short_description,
+    p?.descriptionShort,
+    p?.desc_short,
+    p?.description_shor, // на случай опечатки в заголовке таблицы
+  ];
+  for (const v of cand) {
+    const s = String(v ?? "").trim();
+    if (s) return s;
+  }
+  return "";
+}
+function getLongDesc(p) {
+  const cand = [
+    p?.description,
+    p?.full_description,
+    p?.description_full,
+    p?.desc,
+  ];
+  for (const v of cand) {
+    const s = String(v ?? "").trim();
+    if (s) return s;
+  }
+  return "";
+}
+
 
 function openTelegramText(toUsername, text) {
   const link = `https://t.me/${toUsername}?text=${encodeURIComponent(text)}`;
@@ -1551,7 +1604,7 @@ function renderSearch(q) {
   const rawPHits = products
     .filter((p) => {
       const typeName = (p.product_type || "").toLowerCase();
-      const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
+      const hay = `${p.name || ""} ${getShortDesc(p) || ""} ${getLongDesc(p) || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
       return hay.includes(query);
     })
     .slice(0, 120);
@@ -1789,8 +1842,9 @@ function renderProduct(productId) {
 
         ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
 
-        ${p.description ? `<div class="small" style="margin-top:10px">${p.description}</div>` : ""}
-        ${p.description_short && !p.description ? `<div class="small" style="margin-top:10px">${p.description_short}</div>` : ""}
+        ${getLongDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(getLongDesc(p))}</div>` : ""}
+        ${(!getLongDesc(p) && getShortDesc(p)) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(getShortDesc(p))}</div>` : ""}
+
 
         ${(isSticker || isPin) ? `<hr>` : ``}
 
