@@ -1859,37 +1859,37 @@ function renderFavorites() {
   `;
 
   view.querySelectorAll("[data-open]").forEach((el) => {
-    el.onclick = (e) => {
-      const t = e.target;
-      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+    bindTap(el, (e) => {
+      const t = e?.target;
+      if (t && (t.closest?.("button") || t.tagName === "BUTTON")) return;
       openPage(() => renderProduct(el.dataset.open));
-    };
+    });
   });
 
   const goCats = document.getElementById("goCatsFromEmptyFav");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
   view.querySelectorAll("[data-remove]").forEach((b) => {
-    b.onclick = (e) => {
-      e.stopPropagation();
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
       const i = Number(b.dataset.remove);
       const next = [...(fav || [])];
       next.splice(i, 1);
       setFav(next);
       toast("Убрано из избранного", "warn");
       renderFavorites();
-    };
+    });
   });
 
   view.querySelectorAll("[data-to-cart]").forEach((b) => {
-    b.onclick = (e) => {
-      e.stopPropagation();
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
       const i = Number(b.dataset.toCart);
       const fi = normalizeFavItem((fav || [])[i]);
       addToCartById(fi.id, fi);
       toast("Добавлено в корзину", "good");
       renderFavorites();
-    };
+    });
   });
 
   syncNav();
@@ -1982,9 +1982,9 @@ function renderCart() {
                       </div>
 
                       <div class="row miniIndentRow" style="margin-top:12px; align-items:center">
-                        <button class="btn" type="button" data-dec="${idx}">−</button>
+                        <button class="btn" data-dec="${idx}" type="button">−</button>
                         <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" type="button" data-inc="${idx}">+</button>
+                        <button class="btn" data-inc="${idx}" type="button">+</button>
                       </div>
                     </div>
                   `;
@@ -2017,17 +2017,17 @@ function renderCart() {
   `;
 
   view.querySelectorAll("[data-inc]").forEach((b) => {
-    b.onclick = () => {
+    bindTap(b, () => {
       const i = Number(b.dataset.inc);
       const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
       setCart(next);
       renderCart();
-    };
+    });
   });
 
   view.querySelectorAll("[data-dec]").forEach((b) => {
-    b.onclick = () => {
+    bindTap(b, () => {
       const i = Number(b.dataset.dec);
       const next = [...cart];
       const q = (Number(next[i].qty) || 1) - 1;
@@ -2035,7 +2035,7 @@ function renderCart() {
       else next[i].qty = q;
       setCart(next);
       renderCart();
-    };
+    });
   });
 
   const goCats = document.getElementById("goCatsFromEmptyCart");
