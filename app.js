@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v111
+// LesPaw Mini App — app.js v112
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -2091,7 +2091,11 @@ function calcItemUnitPrice(p, ci){
   }
   if (t === "pin") {
     const lam = String(ci?.pin_lamination||"") || "pin_base";
-    if (lam !== "pin_base") price += overlay
+    if (lam !== "pin_base") price += overlayDelta;
+  }
+  return price;
+}
+
 function renderHistory() {
   const modeKey = "lespaw_history_mode_v1";
   let mode = "orders";
@@ -2268,13 +2272,6 @@ function renderHistory() {
   syncNav();
   syncBottomSpace();
 }
-
-
-Delta;
-  }
-  return price;
-}
-
 function optionPairsFor(ci, p) {
   const t = normalizeTypeKey(p?.product_type);
   const out = [];
