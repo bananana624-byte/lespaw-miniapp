@@ -1656,7 +1656,7 @@ function renderProduct(productId) {
           ${rows
             .map(([key, label, delta]) => {
               const active = key === selectedKey;
-              const deltaText = Number(delta) > 0 ? ` <span class="optDelta">+${Number(delta)}₽</span>` : ``;
+              const deltaText = Number(delta) > 0 ? `&nbsp;<span class="optDelta">+${Number(delta)}₽</span>` : ``;
               return `
                 <button class="optItem ${active ? "is-active" : ""}" data-opt="${key}" type="button">
                   <span class="optBox" aria-hidden="true"><span class="optFill"></span></span>
