@@ -747,13 +747,16 @@ function safeText(s) {
 function openTelegramText(toUsername, text) {
   const link = `https://t.me/${toUsername}?text=${encodeURIComponent(text)}`;
   try {
-    if (tg?.openTelegramLink) tg.openTelegramLink(link);
-    else if (tg?.openLink) tg.openLink(link);
+    // tg.openTelegramLink в некоторых WebView может "молчать" на ссылках с ?text,
+    // поэтому отдаём приоритет openLink (если есть).
+    if (tg?.openLink) tg.openLink(link);
+    else if (tg?.openTelegramLink) tg.openTelegramLink(link);
     else window.open(link, "_blank", "noopener,noreferrer");
   } catch {
     try { window.open(link, "_blank", "noopener,noreferrer"); } catch {}
   }
 }
+
 
 function openExternal(url) {
   const u = String(url || "").trim();
@@ -768,10 +771,18 @@ function openExternal(url) {
 // Tap helper (фикс кликов в разных WebView)
 // =====================
 function bindTap(el, handler) {
-  // В Telegram WebView (особенно iOS) иногда клики по кнопкам
-  // не доходят как обычный `click`. Поэтому слушаем несколько событий.
+  // В Telegram WebView (особенно iOS) иногда «умирают» обычные клики.
+  // Поэтому:
+  // - слушаем touchend / pointerup / click
+  // - фильтруем «скролл», чтобы не ловить свайпы как тап
+  // - продублируем через on* свойства (на некоторых сборках это надёжнее)
   if (!el) return;
+
+  try { el.style.touchAction = "manipulation"; } catch {}
+
   let last = 0;
+  let tsX = 0, tsY = 0, moved = false;
+
   const fire = (e) => {
     const now = Date.now();
     if (now - last < 350) return; // защита от дублей
@@ -784,29 +795,46 @@ function bindTap(el, handler) {
     }
   };
 
-  // touchend — самый надёжный для мобильных webview
-  el.addEventListener(
-    "touchend",
-    (e) => {
-      try { e.preventDefault(); } catch {}
-      fire(e);
-    },
-    { passive: false }
-  );
+  const onTouchStart = (e) => {
+    moved = false;
+    const t = (e.touches && e.touches[0]) || null;
+    tsX = t ? t.clientX : 0;
+    tsY = t ? t.clientY : 0;
+  };
 
-  // pointerup — для современных браузеров
-  el.addEventListener(
-    "pointerup",
-    (e) => {
-      try { e.preventDefault(); } catch {}
-      fire(e);
-    },
-    { passive: false }
-  );
+  const onTouchMove = (e) => {
+    const t = (e.touches && e.touches[0]) || null;
+    if (!t) return;
+    if (Math.abs(t.clientX - tsX) > 10 || Math.abs(t.clientY - tsY) > 10) moved = true;
+  };
 
-  // click — fallback
+  const onTouchEnd = (e) => {
+    // если это был свайп/скролл — не считаем тапом
+    if (moved) return;
+    try { e.preventDefault(); } catch {}
+    fire(e);
+  };
+
+  const onPointerUp = (e) => {
+    try { e.preventDefault(); } catch {}
+    fire(e);
+  };
+
+  // addEventListener (основной путь)
+  el.addEventListener("touchstart", onTouchStart, { passive: true });
+  el.addEventListener("touchmove", onTouchMove, { passive: true });
+  el.addEventListener("touchend", onTouchEnd, { passive: false });
+  el.addEventListener("pointerup", onPointerUp, { passive: false });
   el.addEventListener("click", fire);
+
+  // on* (дублирующий путь)
+  try { el.ontouchstart = onTouchStart; } catch {}
+  try { el.ontouchmove = onTouchMove; } catch {}
+  try { el.ontouchend = onTouchEnd; } catch {}
+  try { el.onpointerup = onPointerUp; } catch {}
+  try { el.onclick = fire; } catch {}
 }
+
 
 // =====================
 // Init
@@ -970,7 +998,6 @@ function renderFandomList(type) {
     .filter((f) => truthy(f.is_active))
     .filter((f) => f.fandom_type === type)
     .sort((a, b) => (a.fandom_name || "").localeCompare(b.fandom_name || "", "ru"));
-
   const letters = list.filter((f) => !isDigitStart(f.fandom_name));
   const digits = list.filter((f) => isDigitStart(f.fandom_name));
 
@@ -2232,11 +2259,11 @@ function renderCheckout() {
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
-  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); });
-  bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); });
+  ptYandex.onclick = () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); };
+  pt5Post.onclick = () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); };
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
-  bindTap(openInfoFromCheckout, () => openPage(renderInfo));
+  openInfoFromCheckout.onclick = () => openPage(renderInfo);
 
   const btnSend = document.getElementById("btnSend");
   const agreeInfo = document.getElementById("agreeInfo");
@@ -2261,7 +2288,7 @@ function renderCheckout() {
   agreeInfo?.addEventListener("change", () => rowAgreeInfo?.classList.remove("is-error"));
   confirmItems?.addEventListener("change", () => rowConfirmItems?.classList.remove("is-error"));
 
-  bindTap(btnSend, () => {
+  btnSend.onclick = () => {
     syncCheckout();
 
     // сброс подсветок
@@ -2304,7 +2331,7 @@ function renderCheckout() {
     const text = buildOrderText();
     openTelegramText(MANAGER_USERNAME, text);
     toast("Открываю чат с менеджеркой…", "good");
-  });
+  };
 
   syncNav();
   syncBottomSpace();
