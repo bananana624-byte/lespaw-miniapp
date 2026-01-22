@@ -772,12 +772,29 @@ function safeText(s) {
 function openTelegramText(toUsername, text) {
   const link = `https://t.me/${toUsername}?text=${encodeURIComponent(text)}`;
   try {
-    // openLink works more reliably for deep links with ?text= in some Telegram WebViews
-    if (tg?.openLink) tg.openLink(link);
-    else if (tg?.openTelegramLink) tg.openTelegramLink(link);
-    else window.open(link, "_blank", "noopener,noreferrer");
+    // В Telegram WebApp чаще надёжнее сначала openTelegramLink (как "внутренний" переход),
+    // а уже потом openLink.
+    if (tg?.openTelegramLink) tg.openTelegramLink(link);
+    else if (tg?.openLink) tg.openLink(link);
+    else {
+      const a = document.createElement("a");
+      a.href = link;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   } catch {
-    try { window.open(link, "_blank", "noopener,noreferrer"); } catch {}
+    try {
+      // фоллбек — пробуем хотя бы открыть чат без префилла
+      const bare = `https://t.me/${toUsername}`;
+      if (tg?.openTelegramLink) tg.openTelegramLink(bare);
+      else if (tg?.openLink) tg.openLink(bare);
+      else window.open(bare, "_blank", "noopener,noreferrer");
+    } catch {
+      try { window.open(link, "_blank", "noopener,noreferrer"); } catch {}
+    }
   }
 }
 
@@ -2030,7 +2047,7 @@ function renderCart() {
         items.length
           ? `
         <hr>
-        <div class="small">Итого: <b>${money(calcCartTotal())}</b></div>
+        <div class="small">Итого: <b>${money(calcCartTotal())}</b><span class="totalNote">(без учёта доставки — она рассчитывается менеджеркой индивидуально)</span></div>
         <div style="height:10px"></div>
         <div class="row">
           <button class="btn" id="btnClear" type="button">Очистить</button>
@@ -2288,7 +2305,7 @@ function renderCheckout() {
   if (rowAgreeInfo && !infoViewedThisSession) rowAgreeInfo.classList.add("is-disabled");
 
   // если важная инфа ещё не открывалась — ловим клик по строке (чекбокс disabled и сам клики не отдаёт)
-  rowAgreeInfo?.addEventListener("click", (e) => {
+  bindTap(rowAgreeInfo, (e) => {
     if (!infoViewedThisSession) {
       e.preventDefault();
       e.stopPropagation();
@@ -2302,7 +2319,7 @@ function renderCheckout() {
   agreeInfo?.addEventListener("change", () => rowAgreeInfo?.classList.remove("is-error"));
   confirmItems?.addEventListener("change", () => rowConfirmItems?.classList.remove("is-error"));
 
-  btnSend.onclick = () => {
+  bindTap(btnSend, () => {
     syncCheckout();
 
     // сброс подсветок
@@ -2345,7 +2362,7 @@ function renderCheckout() {
     const text = buildOrderText();
     openTelegramText(MANAGER_USERNAME, text);
     toast("Открываю чат с менеджеркой…", "good");
-  };
+  });
 
   syncNav();
   syncBottomSpace();
