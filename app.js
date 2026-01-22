@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v103
+// LesPaw Mini App — app.js v107
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -2190,10 +2190,10 @@ function buildOrderText() {
 
   // группируем товары по типам
   const groupsOrder = [
-    { key: "sticker", title: "Наклейки:" },
-    { key: "pin", title: "Значки:" },
-    { key: "poster", title: "Постеры:" },
-    { key: "box", title: "Боксы:" },
+    { key: "sticker", title: "*Наклейки:*" },
+    { key: "pin", title: "*Значки:*" },
+    { key: "poster", title: "*Постеры:*" },
+    { key: "box", title: "*Боксы:*" },
   ];
 
   const overlayDelta = Number(settings.overlay_price_delta) || 0;
@@ -2251,8 +2251,8 @@ function buildOrderText() {
       const filmLabel = Object.prototype.hasOwnProperty.call(overlayMap, filmKey) ? overlayMap[filmKey] : filmKey;
       const lamLabel = Object.prototype.hasOwnProperty.call(lamMap, lamKey) ? lamMap[lamKey] : lamKey;
 
-      if (filmKey && filmKey !== "none" && filmLabel) lines.push(`Плёнка: ${filmLabel}`);
-      if (lamKey && lamKey !== "none" && lamLabel) lines.push(`Ламинация: ${lamLabel}`);
+      if (filmKey && filmKey !== "none" && filmLabel) lines.push(`*Плёнка:* ${filmLabel}`);
+      if (lamKey && lamKey !== "none" && lamLabel) lines.push(`*Ламинация:* ${lamLabel}`);
 
       // пустая строка между позициями
       lines.push("");
@@ -2269,14 +2269,19 @@ function buildOrderText() {
     lines.push("");
   }
 
-  lines.push(`Итоговая сумма: ${money(total)}`);
-  lines.push("");
-  lines.push("");
-  lines.push("Данные для доставки:");
-  lines.push(`ФИО: ${checkout.fio || ""}`);
-  lines.push(`Номер телефона: ${checkout.phone || ""}`);
-  lines.push(`Пункт выдачи: ${pt}`);
-  lines.push(`Адрес пункта выдачи: ${checkout.pickupAddress || ""}`);
+  // итог и доставка
+lines.push(`*Итоговая сумма:* ${money(total)}`);
+lines.push("");
+lines.push("");
+lines.push("*Данные для доставки:*");
+lines.push(`*ФИО:* ${checkout.fio || ""}`);
+
+const safePhone = (checkout.phone || "").replace(/`/g, "'");
+const safeAddr = (checkout.pickupAddress || "").replace(/`/g, "'");
+
+lines.push(`*Номер телефона:* ${safePhone ? "`" + safePhone + "`" : ""}`);
+lines.push(`*Пункт выдачи:* ${pt}`);
+lines.push(`*Адрес пункта выдачи:* ${safeAddr ? "`" + safeAddr + "`" : ""}`);
 
   return lines.join("\n");
 }
