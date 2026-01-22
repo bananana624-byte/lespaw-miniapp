@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v109
+// LesPaw Mini App — app.js v115
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -632,6 +632,165 @@ function normalizeTypeKey(t) {
   return s;
 }
 
+
+// =====================
+// Default product descriptions (если в CSV не заполнены description / description_short)
+// =====================
+function defaultShortByType(p){
+  const t = normalizeTypeKey(p?.product_type);
+  const name = String(p?.name || "").toLowerCase();
+
+  if (t === "pin") return "6 шт · 44 мм · металл";
+  if (t === "sticker") return "Лист 16×25 см · глянец · не по контуру";
+  if (t === "poster") return "Рандомные фотопостеры";
+  if (t === "box") {
+    if (name.includes("конверт")) return "Сюрприз · наклейки + фотопостеры";
+    return "Сюрприз · значки + наклейки";
+  }
+  return "";
+}
+
+function defaultLongByType(p){
+  const t = normalizeTypeKey(p?.product_type);
+  const name = String(p?.name || "").toLowerCase();
+
+  if (t === "pin") {
+    return `
+      <div class="pDesc">
+        <div class="pDescBlock">
+          <div class="pDescTitle">Набор</div>
+          <ul class="pDescList">
+            <li>6 значков</li>
+            <li>Размер одного: <b>44 мм</b></li>
+          </ul>
+        </div>
+
+        <div class="pDescBlock">
+          <div class="pDescTitle">Материал</div>
+          <ul class="pDescList">
+            <li>Металл</li>
+            <li>Крепление сзади: <b>булавка</b></li>
+          </ul>
+        </div>
+      </div>
+    `.trim();
+  }
+
+  if (t === "sticker") {
+    return `
+      <div class="pDesc">
+        <div class="pDescBlock">
+          <div class="pDescTitle">Размер</div>
+          <ul class="pDescList">
+            <li>Лист: <b>16×25 см</b></li>
+          </ul>
+        </div>
+
+        <div class="pDescBlock">
+          <div class="pDescTitle">Материал</div>
+          <ul class="pDescList">
+            <li>Глянцевая плёнка</li>
+          </ul>
+        </div>
+
+        <div class="pDescBlock">
+          <div class="pDescTitle">Важно</div>
+          <ul class="pDescList">
+            <li>Наклейки <b>не вырезаны по контуру</b></li>
+          </ul>
+        </div>
+      </div>
+    `.trim();
+  }
+
+  if (t === "poster") {
+    return `
+      <div class="pDesc">
+        <div class="pDescBlock">
+          <div class="pDescTitle">О наборе</div>
+          <ul class="pDescList">
+            <li>Это <b>рандомные</b> фотопостеры — заказ собирается случайным образом.</li>
+            <li>Если заказывать повторно, могут попасться <b>повторки</b> (это нормально для случайной сборки).</li>
+          </ul>
+        </div>
+
+        <div class="pDescBlock">
+          <div class="pDescTitle">Варианты набора</div>
+          <ul class="pDescList">
+            <li><b>8</b> фотопостеров <b>10×15</b> — <b>450 ₽</b></li>
+            <li><b>5</b> фотопостеров <b>21×30</b> — <b>750 ₽</b></li>
+            <li><b>8×10×15</b> + <b>5×21×30</b> — <b>1100 ₽</b></li>
+          </ul>
+        </div>
+
+        <div class="pDescBlock">
+          <div class="pDescTitle">Печать</div>
+          <ul class="pDescList">
+            <li>Качественная <b>струйная</b> печать</li>
+            <li>Бумага на выбор: <b>глянцевая</b> или <b>матовая</b></li>
+          </ul>
+        </div>
+      </div>
+    `.trim();
+  }
+
+  if (t === "box") {
+    const isEnvelope = name.includes("конверт");
+    const lead = isEnvelope
+      ? "Хочешь открыть конверт, где каждая вещь подобрана с любовью — уютно, красиво и с вайбом любимых историй? 💖"
+      : "Хочешь открыть коробочку, где каждая вещь подобрана с любовью — уютно, красиво и с вайбом любимых историй? 💖";
+
+    const inside = isEnvelope
+      ? `
+        <li><b>2</b> набора наклеек</li>
+        <li><b>8</b> глянцевых фотопостеров <b>10×15</b></li>
+        <li><b>3</b> глянцевых фотопостера <b>21×30</b></li>
+      `
+      : `
+        <li><b>1</b> набор значков</li>
+        <li><b>2</b> набора наклеек</li>
+        <li><b>4</b> глянцевых фотопостера <b>10×15</b></li>
+        <li><b>3</b> глянцевых фотопостера <b>21×30</b></li>
+        <li><b>2</b> 3D-стикера (<b>2,5×2,5 см</b>)</li>
+        <li>Круглый металлический брелок (<b>44 мм</b>)</li>
+      `;
+
+    return `
+      <div class="pDesc">
+        <div class="pDescLead">${lead}</div>
+
+        <div class="pDescBlock">
+          <div class="pDescTitle">Внутри</div>
+          <ul class="pDescList">
+            ${inside}
+          </ul>
+        </div>
+
+        <div class="pDescBlock">
+          <div class="pDescTitle">Важно</div>
+          <ul class="pDescList">
+            <li>Если ты <b>ещё не брала</b> у нас наборы наклеек/значков — положим <b>готовые наборы</b> из ассортимента.</li>
+            <li>Если ты уже покупала наборы, которые есть сейчас — для тебя соберём <b>новые наборы</b>. После отправки заказа они появятся и в ассортименте.</li>
+          </ul>
+        </div>
+      </div>
+    `.trim();
+  }
+
+  return "";
+}
+
+function productShortDesc(p){
+  return String(p?.description_short || "").trim() || defaultShortByType(p);
+}
+function productLongDescHtml(p){
+  const d = String(p?.description || "").trim();
+  if (d) return d;
+  const fallback = defaultLongByType(p);
+  return fallback || "";
+}
+
+
 function getFandomById(id) {
   return fandoms.find((f) => f.fandom_id === id);
 }
@@ -1075,6 +1234,7 @@ function renderFandomPage(fandomId) {
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${safeText(p.name)}</div>
+            <div class="pcardMeta">${safeText(productShortDesc(p))}</div>
             <div class="pcardPrice">${money(p.price)}</div>
             <div class="pcardActions">
               <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
@@ -1561,6 +1721,7 @@ function renderSearch(q) {
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${safeText(p.name)}</div>
+            <div class="pcardMeta">${safeText(productShortDesc(p))}</div>
             <div class="pcardPrice">${money(p.price)}</div>
             <div class="pcardActions">
               <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
@@ -1771,8 +1932,7 @@ function renderProduct(productId) {
 
         ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
 
-        ${p.description ? `<div class="small" style="margin-top:10px">${p.description}</div>` : ""}
-        ${p.description_short && !p.description ? `<div class="small" style="margin-top:10px">${p.description_short}</div>` : ""}
+        ${productLongDescHtml(p) ? `<div class="pDescWrap" style="margin-top:10px">${productLongDescHtml(p)}</div>` : (productShortDesc(p) ? `<div class="small" style="margin-top:10px">${safeText(productShortDesc(p))}</div>` : "")}
 
         ${(isSticker || isPin) ? `<hr>` : ``}
 
