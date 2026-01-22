@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v57
+// LesPaw Mini App — app.js v101
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -2126,6 +2126,49 @@ function saveCheckout(next) {
   checkout = next;
   saveJSON(LS_CHECKOUT, checkout);
 }
+
+
+function optionLabelForCartItem(ci) {
+  const parts = [];
+  const overlayMap = {
+    none: "без плёнки",
+    matte: "матовая",
+    glossy: "глянцевая",
+    sparkle: "с блёстками",
+    holo: "голографическая",
+  };
+  const baseMap = {
+    normal: "обычная",
+    holo: "голография",
+  };
+  const lamMap = {
+    none: "без ламинации",
+    matte: "матовая",
+    glossy: "глянцевая",
+    softtouch: "софт-тач",
+    sparkle: "с блёстками",
+  };
+
+  const overlay = (ci?.overlay || "").trim();
+  const base = (ci?.base || "").trim();
+  const lam = (ci?.lamination || "").trim();
+  const film = (ci?.film || "").trim();
+  const pinLam = (ci?.pin_lamination || "").trim();
+
+  // stickers: overlay/base
+  if (overlay) parts.push(`Плёнка: ${overlayMap[overlay] || overlay}`);
+  if (base) parts.push(`Основа: ${baseMap[base] || base}`);
+
+  // posters/prints etc: lamination/film
+  if (lam) parts.push(`Ламинация: ${lamMap[lam] || lam}`);
+  if (film) parts.push(`Плёнка: ${overlayMap[film] || film}`);
+
+  // pins
+  if (pinLam) parts.push(`Ламинация значка: ${lamMap[pinLam] || pinLam}`);
+
+  return parts.filter(Boolean).join(" · ");
+}
+
 
 function buildOrderText() {
   const lines = [];
