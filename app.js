@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v57
+// LesPaw Mini App — app.js v96
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1867,7 +1867,7 @@ function renderFavorites() {
   });
 
   const goCats = document.getElementById("goCatsFromEmptyFav");
-  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
+  if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
   view.querySelectorAll("[data-remove]").forEach((b) => {
     b.onclick = (e) => {
@@ -1982,9 +1982,9 @@ function renderCart() {
                       </div>
 
                       <div class="row miniIndentRow" style="margin-top:12px; align-items:center">
-                        <button class="btn" data-dec="${idx}">−</button>
+                        <button class="btn" type="button" data-dec="${idx}">−</button>
                         <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" data-inc="${idx}">+</button>
+                        <button class="btn" type="button" data-inc="${idx}">+</button>
                       </div>
                     </div>
                   `;
@@ -2007,8 +2007,8 @@ function renderCart() {
         <div class="small">Итого: <b>${money(calcCartTotal())}</b></div>
         <div style="height:10px"></div>
         <div class="row">
-          <button class="btn" id="btnClear">Очистить</button>
-          <button class="btn is-active" id="btnCheckout">Оформить заказ</button>
+          <button class="btn" id="btnClear" type="button">Очистить</button>
+          <button class="btn is-active" id="btnCheckout" type="button">Оформить заказ</button>
         </div>
       `
           : ""
@@ -2039,19 +2039,19 @@ function renderCart() {
   });
 
   const goCats = document.getElementById("goCatsFromEmptyCart");
-  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
+  if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
-    btnClear.onclick = () => {
+    bindTap(btnClear, () => {
       setCart([]);
       toast("Корзина очищена", "warn");
       renderCart();
-    };
+    });
   }
 
   const btnCheckout = document.getElementById("btnCheckout");
-  if (btnCheckout) btnCheckout.onclick = () => openCheckout();
+  if (btnCheckout) bindTap(btnCheckout, () => openCheckout());
 
   syncNav();
   syncBottomSpace();
