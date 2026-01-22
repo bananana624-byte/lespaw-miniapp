@@ -1146,3 +1146,7 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .checkWrap{margin-top:10px;padding:10px;border-radius:14px;background:rgba(0,0,0,.12);border:1px dashed rgba(255,255,255,.22)}
 .btnSmall{padding:10px 12px;border-radius:14px}
 .checkoutNote{margin-top:12px}
+
+
+/* Итого: примечание про доставку */
+.totalNote{display:block;margin-top:4px;opacity:.7;font-size:12px;line-height:1.25;}
