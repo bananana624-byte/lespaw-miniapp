@@ -768,16 +768,44 @@ function openExternal(url) {
 // Tap helper (фикс кликов в разных WebView)
 // =====================
 function bindTap(el, handler) {
+  // В Telegram WebView (особенно iOS) иногда клики по кнопкам
+  // не доходят как обычный `click`. Поэтому слушаем несколько событий.
   if (!el) return;
   let last = 0;
-  const wrap = (e) => {
+  const fire = (e) => {
     const now = Date.now();
-    if (now - last < 320) return; // защита от двойных событий
+    if (now - last < 350) return; // защита от дублей
     last = now;
-    handler(e);
+    try {
+      handler(e);
+    } catch (err) {
+      try { console.error(err); } catch {}
+      toast("Ошибка действия", "warn");
+    }
   };
-  el.addEventListener("pointerup", wrap);
-  el.addEventListener("click", wrap);
+
+  // touchend — самый надёжный для мобильных webview
+  el.addEventListener(
+    "touchend",
+    (e) => {
+      try { e.preventDefault(); } catch {}
+      fire(e);
+    },
+    { passive: false }
+  );
+
+  // pointerup — для современных браузеров
+  el.addEventListener(
+    "pointerup",
+    (e) => {
+      try { e.preventDefault(); } catch {}
+      fire(e);
+    },
+    { passive: false }
+  );
+
+  // click — fallback
+  el.addEventListener("click", fire);
 }
 
 // =====================
@@ -998,6 +1026,7 @@ function renderFandomPage(fandomId) {
   const grouped = groupsOrder
     .map((g) => ({ ...g, items: all.filter((p) => normalizeTypeKey(p.product_type) === g.key) }))
     .filter((g) => g.items.length > 0);
+
   const other = all.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
@@ -2203,11 +2232,11 @@ function renderCheckout() {
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
-  ptYandex.onclick = () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); };
-  pt5Post.onclick = () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); };
+  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); });
+  bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); });
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
-  openInfoFromCheckout.onclick = () => openPage(renderInfo);
+  bindTap(openInfoFromCheckout, () => openPage(renderInfo));
 
   const btnSend = document.getElementById("btnSend");
   const agreeInfo = document.getElementById("agreeInfo");
@@ -2232,7 +2261,7 @@ function renderCheckout() {
   agreeInfo?.addEventListener("change", () => rowAgreeInfo?.classList.remove("is-error"));
   confirmItems?.addEventListener("change", () => rowConfirmItems?.classList.remove("is-error"));
 
-  btnSend.onclick = () => {
+  bindTap(btnSend, () => {
     syncCheckout();
 
     // сброс подсветок
@@ -2275,7 +2304,7 @@ function renderCheckout() {
     const text = buildOrderText();
     openTelegramText(MANAGER_USERNAME, text);
     toast("Открываю чат с менеджеркой…", "good");
-  };
+  });
 
   syncNav();
   syncBottomSpace();
