@@ -398,6 +398,21 @@ const PIN_LAM_LABELS = {
   holo_overlay: "Голографическая ламинация",
 };
 
+// Posters: packs + paper (interactive options)
+const POSTER_PACKS = [
+  ["p10x15_8", "8 фотопостеров 10 × 15 см", 450],
+  ["p21x30_5", "5 фотопостеров 21 × 30 см", 750],
+  ["p_mix", "8 фотопостеров 10 × 15 см + 5 фотопостеров 21 × 30 см", 1100],
+];
+const POSTER_PAPERS = [
+  ["glossy", "Глянцевая — яркие цвета и выразительный блеск", 0],
+  ["matte", "Матовая — мягкая цветопередача без бликов", 0],
+];
+const POSTER_PACK_LABELS = Object.fromEntries(POSTER_PACKS.map(x=>[x[0], x[1]]));
+const POSTER_PAPER_LABELS = Object.fromEntries(POSTER_PAPERS.map(x=>[x[0], x[1]]));
+const POSTER_PACK_PRICES = Object.fromEntries(POSTER_PACKS.map(x=>[x[0], Number(x[2]||0)]));
+
+
 const OVERLAY_OPTIONS = [
   ["none", "Без покрытия"],
   ["sugar", "Сахар"],
@@ -671,7 +686,9 @@ function normalizeFavItem(raw){
     id,
     film: String(raw.film || ""),
     lamination: String(raw.lamination || raw.lam || ""),
-    pin_lamination: String(raw.pin_lamination || raw.pinLam || raw.pin_lam || "")
+    pin_lamination: String(raw.pin_lamination || raw.pinLam || raw.pin_lam || ""),
+    poster_pack: String(raw.poster_pack || raw.posterPack || raw.pack || ""),
+    poster_paper: String(raw.poster_paper || raw.posterPaper || raw.paper || "")
   };
 }
 
@@ -690,7 +707,7 @@ function toggleFav(id, opts){
     toast("Убрано из избранного", "warn");
   } else {
     const next = [...(fav||[])];
-    next.push({ id: sid, film: String(opts?.film||""), lamination: String(opts?.lamination||""), pin_lamination: String(opts?.pin_lamination||"") });
+    next.push({ id: sid, film: String(opts?.film||""), lamination: String(opts?.lamination||""), pin_lamination: String(opts?.pin_lamination||""), poster_pack: String(opts?.poster_pack||""), poster_paper: String(opts?.poster_paper||"") });
     setFav(next);
     toast("Добавлено в избранное", "good");
   }
@@ -699,17 +716,43 @@ function toggleFav(id, opts){
 function addToCartById(id, opts){
   const sid = String(id||"").trim();
   if (!sid) return;
-  const film = String(opts?.film||"");
-  const lamination = String(opts?.lamination||"");
-  const pin_lamination = String(opts?.pin_lamination||"");
 
-  const match = (ci) => String(ci.id) === sid && String(ci.film||"") === film && String(ci.lamination||"") === lamination && String(ci.pin_lamination||"") === pin_lamination;
+  const p = getProductById(sid);
+  const typeKey = normalizeTypeKey(p?.product_type);
+
+  // options (with safe defaults)
+  let film = String(opts?.film||"");
+  let lamination = String(opts?.lamination||"");
+  let pin_lamination = String(opts?.pin_lamination||"");
+  let poster_pack = String(opts?.poster_pack||"");
+  let poster_paper = String(opts?.poster_paper||"");
+
+  if (typeKey === "sticker") {
+    if (!film) film = "film_glossy";
+    if (!lamination) lamination = "none";
+  }
+  if (typeKey === "pin") {
+    if (!pin_lamination) pin_lamination = "pin_base";
+  }
+  if (typeKey === "poster") {
+    if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+    if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
+  }
+
+  const match = (ci) =>
+    String(ci.id) === sid &&
+    String(ci.film||"") === film &&
+    String(ci.lamination||"") === lamination &&
+    String(ci.pin_lamination||"") === pin_lamination &&
+    String(ci.poster_pack||"") === poster_pack &&
+    String(ci.poster_paper||"") === poster_paper;
+
   const existing = (cart||[]).find(match);
   if (existing) {
     existing.qty = (Number(existing.qty)||0) + 1;
     setCart([...(cart||[])]);
   } else {
-    setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination }]);
+    setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper }]);
   }
 }
 
@@ -955,7 +998,6 @@ function bindTap(el, handler) {
       toast("Ошибка действия", "warn");
     }
   };
-
   // touch path
   el.addEventListener("touchstart", () => { touchMoved = false; }, { passive: true });
   el.addEventListener("touchmove", () => { touchMoved = true; }, { passive: true });
@@ -1805,11 +1847,15 @@ function renderProduct(productId) {
   const typeKey = normalizeTypeKey(p.product_type);
   const isSticker = typeKey === "sticker";
   const isPin = typeKey === "pin";
+  const isPoster = typeKey === "poster";
 
   // --- defaults ---
   let selectedFilm = "film_glossy"; // default
   let selectedStickerLam = "none"; // default: без ламинации
   let selectedPinLam = "pin_base"; // default: глянцевая базовая
+  let selectedPosterPack = POSTER_PACKS?.[0]?.[0] || "p10x15_8"; // default pack
+  let selectedPosterPaper = POSTER_PAPERS?.[0]?.[0] || "glossy"; // default paper
+
 
   const FILM_OPTIONS = [
     ["film_glossy", "Стандартная глянцевая плёнка", 0],
@@ -1836,6 +1882,10 @@ function renderProduct(productId) {
 
   function calcPrice() {
     let price = Number(p.price) || 0;
+    if (isPoster) {
+      const base = Number(POSTER_PACK_PRICES[selectedPosterPack]) || Number(p.price) || 0;
+      price = base;
+    }
     if (isSticker) {
       const filmOpt = FILM_OPTIONS.find((x) => x[0] === selectedFilm);
       const lamOpt = STICKER_LAM_OPTIONS.find((x) => x[0] === selectedStickerLam);
@@ -1854,6 +1904,8 @@ function renderProduct(productId) {
       film: isSticker ? selectedFilm : "",
       lamination: isSticker ? selectedStickerLam : "",
       pin_lamination: isPin ? selectedPinLam : "",
+      poster_pack: isPoster ? selectedPosterPack : "",
+      poster_paper: isPoster ? selectedPosterPaper : "",
     };
   }
 
@@ -1865,7 +1917,13 @@ function renderProduct(productId) {
           ${rows
             .map(([key, label, delta]) => {
               const active = key === selectedKey;
-              const deltaText = Number(delta) > 0 ? `&nbsp;<span class="optDelta">+${Number(delta)}₽</span>` : ``;
+              let deltaText = ``;
+              if (title === "Варианты наборов") {
+                const price = Number(delta) || 0;
+                deltaText = price > 0 ? `&nbsp;<span class="optDelta">— ${money(price)}</span>` : ``;
+              } else {
+                deltaText = Number(delta) > 0 ? `&nbsp;<span class="optDelta">+${Number(delta)}₽</span>` : ``;
+              }
               return `
                 <button class="optItem ${active ? "is-active" : ""}" data-opt="${key}" type="button">
                   <span class="optBox" aria-hidden="true"><span class="optFill"></span></span>
@@ -1895,13 +1953,24 @@ function renderProduct(productId) {
           </button>
         </div>
 
-        <div class="prodPrice">${money(priceNow)}</div>
+        <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
         ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
 
         ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(getFullDesc(p))}</div>` : ""}
 
-        ${(isSticker || isPin) ? `<hr>` : ``}
+        ${
+          isPoster
+            ? `
+              <div style="height:10px"></div>
+              ${renderOptionPanel("Варианты наборов", POSTER_PACKS, selectedPosterPack)}
+              <div style="height:10px"></div>
+              ${renderOptionPanel("Бумага для печати", POSTER_PAPERS, selectedPosterPaper)}
+            `
+            : ""
+        }
+
+        ${(isSticker || isPin || isPoster) ? `<hr>` : ``}
 
         ${
           isSticker
@@ -1959,6 +2028,8 @@ function renderProduct(productId) {
           if (isSticker && title === "Плёнка") selectedFilm = key;
           else if (isSticker && title === "Ламинация") selectedStickerLam = key;
           else if (isPin && title === "Ламинация") selectedPinLam = key;
+          else if (isPoster && title === "Варианты наборов") selectedPosterPack = key;
+          else if (isPoster && title === "Бумага для печати") selectedPosterPaper = key;
           render();
         };
       });
@@ -2084,6 +2155,11 @@ function calcItemUnitPrice(p, ci){
     const lam = String(ci?.pin_lamination||"") || "pin_base";
     if (lam !== "pin_base") price += overlayDelta;
   }
+  if (t === "poster") {
+    const pack = String(ci?.poster_pack||"" ) || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+    const base = Number(POSTER_PACK_PRICES[pack]) || Number(p?.price) || 0;
+    price = base;
+  }
   return price;
 }
 
@@ -2099,6 +2175,11 @@ function optionPairsFor(ci, p) {
   } else if (t === "pin") {
     const lam = String(ci?.pin_lamination || "") || "pin_base";
     if (lam !== "pin_base") out.push({ k: "Ламинация", v: PIN_LAM_LABELS[lam] || lam });
+  } else if (t === "poster") {
+    const pack = String(ci?.poster_pack||"") || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+    const paper = String(ci?.poster_paper||"") || POSTER_PAPERS?.[0]?.[0] || "glossy";
+    out.push({ k: "Набор", v: `${POSTER_PACK_LABELS[pack] || pack} — ${money(Number(POSTER_PACK_PRICES[pack]) || Number(p?.price)||0)}` });
+    out.push({ k: "Бумага", v: POSTER_PAPER_LABELS[paper] || paper });
   }
   return out;
 }
@@ -2407,6 +2488,12 @@ function buildOrderText() {
       if (lamKey && lamKey !== "pin_base") unitPrice += overlayDelta;
     }
 
+    if (typeKey === "poster") {
+      const pack = String(ci?.poster_pack||"").trim() || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+      const base = Number(POSTER_PACK_PRICES[pack]) || Number(p.price) || 0;
+      unitPrice = base;
+    }
+
     total += unitPrice * qty;
 
     groupedItems.get(typeKey).push({ ci, p, qty, unitPrice });
@@ -2455,6 +2542,13 @@ function buildOrderText() {
           const label = pinLamLabelByKey[lamKey] || String(lamKey);
           lines.push(`${LBL("Ламинация")} ${label}`);
         }
+      } else if (g.key === "poster") {
+        const pack = String(ci?.poster_pack||"").trim() || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+        const paper = String(ci?.poster_paper||"").trim() || POSTER_PAPERS?.[0]?.[0] || "glossy";
+        const packLabel = POSTER_PACK_LABELS[pack] || pack;
+        const paperLabel = POSTER_PAPER_LABELS[paper] || paper;
+        lines.push(`${LBL("Набор")} ${packLabel}`);
+        lines.push(`${LBL("Бумага")} ${paperLabel}`);
       } else {
         // остальные типы: допок нет
       }
