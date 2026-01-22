@@ -1168,3 +1168,14 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   line-height:1.45;
   color:rgba(11,11,18,.78);
 }
+
+
+.dTitle{
+  font-weight:1000;
+  color:#0b0b12;
+  letter-spacing:.2px;
+  margin-bottom:6px;
+}
+.dText{
+  color:rgba(11,11,18,.78);
+}
