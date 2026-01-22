@@ -719,7 +719,7 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   transform:translateX(-50%);
   z-index:9999;
   display:flex;
-  gap:18px;
+  gap:14px;
   align-items:center;
   justify-content:center;
 }
@@ -1150,3 +1150,74 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 
 /* Итого: примечание про доставку */
 .totalNote{display:block;margin-top:4px;opacity:.7;font-size:12px;line-height:1.25;}
+
+
+/* =====================
+   History / Saved carts UI
+===================== */
+.seg{
+  display:flex;
+  gap:10px;
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+  padding:8px;
+  border-radius:16px;
+}
+.segBtn{
+  flex:1;
+  border:0;
+  background: transparent;
+  color: rgba(255,255,255,.78);
+  padding:10px 12px;
+  border-radius:12px;
+  font-weight:700;
+  letter-spacing:.2px;
+}
+.segBtn.is-active{
+  background: rgba(255,255,255,.14);
+  color:#fff;
+  box-shadow: 0 10px 30px rgba(0,0,0,.22);
+}
+.miniMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 10px;
+  align-items:center;
+  margin-top:6px;
+}
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:999px;
+  background: rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.10);
+  color: rgba(255,255,255,.85);
+  font-size:12px;
+}
+.chip.is-warn{
+  background: rgba(255, 186, 73, .12);
+  border-color: rgba(255, 186, 73, .25);
+}
+.rowWrap{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  align-items:center;
+}
+.btn.is-ghost{
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+}
+.smallMuted{ color: rgba(255,255,255,.62); font-size: 12px; }
+.monoVal{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display:inline-block;
+}
+
+.badge.is-glow{ box-shadow: 0 0 14px rgba(255,255,255,.35), 0 0 26px rgba(180,120,255,.25); }
