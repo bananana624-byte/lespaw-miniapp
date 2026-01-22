@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v116
+// LesPaw Mini App — app.js v118
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -765,26 +765,6 @@ function cardThumbHTML(p) {
   return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy" decoding="async">`;
 }
 
-// Короткий текст для карточек в сетке (берём из CSV description_short, иначе — дефолт по типу)
-// Важно: это НЕ конфликтует с "description" в таблице — просто отдельное поле для сетки.
-function cardMetaText(p) {
-  const fromCsv = getShortDesc(p);
-  if (fromCsv) return fromCsv;
-
-  const typeKey = normalizeTypeKey(p?.product_type);
-  const nm = String(p?.name || "").toLowerCase();
-
-  if (typeKey === "pin") return "6 значков · металл · 44 мм";
-  if (typeKey === "sticker") return "лист 16×25 см · глянец · цельный";
-  if (typeKey === "poster") return "рандом · выбор формата";
-  if (typeKey === "box") {
-    // оба типа идут как box, различим по названию
-    if (nm.includes("конверт")) return "компактный набор · сюрприз";
-    return "много наполнения · сюрприз";
-  }
-  return "";
-}
-
 function safeText(s) {
   return String(s ?? "").trim();
 }
@@ -804,37 +784,114 @@ function renderTextBlocks(raw) {
   if (!t) return "";
   const blocks = t.split(/\n\s*\n+/g).map((x) => x.trim()).filter(Boolean);
   return blocks
-    .map((b) => `<div class="dBlock">${escapeHTML(b).replace(/\n/g, "<br>")}</div>`)
+    .map((b) => {
+      // keep single line breaks inside a block
+      const html = escapeHTML(b).replace(/\n/g, "<br>");
+      return `<div class="dBlock">${html}</div>`;
+    })
     .join("");
 }
 
-// Flexible getters for CSV columns (to avoid header mismatches)
-function getShortDesc(p) {
-  const cand = [
-    p?.description_short,
-    p?.short_description,
-    p?.descriptionShort,
-    p?.desc_short,
-    p?.description_shor, // на случай опечатки в заголовке таблицы
-  ];
-  for (const v of cand) {
+function pickFirstField(obj, keys) {
+  for (const k of keys) {
+    const v = obj?.[k];
     const s = String(v ?? "").trim();
     if (s) return s;
   }
   return "";
 }
-function getLongDesc(p) {
-  const cand = [
-    p?.description,
-    p?.full_description,
-    p?.description_full,
-    p?.desc,
-  ];
-  for (const v of cand) {
-    const s = String(v ?? "").trim();
-    if (s) return s;
+
+function looksLikeGenericDesc(s) {
+  const t = String(s ?? "").trim();
+  if (!t) return true;
+  // if very short and no structure — treat as generic
+  if (t.length < 80 && !t.includes("\n")) return true;
+  // if doesn't include our block markers — often generic
+  const markers = ["✨", "📦", "📏", "🎲", "🖨️", "⚠️", "💜"];
+  const hasMarker = markers.some((m) => t.includes(m));
+  if (!hasMarker && t.length < 160) return true;
+  return false;
+}
+
+function defaultShortByType(p) {
+  const typeKey = normalizeTypeKey(p?.product_type);
+  const nm = String(p?.name || "").toLowerCase();
+
+  if (typeKey === "pin") return "6 значков в наборе • металл • 44 мм";
+  if (typeKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
+  if (typeKey === "poster") return "Рандомные фотопостеры • выбор формата";
+  if (typeKey === "box") {
+    if (nm.includes("конверт")) return "Сюрприз-конверт • компактный набор";
+    return "Большой сюрприз-бокс • много наполнения";
   }
   return "";
+}
+
+function defaultFullByType(p) {
+  const typeKey = normalizeTypeKey(p?.product_type);
+  const nm = String(p?.name || "").toLowerCase();
+
+  if (typeKey === "pin") {
+    return [
+      "✨ О товаре\nНабор из шести аккуратных значков с яркой печатью.\nХорошо подойдут для рюкзаков, сумок, курток или коллекций — лёгкие, удобные и приятные в использовании.",
+      "📦 В наборе\n• 6 значков",
+      "📏 Характеристики\n• Размер одного значка: 44 мм\n• Материал: металл\n• Крепление: булавка сзади",
+    ].join("\n\n");
+  }
+
+  if (typeKey === "sticker") {
+    return [
+      "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
+      "📏 Характеристики\n• Размер листа: 16 × 25 см\n• Материал: глянцевая плёнка",
+      "⚠️ Важно\nНаклейки не вырезаны по контуру — лист идёт цельным.",
+    ].join("\n\n");
+  }
+
+  if (typeKey === "poster") {
+    return [
+      "✨ О товаре\nНабор рандомных фотопостеров с аккуратной печатью и приятной цветопередачей.\nКаждый заказ собирается случайным образом, поэтому каждый набор получается уникальным ✨",
+      "🎲 Важно\nФотопостеры в заказе подбираются случайным образом.\n\nМы стараемся не класть повторы внутри одного заказа.\nПри повторных заказах в будущем возможны повторения изображений, так как подбор осуществляется заново.",
+      "📦 Варианты наборов\n• 8 фотопостеров 10 × 15 см — 450 ₽\n• 5 фотопостеров 21 × 30 см — 750 ₽\n• 8 фотопостеров 10 × 15 см + 5 фотопостеров 21 × 30 см — 1100 ₽",
+      "🖨️ Бумага для печати\n• Глянцевая — яркие цвета и выразительный блеск\n• Матовая — мягкая цветопередача без бликов",
+      "📏 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Подбор изображений: рандомный",
+    ].join("\n\n");
+  }
+
+  if (typeKey === "box") {
+    const isEnvelope = nm.includes("конверт");
+    if (isEnvelope) {
+      return [
+        "✨ О товаре\nНебольшой конверт с аккуратно подобранным наполнением.\nПодойдёт для тех, кто любит сюрпризы, атмосферу уюта и приятные мелочи 💌",
+        "📦 Внутри\n• 2 набора наклеек\n\n• 8 глянцевых фотопостеров 10 × 15 см\n• 3 глянцевых фотопостеров 21 × 30 см",
+        "💜 Важно\nЕсли вы ранее не покупали наборы наклеек или значков — будут вложены готовые наборы из ассортимента.\n\nЕсли вы уже покупали товары из текущего ассортимента — для вас будут подготовлены новые уникальные наборы,\nкоторые позже появятся в ассортименте магазина.",
+      ].join("\n\n");
+    }
+    return [
+      "✨ О товаре\nКоробочка с тщательно подобранным наполнением и вниманием к деталям.\nКаждый бокс собирается индивидуально и дарит ощущение небольшого, приятного сюрприза 💖",
+      "📦 Внутри\n• 1 набор значков\n• 2 набора наклеек\n\n• 4 глянцевых фотопостера 10 × 15 см\n• 3 глянцевых фотопостера 21 × 30 см\n\n• 2 3D-стикера (2,5 × 2,5 см)\n• Круглый металлический брелок (44 мм)",
+      "💜 Важно\nЕсли вы ранее не покупали наборы наклеек или значков — в бокс будут вложены готовые наборы из ассортимента.\n\nЕсли вы уже покупали товары из текущего ассортимента — для вас будут собраны новые уникальные наборы.\nПосле выполнения заказа такие наборы будут добавлены в ассортимент магазина.",
+    ].join("\n\n");
+  }
+
+  return "";
+}
+
+function getShortDesc(p) {
+  // support multiple column names
+  const s = pickFirstField(p, ["description_short", "short_description", "description_shor", "desc_short", "meta"]);
+  return s;
+}
+
+function getFullDesc(p) {
+  const fromCsv = pickFirstField(p, ["description_full", "description", "full_description", "descriptionFull", "desc"]);
+  if (!fromCsv) return defaultFullByType(p) || "";
+  // If the csv text is too generic, upgrade to our default template
+  if (looksLikeGenericDesc(fromCsv)) return defaultFullByType(p) || fromCsv;
+  return fromCsv;
+}
+
+function cardMetaText(p) {
+  return getShortDesc(p) || defaultShortByType(p) || "";
 }
 
 
@@ -1144,7 +1201,7 @@ function renderFandomPage(fandomId) {
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${safeText(p.name)}</div>
-            ${cardMetaText(p) ? `<div class="pcardMeta">${safeText(cardMetaText(p))}</div>` : ``}
+            ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
             <div class="pcardPrice">${money(p.price)}</div>
             <div class="pcardActions">
               <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
@@ -1604,7 +1661,7 @@ function renderSearch(q) {
   const rawPHits = products
     .filter((p) => {
       const typeName = (p.product_type || "").toLowerCase();
-      const hay = `${p.name || ""} ${getShortDesc(p) || ""} ${getLongDesc(p) || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
+      const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
       return hay.includes(query);
     })
     .slice(0, 120);
@@ -1631,7 +1688,7 @@ function renderSearch(q) {
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${safeText(p.name)}</div>
-            ${cardMetaText(p) ? `<div class="pcardMeta">${safeText(cardMetaText(p))}</div>` : ``}
+            ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
             <div class="pcardPrice">${money(p.price)}</div>
             <div class="pcardActions">
               <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
@@ -1842,9 +1899,7 @@ function renderProduct(productId) {
 
         ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
 
-        ${getLongDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(getLongDesc(p))}</div>` : ""}
-        ${(!getLongDesc(p) && getShortDesc(p)) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(getShortDesc(p))}</div>` : ""}
-
+        ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(getFullDesc(p))}</div>` : ""}
 
         ${(isSticker || isPin) ? `<hr>` : ``}
 
