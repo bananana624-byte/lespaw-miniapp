@@ -765,16 +765,30 @@ function openExternal(url) {
 }
 
 // =====================
+// Tap helper (фикс кликов в разных WebView)
+// =====================
+function bindTap(el, handler) {
+  if (!el) return;
+  let last = 0;
+  const wrap = (e) => {
+    const now = Date.now();
+    if (now - last < 320) return; // защита от двойных событий
+    last = now;
+    handler(e);
+  };
+  el.addEventListener("pointerup", wrap);
+  el.addEventListener("click", wrap);
+}
+
+// =====================
 // Init
 // =====================
 async function init() {
   try {
-    navBack.onclick = () => goBack();
-    navHome.onclick = () => resetToHome();
-    navFav.onclick = () => openPage(renderFavorites);
-    // FIX: на некоторых webview onclick может не срабатывать стабильно
-    navFav.addEventListener("click", () => openPage(renderFavorites));
-    navCart.onclick = () => openPage(renderCart);
+    bindTap(navBack, () => goBack());
+    bindTap(navHome, () => resetToHome());
+    bindTap(navFav, () => openPage(renderFavorites));
+    bindTap(navCart, () => openPage(renderCart));
 
     globalSearch.addEventListener("input", (e) => {
       const q = e.target.value || "";
@@ -984,7 +998,6 @@ function renderFandomPage(fandomId) {
   const grouped = groupsOrder
     .map((g) => ({ ...g, items: all.filter((p) => normalizeTypeKey(p.product_type) === g.key) }))
     .filter((g) => g.items.length > 0);
-
   const other = all.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
@@ -2196,25 +2209,26 @@ function renderCheckout() {
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   openInfoFromCheckout.onclick = () => openPage(renderInfo);
 
-  // если чекбокс заблокирован — мягко подсказываем
-  if (agreeInfo) {
-    agreeInfo.addEventListener("click", (e) => {
-      if (!infoViewed) {
-        e.preventDefault();
-        e.stopPropagation();
-        toast("Сначала открой «Важную информацию» 💜", "warn");
-        rowAgreeInfo?.classList.add("is-error");
-      }
-    });
-  }
-
   const btnSend = document.getElementById("btnSend");
   const agreeInfo = document.getElementById("agreeInfo");
   const confirmItems = document.getElementById("confirmItems");
 
   const rowAgreeInfo = document.getElementById("rowAgreeInfo");
   const rowConfirmItems = document.getElementById("rowConfirmItems");
+
+  // визуальный статус для заблокированной галочки
   if (rowAgreeInfo && !infoViewed) rowAgreeInfo.classList.add("is-disabled");
+
+  // если важная инфа ещё не открывалась — ловим клик по строке (чекбокс disabled и сам клики не отдаёт)
+  rowAgreeInfo?.addEventListener("click", (e) => {
+    if (!infoViewed) {
+      e.preventDefault();
+      e.stopPropagation();
+      toast("Сначала открой «Важную информацию» 💜", "warn");
+      rowAgreeInfo?.classList.add("is-error");
+    }
+  });
+
   agreeInfo?.addEventListener("change", () => rowAgreeInfo?.classList.remove("is-error"));
   confirmItems?.addEventListener("change", () => rowConfirmItems?.classList.remove("is-error"));
 
