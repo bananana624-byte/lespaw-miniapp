@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v101
+// LesPaw Mini App — app.js v103
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -849,7 +849,7 @@ function bindTap(el, handler) {
 // =====================
 // Init
 // =====================
-async function init() {
+async async function init() {
   try {
     bindTap(navBack, () => goBack());
     bindTap(navHome, () => resetToHome());
