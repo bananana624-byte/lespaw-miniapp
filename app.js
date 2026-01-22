@@ -849,7 +849,7 @@ function bindTap(el, handler) {
 // =====================
 // Init
 // =====================
-async async function init() {
+async function init() {
   try {
     bindTap(navBack, () => goBack());
     bindTap(navHome, () => resetToHome());
@@ -2278,8 +2278,7 @@ function buildOrderText() {
   lines.push(`Пункт выдачи: ${pt}`);
   lines.push(`Адрес пункта выдачи: ${checkout.pickupAddress || ""}`);
 
-  return lines.join("
-");
+  return lines.join("\n");
 }
 
 function renderCheckout() {
