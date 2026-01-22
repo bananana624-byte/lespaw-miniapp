@@ -2171,32 +2171,46 @@ function optionLabelForCartItem(ci) {
 
 
 function buildOrderText() {
-  const lines = [];
-  lines.push("🛍 Заказ LesPaw");
-
-  if (checkout.fio) lines.push(`👤 ФИО: ${checkout.fio}`);
-  if (checkout.phone) lines.push(`📱 Телефон: ${checkout.phone}`);
+  const overlayMap = {
+    none: "",
+    matte: "матовая",
+    glossy: "глянцевая",
+    sparkle: "с блёстками",
+    holo: "голографическая",
+  };
+  const lamMap = {
+    none: "",
+    matte: "матовая",
+    glossy: "глянцевая",
+    softtouch: "софт-тач",
+    sparkle: "с блёстками",
+  };
 
   const pt = checkout.pickupType === "5post" ? "5Post" : "Яндекс";
-  lines.push(`📍 Пункт выдачи: ${pt}`);
-  if (checkout.pickupAddress) lines.push(`🏷 Адрес ПВЗ: ${checkout.pickupAddress}`);
-  if (checkout.comment) lines.push(`📝 Комментарий: ${checkout.comment}`);
 
-  lines.push("\n📦 Товары:");
-
+  // группируем товары по типам
+  const groupsOrder = [
+    { key: "sticker", title: "Наклейки:" },
+    { key: "pin", title: "Значки:" },
+    { key: "poster", title: "Постеры:" },
+    { key: "box", title: "Боксы:" },
+  ];
 
   const overlayDelta = Number(settings.overlay_price_delta) || 0;
   const holoDelta = Number(settings.holo_base_price_delta) || 0;
 
   let total = 0;
+  const groupedItems = new Map(groupsOrder.map((g) => [g.key, []]));
 
   (cart || []).forEach((ci) => {
     const p = getProductById(ci.id);
     if (!p) return;
 
-    const fandom = getFandomById(p.fandom_id);
+    const typeKey = normalizeTypeKey(p.product_type);
+    if (!groupedItems.has(typeKey)) return;
 
     let price = Number(p.price) || 0;
+    // доп. наценки для наклеек
     if ((p.product_type || "") === "sticker") {
       if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
       if ((ci.base || "") === "holo") price += holoDelta;
@@ -2205,17 +2219,67 @@ function buildOrderText() {
     const qty = Number(ci.qty) || 1;
     total += price * qty;
 
-    const opt = optionLabelForCartItem(ci);
-    const fandomName = fandom?.fandom_name ? ` — ${fandom.fandom_name}` : "";
-    lines.push(`• ${p.name}${fandomName}`);
-    if (opt) lines.push(`  ${opt}`);
-    lines.push(`  ${qty} шт · ${money(price)} за шт`);
+    groupedItems.get(typeKey).push({ ci, p, qty, price });
   });
 
-  lines.push(`\n💜 Итого: ${money(total)}`);
-  lines.push(`\nСвязь: @${MANAGER_USERNAME}`);
+  const lines = [];
+  lines.push("Здравствуйте! Хочу оформить заказ:");
+  lines.push("");
 
-  return lines.join("\n");
+  // секции товаров
+  let anyProducts = false;
+
+  groupsOrder.forEach((g) => {
+    const items = groupedItems.get(g.key) || [];
+    if (!items.length) return;
+
+    anyProducts = true;
+
+    // пустая строка между секциями (но не перед первой)
+    if (lines.length > 2) lines.push("");
+
+    lines.push(g.title);
+
+    items.forEach(({ ci, p, qty, price }) => {
+      // название товара без фандома
+      lines.push(`• ${p.name} (${qty}шт — ${money(price * qty)})`);
+
+      // допки построчно: сначала плёнка, потом ламинация. Базовое не пишем.
+      const filmKey = g.key === "sticker" ? (ci.overlay || "").trim() : (ci.film || "").trim();
+      const lamKey = g.key === "pin" ? (ci.pin_lamination || "").trim() : (ci.lamination || "").trim();
+
+      const filmLabel = Object.prototype.hasOwnProperty.call(overlayMap, filmKey) ? overlayMap[filmKey] : filmKey;
+      const lamLabel = Object.prototype.hasOwnProperty.call(lamMap, lamKey) ? lamMap[lamKey] : lamKey;
+
+      if (filmKey && filmKey !== "none" && filmLabel) lines.push(`Плёнка: ${filmLabel}`);
+      if (lamKey && lamKey !== "none" && lamLabel) lines.push(`Ламинация: ${lamLabel}`);
+
+      // пустая строка между позициями
+      lines.push("");
+    });
+
+    // убираем лишнюю пустую строку в конце секции (оставим ровно одну для разделения)
+    while (lines.length && lines[lines.length - 1] === "" && lines[lines.length - 2] === "") {
+      lines.pop();
+    }
+  });
+
+  if (!anyProducts) {
+    lines.push("Корзина пустая.");
+    lines.push("");
+  }
+
+  lines.push(`Итоговая сумма: ${money(total)}`);
+  lines.push("");
+  lines.push("");
+  lines.push("Данные для доставки:");
+  lines.push(`ФИО: ${checkout.fio || ""}`);
+  lines.push(`Номер телефона: ${checkout.phone || ""}`);
+  lines.push(`Пункт выдачи: ${pt}`);
+  lines.push(`Адрес пункта выдачи: ${checkout.pickupAddress || ""}`);
+
+  return lines.join("
+");
 }
 
 function renderCheckout() {
