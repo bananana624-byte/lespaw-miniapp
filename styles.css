@@ -1133,3 +1133,16 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .checkRow.is-error{ padding:10px; border-radius:14px; border:1px solid rgba(255,59,107,.55); background: rgba(255,59,107,.08); box-shadow: 0 0 0 3px rgba(255,59,107,.14), 0 0 22px rgba(255,59,107,.14); }
 .checkRow.is-disabled{ opacity:.75; }
 .checkRow.is-disabled input{ pointer-events:none; }
+
+
+
+/* ===== Checkout blocks (v99) ===== */
+.checkoutSection{margin-top:2px}
+.checkoutSectionTitle{font-weight:800;letter-spacing:.2px;margin:2px 0 10px 0;font-size:16px}
+.checkoutBlock{border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);border-radius:18px;padding:12px 12px 10px 12px;margin:10px 0;box-shadow:0 8px 20px rgba(0,0,0,.12)}
+.checkoutBlockTop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.checkoutBlockTitle{font-weight:800;font-size:15px}
+.checkoutBlockText{opacity:.95;line-height:1.35;margin-top:8px}
+.checkWrap{margin-top:10px;padding:10px;border-radius:14px;background:rgba(0,0,0,.12);border:1px dashed rgba(255,255,255,.22)}
+.btnSmall{padding:10px 12px;border-radius:14px}
+.checkoutNote{margin-top:12px}
