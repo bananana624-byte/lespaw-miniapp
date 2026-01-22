@@ -65,27 +65,6 @@ const cartCount = document.getElementById("cartCount");
 const wrapEl = document.querySelector(".wrap");
 const navBarEl = document.querySelector(".navBar");
 
-
-// =====================
-// Fixes / compatibility helpers
-// =====================
-
-// normalize favorite item shape (старые версии могли хранить просто id или неполный объект)
-function normalizeFavItem(x) {
-  if (x == null) return { id: "" };
-  if (typeof x === "string" || typeof x === "number") return { id: String(x) };
-  const out = { ...x };
-  if (out.id == null && out.product_id != null) out.id = out.product_id;
-  if (out.id == null && out.pid != null) out.id = out.pid;
-  out.id = String(out.id || "");
-  return out;
-}
-
-// gate: пользователька должна открыть «Важную информацию» перед подтверждением заказа
-const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
-let infoViewed = false;
-try { infoViewed = localStorage.getItem(LS_INFO_VIEWED) === "1"; } catch { infoViewed = false; }
-
 // =====================
 // Storage (локально + синхронизация между устройствами через Telegram CloudStorage)
 // =====================
@@ -95,6 +74,11 @@ const LS_FAV = "lespaw_fav_v41";
 
 // Гейт важной информации (для оформления)
 const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
+
+// Флаг: ознакомилась ли пользователька с "Важной информацией"
+let infoViewed = false;
+try { infoViewed = (localStorage.getItem(LS_INFO_VIEWED) === "1"); } catch {}
+
 
 // облачные ключи (единые для одного Telegram-аккаунта на всех устройствах)
 const CS_CART = "lespaw_cart";
@@ -671,6 +655,23 @@ function favIndexById(id){
   const sid = String(id||"").trim();
   return (fav || []).findIndex((x) => String(x?.id||"").trim() === sid);
 }
+
+function normalizeFavItem(raw){
+  // Поддержка разных форматов избранного (на всякий случай)
+  // Ожидаемый формат: { id, film, lamination, pin_lamination }
+  if (raw == null) return { id: "" };
+  if (typeof raw === "string" || typeof raw === "number") {
+    return { id: String(raw) };
+  }
+  const id = String(raw.id || raw.product_id || raw.pid || "").trim();
+  return {
+    id,
+    film: String(raw.film || ""),
+    lamination: String(raw.lamination || raw.lam || ""),
+    pin_lamination: String(raw.pin_lamination || raw.pinLam || raw.pin_lam || "")
+  };
+}
+
 function isFavId(id){
   return favIndexById(id) >= 0;
 }
@@ -2073,7 +2074,8 @@ function renderCart() {
 
   const btnCheckout = document.getElementById("btnCheckout");
   if (btnCheckout) bindTap(btnCheckout, () => openCheckout());
-syncNav();
+
+  syncNav();
   syncBottomSpace();
 }
 
@@ -2157,7 +2159,7 @@ function renderCheckout() {
         <div class="h2">Оформление</div>
         <div class="small">Корзина пустая — нечего оформлять.</div>
         <hr>
-        <button class="btn is-active" id="goHome" type="button">На главную</button>
+        <button class="btn is-active" id="goHome">На главную</button>
       </div>
     `;
     document.getElementById("goHome").onclick = () => resetToHome();
