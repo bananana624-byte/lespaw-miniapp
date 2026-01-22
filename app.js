@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v112
+// LesPaw Mini App — app.js v109
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -57,11 +57,9 @@ const globalSearch = document.getElementById("globalSearch");
 const navBack = document.getElementById("navBack");
 const navHome = document.getElementById("navHome");
 const navFav = document.getElementById("navFav");
-const navHistory = document.getElementById("navHistory");
 const navCart = document.getElementById("navCart");
 
 const favCount = document.getElementById("favCount");
-const histCount = document.getElementById("histCount");
 const cartCount = document.getElementById("cartCount");
 
 const wrapEl = document.querySelector(".wrap");
@@ -77,10 +75,6 @@ const LS_FAV = "lespaw_fav_v41";
 // Гейт важной информации (для оформления)
 const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
 
-// История оформлений / сохранённые корзины
-const LS_HISTORY = "lespaw_history_v1";
-const LS_SAVED_CARTS = "lespaw_saved_carts_v1";
-
 // Флаг: ознакомилась ли пользователька с "Важной информацией"
 let infoViewed = false;
 try { infoViewed = (localStorage.getItem(LS_INFO_VIEWED) === "1"); } catch {}
@@ -92,8 +86,6 @@ let infoViewedThisSession = false;
 // облачные ключи (единые для одного Telegram-аккаунта на всех устройствах)
 const CS_CART = "lespaw_cart";
 const CS_FAV = "lespaw_fav";
-const CS_HISTORY = "lespaw_history";
-const CS_SAVED_CARTS = "lespaw_saved_carts";
 
 function loadJSON(key, fallback) {
   try {
@@ -139,25 +131,14 @@ async function loadSyncedState() {
   // 1) локальное состояние (быстрый старт)
   const localCart = loadJSON(LS_CART, []);
   const localFav = loadJSON(LS_FAV, []);
-  const localHist = loadJSON(LS_HISTORY, []);
-  const localSaved = loadJSON(LS_SAVED_CARTS, []);
 
   // 2) облако — источник истины, если там уже есть данные
-  const [cloudCartRaw, cloudFavRaw, cloudHistRaw, cloudSavedRaw] = await Promise.all([
-    cloudGet(CS_CART),
-    cloudGet(CS_FAV),
-    cloudGet(CS_HISTORY),
-    cloudGet(CS_SAVED_CARTS),
-  ]);
+  const [cloudCartRaw, cloudFavRaw] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV)]);
   let cloudCart = null;
   let cloudFav = null;
-  let cloudHist = null;
-  let cloudSaved = null;
 
   try { if (cloudCartRaw) cloudCart = JSON.parse(cloudCartRaw); } catch {}
   try { if (cloudFavRaw) cloudFav = JSON.parse(cloudFavRaw); } catch {}
-  try { if (cloudHistRaw) cloudHist = JSON.parse(cloudHistRaw); } catch {}
-  try { if (cloudSavedRaw) cloudSaved = JSON.parse(cloudSavedRaw); } catch {}
 
   // если в облаке есть данные — берём их
   if (Array.isArray(cloudCart)) cart = cloudCart;
@@ -166,12 +147,6 @@ async function loadSyncedState() {
   if (Array.isArray(cloudFav)) fav = cloudFav;
   else fav = localFav;
 
-  if (Array.isArray(cloudHist)) orderHistory = cloudHist;
-  else orderHistory = localHist;
-
-  if (Array.isArray(cloudSaved)) savedCarts = cloudSaved;
-  else savedCarts = localSaved;
-
   // если облако пустое, но локальные данные есть — зальём их в облако (инициализация)
   if (!Array.isArray(cloudCart) && Array.isArray(localCart) && localCart.length) {
     cloudSet(CS_CART, JSON.stringify(localCart)).catch(() => {});
@@ -179,24 +154,14 @@ async function loadSyncedState() {
   if (!Array.isArray(cloudFav) && Array.isArray(localFav) && localFav.length) {
     cloudSet(CS_FAV, JSON.stringify(localFav)).catch(() => {});
   }
-  if (!Array.isArray(cloudHist) && Array.isArray(localHist) && localHist.length) {
-    cloudSet(CS_HISTORY, JSON.stringify(localHist)).catch(() => {});
-  }
-  if (!Array.isArray(cloudSaved) && Array.isArray(localSaved) && localSaved.length) {
-    cloudSet(CS_SAVED_CARTS, JSON.stringify(localSaved)).catch(() => {});
-  }
 
   // сохраним в локалку то, что выбрали (чтобы дальше было быстро)
   saveJSON(LS_CART, cart);
   saveJSON(LS_FAV, fav);
-  saveJSON(LS_HISTORY, orderHistory);
-  saveJSON(LS_SAVED_CARTS, savedCarts);
 }
 
 let cart = [];
 let fav = [];
-let orderHistory = [];
-let savedCarts = [];
 
 // =====================
 // Toast
@@ -207,56 +172,6 @@ function toast(msg, kind = "") {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2200);
-}
-
-
-async function copyToClipboard(text) {
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {}
-  // fallback
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = String(text || "");
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.style.top = "0";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    const ok = document.execCommand("copy");
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
-
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-function escapeAttr(s) {
-  // for dataset values in HTML strings
-  return escapeHtml(s).replace(/"/g, "&quot;");
-}
-
-function fmtDateTime(ts) {
-  try {
-    const d = new Date(ts);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  } catch {
-    return "";
-  }
 }
 
 
@@ -288,14 +203,12 @@ window.addEventListener("resize", syncBottomSpace);
 const navStack = [];
 let currentRender = null;
 
-function openPage(renderFn, opts = {}) {
-  const push = opts.push !== false;
-  const doScroll = opts.scroll !== false;
-  if (currentRender && push) navStack.push(currentRender);
+function openPage(renderFn) {
+  if (currentRender) navStack.push(currentRender);
   currentRender = renderFn;
   syncNav();
   renderFn();
-  if (doScroll) scrollToTop();
+  scrollToTop();
   syncBottomSpace();
 }
 
@@ -304,7 +217,7 @@ function goBack() {
   currentRender = prev || renderHome;
   syncNav();
   currentRender();
-  if (doScroll) scrollToTop();
+  scrollToTop();
   syncBottomSpace();
 }
 
@@ -314,7 +227,7 @@ function resetToHome() {
   if (globalSearch) globalSearch.value = "";
   syncNav();
   renderHome();
-  if (doScroll) scrollToTop();
+  scrollToTop();
   syncBottomSpace();
 }
 
@@ -323,7 +236,6 @@ function syncNav() {
   navHome?.classList.toggle("is-active", currentRender === renderHome && navStack.length === 0);
   navFav?.classList.toggle("is-active", currentRender === renderFavorites);
   navCart?.classList.toggle("is-active", currentRender === renderCart);
-  navHistory?.classList.toggle("is-active", currentRender === renderHistory);
 }
 
 // =====================
@@ -742,20 +654,6 @@ function setFav(next) {
   updateBadges();
 }
 
-function setOrderHistory(next) {
-  orderHistory = next;
-  saveJSON(LS_HISTORY, orderHistory);
-  cloudSet(CS_HISTORY, JSON.stringify(orderHistory)).catch(() => {});
-  updateBadges();
-}
-function setSavedCarts(next) {
-  savedCarts = next;
-  saveJSON(LS_SAVED_CARTS, savedCarts);
-  cloudSet(CS_SAVED_CARTS, JSON.stringify(savedCarts)).catch(() => {});
-  updateBadges();
-}
-
-
 function favIndexById(id){
   const sid = String(id||"").trim();
   return (fav || []).findIndex((x) => String(x?.id||"").trim() === sid);
@@ -818,7 +716,6 @@ function addToCartById(id, opts){
 function updateBadges() {
   const favN = fav.length;
   const cartN = cart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
-  const histN = (orderHistory || []).filter((h) => (h?.status || "draft") === "draft").length;
 
   if (favCount) {
     if (favN > 0) {
@@ -832,17 +729,6 @@ function updateBadges() {
       cartCount.style.display = "";
       cartCount.textContent = String(cartN);
     } else cartCount.style.display = "none";
-  }
-
-  if (histCount) {
-    if (histN > 0) {
-      histCount.style.display = "";
-      histCount.textContent = String(histN);
-      histCount.classList.add("is-glow");
-    } else {
-      histCount.style.display = "none";
-      histCount.classList.remove("is-glow");
-    }
   }
 }
 
@@ -968,34 +854,12 @@ async function init() {
     bindTap(navBack, () => goBack());
     bindTap(navHome, () => resetToHome());
     bindTap(navFav, () => openPage(renderFavorites));
-    bindTap(navHistory, () => openPage(renderHistory));
     bindTap(navCart, () => openPage(renderCart));
 
-    let searchTimer = null;
-    let lastSearchQuery = "";
-    const renderSearchPage = () => renderSearch(lastSearchQuery);
-    renderSearchPage.__isSearch = true;
-
     globalSearch.addEventListener("input", (e) => {
-      const q = (e.target.value || "").trim();
-      lastSearchQuery = q;
-
-      if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
-        // Пустой поиск — домой
-        if (!lastSearchQuery) return resetToHome();
-
-        // Если уже на странице поиска — обновляем без добавления в "Назад"
-        if (currentRender === renderSearchPage) {
-          renderSearchPage();
-          syncNav();
-          syncBottomSpace();
-          return;
-        }
-
-        // Первый вход в поиск — добавляем предыдущую страницу в историю
-        openPage(renderSearchPage, { push: true });
-      }, 200);
+      const q = e.target.value || "";
+      if (q.trim()) openPage(() => renderSearch(q));
+      else resetToHome();
     });
     // Быстрый старт: пробуем взять данные из кеша (если есть)
     // и сразу показываем главную, чтобы меню не "висело" пустым.
@@ -2096,182 +1960,6 @@ function calcItemUnitPrice(p, ci){
   return price;
 }
 
-function renderHistory() {
-  const modeKey = "lespaw_history_mode_v1";
-  let mode = "orders";
-  try { mode = localStorage.getItem(modeKey) || "orders"; } catch {}
-
-  const setMode = (m) => {
-    mode = m;
-    try { localStorage.setItem(modeKey, mode); } catch {}
-    renderHistory();
-  };
-
-  const orders = Array.isArray(orderHistory) ? [...orderHistory] : [];
-  orders.sort((a,b)=> (Number(b.ts)||0) - (Number(a.ts)||0));
-
-  const carts = Array.isArray(savedCarts) ? [...savedCarts] : [];
-  carts.sort((a,b)=> (Number(b.ts)||0) - (Number(a.ts)||0));
-
-  const ordersHtml = orders.length ? orders.map((h) => {
-    const status = (h?.status || "draft");
-    const isDraft = status === "draft";
-    const title = h?.title || (isDraft ? "Черновик заказа" : "Заказ");
-    const when = fmtDateTime(h?.ts || 0);
-    const sum = h?.total ? `${h.total} ₽` : "";
-    const itemsN = Array.isArray(h?.items) ? h.items.reduce((s,it)=> s + (Number(it.qty)||0),0) : 0;
-
-    return `
-      <div class="card" style="margin-top:12px">
-        <div class="h2" style="font-size:18px">${escapeHtml(title)}</div>
-        <div class="miniMeta">
-          <span class="chip ${isDraft ? "is-warn":""}">${isDraft ? "Черновик" : "Отмечено как отправлен"}</span>
-          ${when ? `<span class="chip">${when}</span>` : ""}
-          ${itemsN ? `<span class="chip">${itemsN} шт</span>` : ""}
-          ${sum ? `<span class="chip">${sum}</span>` : ""}
-        </div>
-        <div style="height:10px"></div>
-
-        <div class="rowWrap">
-          <button class="btn is-ghost" data-hcopy="${escapeAttr(h.id)}" type="button">Скопировать текст</button>
-          <button class="btn" data-hrepeat="${escapeAttr(h.id)}" type="button">Повторить</button>
-          ${isDraft ? `<button class="btn" data-hsent="${escapeAttr(h.id)}" type="button">Пометить «отправлено»</button>` : `<button class="btn" data-hdraft="${escapeAttr(h.id)}" type="button">Вернуть в черновики</button>`}
-          <button class="btn" data-hdel="${escapeAttr(h.id)}" type="button">Удалить</button>
-        </div>
-
-        <div style="height:10px"></div>
-        <details>
-          <summary class="small" style="cursor:pointer">Показать текст</summary>
-          <div style="height:8px"></div>
-          <div class="monoVal" style="white-space:pre-wrap; width:100%">${escapeHtml(h?.text || "")}</div>
-          <div style="height:8px"></div>
-          <div class="smallMuted">Важно: приложение не может автоматически узнать, отправлено ли сообщение менеджерке. Поэтому тут есть «черновики» и ручная пометка «отправлено».</div>
-        </details>
-      </div>
-    `;
-  }).join("") : `
-    <div class="card" style="margin-top:12px">
-      <div class="h2">Пока пусто</div>
-      <div class="small">Здесь появятся черновики и история оформлений, когда ты нажмёшь «Оформить заказ» на экране оформления.</div>
-    </div>
-  `;
-
-  const cartsHtml = carts.length ? carts.map((c) => {
-    const name = c?.name || "Сохранённая корзина";
-    const when = fmtDateTime(c?.ts || 0);
-    const itemsN = Array.isArray(c?.items) ? c.items.reduce((s,it)=> s + (Number(it.qty)||0),0) : 0;
-
-    return `
-      <div class="card" style="margin-top:12px">
-        <div class="h2" style="font-size:18px">${escapeHtml(name)}</div>
-        <div class="miniMeta">
-          ${when ? `<span class="chip">${when}</span>` : ""}
-          ${itemsN ? `<span class="chip">${itemsN} шт</span>` : ""}
-        </div>
-        <div style="height:10px"></div>
-        <div class="rowWrap">
-          <button class="btn is-active" data-cload="${escapeAttr(c.id)}" type="button">Загрузить в корзину</button>
-          <button class="btn" data-cdel="${escapeAttr(c.id)}" type="button">Удалить</button>
-        </div>
-      </div>
-    `;
-  }).join("") : `
-    <div class="card" style="margin-top:12px">
-      <div class="h2">Сохранённых корзин нет</div>
-      <div class="small">Открой корзину и нажми «Сохранить корзину» — она появится тут.</div>
-    </div>
-  `;
-
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">История</div>
-      <div class="small">Тут можно вернуться к прошлым оформлениям и сохранённым корзинам.</div>
-      <div style="height:12px"></div>
-
-      <div class="seg">
-        <button class="segBtn ${mode==="orders" ? "is-active":""}" id="segOrders" type="button">Оформления</button>
-        <button class="segBtn ${mode==="carts" ? "is-active":""}" id="segCarts" type="button">Сохранённые корзины</button>
-      </div>
-    </div>
-
-    ${mode==="orders" ? ordersHtml : cartsHtml}
-  `;
-
-  document.getElementById("segOrders").onclick = () => setMode("orders");
-  document.getElementById("segCarts").onclick = () => setMode("carts");
-
-  // Orders actions
-  view.querySelectorAll("[data-hcopy]").forEach((b) => {
-    b.onclick = async () => {
-      const id = b.dataset.hcopy;
-      const h = (orderHistory || []).find((x) => String(x.id) === String(id));
-      if (!h) return;
-      const ok = await copyToClipboard(h.text || "");
-      toast(ok ? "Скопировано" : "Не удалось скопировать");
-    };
-  });
-  view.querySelectorAll("[data-hrepeat]").forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.hrepeat;
-      const h = (orderHistory || []).find((x) => String(x.id) === String(id));
-      if (!h?.items) return;
-      setCart(h.items);
-      toast("Корзина восстановлена");
-      openPage(renderCart);
-    };
-  });
-  view.querySelectorAll("[data-hsent]").forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.hsent;
-      const next = (orderHistory || []).map((x) => String(x.id) === String(id) ? { ...x, status: "sent" } : x);
-      setOrderHistory(next);
-      toast("Отмечено как отправленное");
-      renderHistory();
-    };
-  });
-  view.querySelectorAll("[data-hdraft]").forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.hdraft;
-      const next = (orderHistory || []).map((x) => String(x.id) === String(id) ? { ...x, status: "draft" } : x);
-      setOrderHistory(next);
-      toast("Вернула в черновики");
-      renderHistory();
-    };
-  });
-  view.querySelectorAll("[data-hdel]").forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.hdel;
-      const next = (orderHistory || []).filter((x) => String(x.id) !== String(id));
-      setOrderHistory(next);
-      toast("Удалено");
-      renderHistory();
-    };
-  });
-
-  // Saved carts actions
-  view.querySelectorAll("[data-cload]").forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.cload;
-      const c = (savedCarts || []).find((x) => String(x.id) === String(id));
-      if (!c?.items) return;
-      setCart(c.items);
-      toast("Корзина загружена");
-      openPage(renderCart);
-    };
-  });
-  view.querySelectorAll("[data-cdel]").forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.cdel;
-      const next = (savedCarts || []).filter((x) => String(x.id) !== String(id));
-      setSavedCarts(next);
-      toast("Удалено");
-      renderHistory();
-    };
-  });
-
-  syncNav();
-  syncBottomSpace();
-}
 function optionPairsFor(ci, p) {
   const t = normalizeTypeKey(p?.product_type);
   const out = [];
@@ -2363,7 +2051,6 @@ function renderCart() {
         <div style="height:10px"></div>
         <div class="row">
           <button class="btn" id="btnClear" type="button">Очистить</button>
-          <button class="btn" id="btnSaveCart" type="button">Сохранить корзину</button>
           <button class="btn is-active" id="btnCheckout" type="button">Оформить заказ</button>
         </div>
       `
@@ -2403,25 +2090,6 @@ function renderCart() {
       setCart([]);
       toast("Корзина очищена", "warn");
       renderCart();
-    };
-  }
-
-
-  const btnSaveCart = document.getElementById("btnSaveCart");
-  if (btnSaveCart) {
-    btnSaveCart.onclick = () => {
-      if (!cart || !cart.length) return toast("Корзина пустая", "warn");
-      const name = (prompt("Название сохранённой корзины:", "") || "").trim();
-      if (!name) return toast("Не сохранила: без названия", "warn");
-      const entry = {
-        id: "c_" + Date.now() + "_" + Math.random().toString(16).slice(2),
-        ts: Date.now(),
-        name,
-        items: JSON.parse(JSON.stringify(cart)),
-      };
-      const next = [entry, ...(savedCarts || [])].slice(0, 50);
-      setSavedCarts(next);
-      toast("Корзина сохранена");
     };
   }
 
@@ -2782,7 +2450,6 @@ function renderCheckout() {
       <div style="height:12px"></div>
 
       <div class="row">
-        <button class="btn" id="btnCopyOrder" type="button">Скопировать текст</button>
         <button class="btn is-active" id="btnSend" type="button">Оформить заказ</button>
       </div>
     </div>
@@ -2812,17 +2479,7 @@ function renderCheckout() {
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   openInfoFromCheckout.onclick = () => openPage(renderInfo);
 
-  const btnCopyOrder = document.getElementById("btnCopyOrder");
   const btnSend = document.getElementById("btnSend");
-
-  if (btnCopyOrder) {
-    bindTap(btnCopyOrder, async () => {
-      syncCheckout();
-      const text = buildOrderText();
-      const ok = await copyToClipboard(text);
-      toast(ok ? "Текст заказа скопирован" : "Не удалось скопировать", ok ? "good" : "warn");
-    });
-  }
   const agreeInfo = document.getElementById("agreeInfo");
   const confirmItems = document.getElementById("confirmItems");
 
@@ -2887,30 +2544,10 @@ function renderCheckout() {
       return;
     }
 
-
     const text = buildOrderText();
-
-    // Сохраняем "снимок" оформления в историю (как черновик).
-    // Важно: мы НЕ можем автоматически понять, отправила ли пользователька сообщение,
-    // поэтому по умолчанию статус "draft".
-    try {
-      const entry = {
-        id: "h_" + Date.now() + "_" + Math.random().toString(16).slice(2),
-        ts: Date.now(),
-        status: "draft",
-        title: "Оформление",
-        text,
-        total: calcCartTotal(),
-        items: JSON.parse(JSON.stringify(cart)),
-      };
-      const next = [entry, ...(orderHistory || [])].slice(0, 80);
-      setOrderHistory(next);
-    } catch {}
-
     openTelegramText(MANAGER_USERNAME, text);
-    toast("Открываю чат с менеджеркой… Черновик сохранён в «Истории».", "good");
+    toast("Открываю чат с менеджеркой…", "good");
   });
-
 
   syncNav();
   syncBottomSpace();
