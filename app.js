@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v96
+// LesPaw Mini App — app.js v57
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -64,6 +64,27 @@ const cartCount = document.getElementById("cartCount");
 
 const wrapEl = document.querySelector(".wrap");
 const navBarEl = document.querySelector(".navBar");
+
+
+// =====================
+// Fixes / compatibility helpers
+// =====================
+
+// normalize favorite item shape (старые версии могли хранить просто id или неполный объект)
+function normalizeFavItem(x) {
+  if (x == null) return { id: "" };
+  if (typeof x === "string" || typeof x === "number") return { id: String(x) };
+  const out = { ...x };
+  if (out.id == null && out.product_id != null) out.id = out.product_id;
+  if (out.id == null && out.pid != null) out.id = out.pid;
+  out.id = String(out.id || "");
+  return out;
+}
+
+// gate: пользователька должна открыть «Важную информацию» перед подтверждением заказа
+const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
+let infoViewed = false;
+try { infoViewed = localStorage.getItem(LS_INFO_VIEWED) === "1"; } catch { infoViewed = false; }
 
 // =====================
 // Storage (локально + синхронизация между устройствами через Telegram CloudStorage)
@@ -1859,37 +1880,37 @@ function renderFavorites() {
   `;
 
   view.querySelectorAll("[data-open]").forEach((el) => {
-    bindTap(el, (e) => {
-      const t = e?.target;
-      if (t && (t.closest?.("button") || t.tagName === "BUTTON")) return;
+    el.onclick = (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       openPage(() => renderProduct(el.dataset.open));
-    });
+    };
   });
 
   const goCats = document.getElementById("goCatsFromEmptyFav");
-  if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
+  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
 
   view.querySelectorAll("[data-remove]").forEach((b) => {
-    bindTap(b, (e) => {
-      try { e?.stopPropagation?.(); } catch {}
+    b.onclick = (e) => {
+      e.stopPropagation();
       const i = Number(b.dataset.remove);
       const next = [...(fav || [])];
       next.splice(i, 1);
       setFav(next);
       toast("Убрано из избранного", "warn");
       renderFavorites();
-    });
+    };
   });
 
   view.querySelectorAll("[data-to-cart]").forEach((b) => {
-    bindTap(b, (e) => {
-      try { e?.stopPropagation?.(); } catch {}
+    b.onclick = (e) => {
+      e.stopPropagation();
       const i = Number(b.dataset.toCart);
       const fi = normalizeFavItem((fav || [])[i]);
       addToCartById(fi.id, fi);
       toast("Добавлено в корзину", "good");
       renderFavorites();
-    });
+    };
   });
 
   syncNav();
@@ -1982,9 +2003,9 @@ function renderCart() {
                       </div>
 
                       <div class="row miniIndentRow" style="margin-top:12px; align-items:center">
-                        <button class="btn" data-dec="${idx}" type="button">−</button>
+                        <button class="btn" data-dec="${idx}">−</button>
                         <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" data-inc="${idx}" type="button">+</button>
+                        <button class="btn" data-inc="${idx}">+</button>
                       </div>
                     </div>
                   `;
@@ -2017,17 +2038,17 @@ function renderCart() {
   `;
 
   view.querySelectorAll("[data-inc]").forEach((b) => {
-    bindTap(b, () => {
+    b.onclick = () => {
       const i = Number(b.dataset.inc);
       const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
       setCart(next);
       renderCart();
-    });
+    };
   });
 
   view.querySelectorAll("[data-dec]").forEach((b) => {
-    bindTap(b, () => {
+    b.onclick = () => {
       const i = Number(b.dataset.dec);
       const next = [...cart];
       const q = (Number(next[i].qty) || 1) - 1;
@@ -2035,25 +2056,24 @@ function renderCart() {
       else next[i].qty = q;
       setCart(next);
       renderCart();
-    });
+    };
   });
 
   const goCats = document.getElementById("goCatsFromEmptyCart");
-  if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
+  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
-    bindTap(btnClear, () => {
+    btnClear.onclick = () => {
       setCart([]);
       toast("Корзина очищена", "warn");
       renderCart();
-    });
+    };
   }
 
   const btnCheckout = document.getElementById("btnCheckout");
   if (btnCheckout) bindTap(btnCheckout, () => openCheckout());
-
-  syncNav();
+syncNav();
   syncBottomSpace();
 }
 
@@ -2137,7 +2157,7 @@ function renderCheckout() {
         <div class="h2">Оформление</div>
         <div class="small">Корзина пустая — нечего оформлять.</div>
         <hr>
-        <button class="btn is-active" id="goHome">На главную</button>
+        <button class="btn is-active" id="goHome" type="button">На главную</button>
       </div>
     `;
     document.getElementById("goHome").onclick = () => resetToHome();
