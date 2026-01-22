@@ -79,6 +79,9 @@ const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
 let infoViewed = false;
 try { infoViewed = (localStorage.getItem(LS_INFO_VIEWED) === "1"); } catch {}
 
+// Флаг на текущую сессию оформления: галочку можно поставить только после перехода на вкладку
+let infoViewedThisSession = false;
+
 
 // облачные ключи (единые для одного Telegram-аккаунта на всех устройствах)
 const CS_CART = "lespaw_cart";
@@ -1134,6 +1137,7 @@ function renderFandomPage(fandomId) {
 function renderInfo() {
   // фиксируем факт ознакомления: пользователька открыла вкладку
   infoViewed = true;
+  infoViewedThisSession = true;
   try { localStorage.setItem(LS_INFO_VIEWED, "1"); } catch {}
   view.innerHTML = `
     <div class="card">
@@ -2096,6 +2100,8 @@ let checkout = loadJSON(LS_CHECKOUT, {
 });
 
 function openCheckout() {
+  // каждый новый заход в оформление требует открыть "Важную информацию"
+  infoViewedThisSession = false;
   openPage(renderCheckout);
 }
 
@@ -2200,23 +2206,38 @@ function renderCheckout() {
 
       <hr>
 
-      <div class="checkoutChecks">
-        <label class="checkRow small" id="rowAgreeInfo">
-          <input type="checkbox" id="agreeInfo" style="margin-top:2px" ${infoViewed ? "" : "disabled"}>
-          <span>
-            Я ознакомилась с «Важной информацией».
-            <span class="checkHint">обязательно ознакомься</span>
-          </span>
-        </label>
+      <div class="checkoutSection">
+        <div class="checkoutSectionTitle">Подтверждения</div>
 
-        <button class="btn btnGhost" id="openInfoFromCheckout" type="button" style="margin-top:10px">Важная информация</button>
+        <div class="checkoutBlock" id="blockInfoGate">
+          <div class="checkoutBlockTop">
+            <div class="checkoutBlockTitle">Важная информация</div>
+            <button class="btn btnGhost btnSmall" id="openInfoFromCheckout" type="button">Открыть</button>
+          </div>
+          <div class="checkoutBlockText small">
+            Перед оформлением заказа нужно перейти на вкладку «Важная информация» и ознакомиться с условиями.
+          </div>
 
-        <div style="height:10px"></div>
+          <div class="checkWrap">
+            <label class="checkRow small" id="rowAgreeInfo">
+              <input type="checkbox" id="agreeInfo" ${infoViewedThisSession ? "" : "disabled"}>
+              <span>
+                Я ознакомилась с «Важной информацией».
+                <span class="checkHint">${infoViewedThisSession ? "можно поставить галочку" : "сначала открой вкладку"}</span>
+              </span>
+            </label>
+          </div>
+        </div>
 
-        <label class="checkRow small" id="rowConfirmItems">
-          <input type="checkbox" id="confirmItems" style="margin-top:2px">
-          <span>Я проверила позиции в заказе (количество, варианты плёнки/ламинации, фандомы) — всё верно.</span>
-        </label>
+        <div class="checkoutBlock" id="blockConfirmItems">
+          <div class="checkoutBlockTitle">Проверка заказа</div>
+          <div class="checkWrap">
+            <label class="checkRow small" id="rowConfirmItems">
+              <input type="checkbox" id="confirmItems">
+              <span>Я проверила позиции в заказе (количество, варианты плёнки/ламинации, фандомы) — всё верно.</span>
+            </label>
+          </div>
+        </div>
 
         <div class="checkoutNote">
           После нажатия <b>«Оформить заказ»</b> откроется чат с менеджеркой с готовым текстом заказа.
@@ -2264,15 +2285,17 @@ function renderCheckout() {
   const rowConfirmItems = document.getElementById("rowConfirmItems");
 
   // визуальный статус для заблокированной галочки
-  if (rowAgreeInfo && !infoViewed) rowAgreeInfo.classList.add("is-disabled");
+  if (rowAgreeInfo && !infoViewedThisSession) rowAgreeInfo.classList.add("is-disabled");
 
   // если важная инфа ещё не открывалась — ловим клик по строке (чекбокс disabled и сам клики не отдаёт)
   rowAgreeInfo?.addEventListener("click", (e) => {
-    if (!infoViewed) {
+    if (!infoViewedThisSession) {
       e.preventDefault();
       e.stopPropagation();
       toast("Сначала открой «Важную информацию» 💜", "warn");
       rowAgreeInfo?.classList.add("is-error");
+      // удобно: сразу ведём на вкладку
+      setTimeout(() => openPage(renderInfo), 150);
     }
   });
 
@@ -2298,7 +2321,7 @@ function renderCheckout() {
     if (!addr) { cPickupAddress?.classList.add("field-error"); ok = false; }
 
     // гейт: без открытия важной информации нельзя подтверждать
-    if (!infoViewed) {
+    if (!infoViewedThisSession) {
       rowAgreeInfo?.classList.add("is-error");
       ok = false;
     } else if (!agreeInfo?.checked) {
