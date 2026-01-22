@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v107
+// LesPaw Mini App — app.js v109
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -2171,36 +2171,88 @@ function optionLabelForCartItem(ci) {
 
 
 function buildOrderText() {
-  const overlayMap = {
-    none: "",
-    matte: "матовая",
-    glossy: "глянцевая",
-    sparkle: "с блёстками",
-    holo: "голографическая",
+  // Важно: текст отправляется через tg:// / t.me/share?text=..., там НЕ работает Markdown (**жирный**, `моно`).
+  // Поэтому делаем "выделение" визуально через капс/разделители и псевдо-моно для цифр.
+
+  // Опции ровно как в приложении (лейблы на русском)
+  const overlayDelta = Number(settings.overlay_price_delta) || 0;
+  const holoDelta = Number(settings.holo_base_price_delta) || 0;
+
+  const FILM_OPTIONS = [
+    ["film_glossy", "Стандартная глянцевая плёнка", 0],
+    ["film_holo", "Голографическая плёнка", holoDelta],
+  ];
+
+  const STICKER_LAM_OPTIONS = [
+    ["none", "Без ламинации", 0],
+    ["sugar", "Сахар", overlayDelta],
+    ["stars", "Звёздочки", overlayDelta],
+    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
+    ["stars_big", "Большие звёзды", overlayDelta],
+    ["holo_overlay", "Голографическая ламинация", overlayDelta],
+  ];
+
+  const PIN_LAM_OPTIONS = [
+    ["pin_base", "Глянцевая ламинация (базовая)", 0],
+    ["sugar", "Сахар", overlayDelta],
+    ["stars", "Звёздочки", overlayDelta],
+    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
+    ["stars_big", "Большие звёзды", overlayDelta],
+    ["holo_overlay", "Голографическая ламинация", overlayDelta],
+  ];
+
+  const filmLabelByKey = Object.fromEntries(FILM_OPTIONS.map((x) => [x[0], x[1]]));
+  const stickerLamLabelByKey = Object.fromEntries(STICKER_LAM_OPTIONS.map((x) => [x[0], x[1]]));
+  const pinLamLabelByKey = Object.fromEntries(PIN_LAM_OPTIONS.map((x) => [x[0], x[1]]));
+
+  // Выделение "жирным" (симуляция): капс + двоеточие
+  const H = (s) => String(s || "").toUpperCase(); // заголовок/лейбл
+  const LBL = (s) => `${H(s)}:`; // лейбл с двоеточием
+
+  // "Моно" (симуляция): заменяем цифры на математические моно-цифры + обрамляем скобками
+  const monoDigits = {
+    "0": "𝟶", "1": "𝟷", "2": "𝟸", "3": "𝟹", "4": "𝟺",
+    "5": "𝟻", "6": "𝟼", "7": "𝟽", "8": "𝟾", "9": "𝟿",
   };
-  const lamMap = {
-    none: "",
-    matte: "матовая",
-    glossy: "глянцевая",
-    softtouch: "софт-тач",
-    sparkle: "с блёстками",
+  const asMono = (s) => {
+    const str = String(s || "");
+    if (!str) return "";
+    const mapped = str.replace(/[0-9]/g, (d) => monoDigits[d] || d);
+    // симпатичные "моно-скобки"
+    return `⟦${mapped}⟧`;
   };
 
   const pt = checkout.pickupType === "5post" ? "5Post" : "Яндекс";
 
   // группируем товары по типам
   const groupsOrder = [
-    { key: "sticker", title: "*Наклейки:*" },
-    { key: "pin", title: "*Значки:*" },
-    { key: "poster", title: "*Постеры:*" },
-    { key: "box", title: "*Боксы:*" },
+    { key: "sticker", title: H("Наклейки") + ":" },
+    { key: "pin", title: H("Значки") + ":" },
+    { key: "poster", title: H("Постеры") + ":" },
+    { key: "box", title: H("Боксы") + ":" },
   ];
-
-  const overlayDelta = Number(settings.overlay_price_delta) || 0;
-  const holoDelta = Number(settings.holo_base_price_delta) || 0;
 
   let total = 0;
   const groupedItems = new Map(groupsOrder.map((g) => [g.key, []]));
+
+  // helper: аккуратно достать выбранные допки из разных версий корзины
+  function pickStickerFilm(ci) {
+    const k = String(ci?.film || "").trim() || String(ci?.base || "").trim();
+    // совместимость: старое "holo" => film_holo
+    if (k === "holo") return "film_holo";
+    if (k === "glossy" || k === "matte") return "film_glossy";
+    return k;
+  }
+  function pickStickerLam(ci) {
+    const k = String(ci?.lamination || "").trim() || String(ci?.overlay || "").trim();
+    // совместимость: старые ключи
+    if (k === "softtouch") return "softtouch"; // если где-то ещё встречается — выведем как есть
+    return k;
+  }
+  function pickPinLam(ci) {
+    const k = String(ci?.pin_lamination || "").trim() || String(ci?.lamination || "").trim();
+    return k;
+  }
 
   (cart || []).forEach((ci) => {
     const p = getProductById(ci.id);
@@ -2209,17 +2261,28 @@ function buildOrderText() {
     const typeKey = normalizeTypeKey(p.product_type);
     if (!groupedItems.has(typeKey)) return;
 
-    let price = Number(p.price) || 0;
-    // доп. наценки для наклеек
-    if ((p.product_type || "") === "sticker") {
-      if ((ci.overlay || "") && ci.overlay !== "none") price += overlayDelta;
-      if ((ci.base || "") === "holo") price += holoDelta;
+    const qty = Number(ci.qty) || 1;
+    let unitPrice = Number(p.price) || 0;
+
+    if (typeKey === "sticker") {
+      const filmKey = pickStickerFilm(ci);
+      const lamKey = pickStickerLam(ci);
+
+      if (filmKey === "film_holo") unitPrice += holoDelta;
+
+      // ламинации с доплатой: всё кроме "none"
+      if (lamKey && lamKey !== "none") unitPrice += overlayDelta;
     }
 
-    const qty = Number(ci.qty) || 1;
-    total += price * qty;
+    if (typeKey === "pin") {
+      const lamKey = pickPinLam(ci);
+      // доплата за всё кроме базовой
+      if (lamKey && lamKey !== "pin_base") unitPrice += overlayDelta;
+    }
 
-    groupedItems.get(typeKey).push({ ci, p, qty, price });
+    total += unitPrice * qty;
+
+    groupedItems.get(typeKey).push({ ci, p, qty, unitPrice });
   });
 
   const lines = [];
@@ -2240,25 +2303,40 @@ function buildOrderText() {
 
     lines.push(g.title);
 
-    items.forEach(({ ci, p, qty, price }) => {
+    items.forEach(({ ci, p, qty, unitPrice }) => {
       // название товара без фандома
-      lines.push(`• ${p.name} (${qty}шт — ${money(price * qty)})`);
+      lines.push(`• ${p.name} (${qty}шт — ${money(unitPrice * qty)})`);
 
-      // допки построчно: сначала плёнка, потом ламинация. Базовое не пишем.
-      const filmKey = g.key === "sticker" ? (ci.overlay || "").trim() : (ci.film || "").trim();
-      const lamKey = g.key === "pin" ? (ci.pin_lamination || "").trim() : (ci.lamination || "").trim();
+      if (g.key === "sticker") {
+        const filmKey = pickStickerFilm(ci);
+        const lamKey = pickStickerLam(ci);
 
-      const filmLabel = Object.prototype.hasOwnProperty.call(overlayMap, filmKey) ? overlayMap[filmKey] : filmKey;
-      const lamLabel = Object.prototype.hasOwnProperty.call(lamMap, lamKey) ? lamMap[lamKey] : lamKey;
+        // Плёнка: базовую не пишем
+        if (filmKey && filmKey !== "film_glossy" && filmKey !== "none") {
+          const label = filmLabelByKey[filmKey] || String(filmKey);
+          lines.push(`${LBL("Плёнка")} ${label}`);
+        }
 
-      if (filmKey && filmKey !== "none" && filmLabel) lines.push(`*Плёнка:* ${filmLabel}`);
-      if (lamKey && lamKey !== "none" && lamLabel) lines.push(`*Ламинация:* ${lamLabel}`);
+        // Ламинация: базовую не пишем
+        if (lamKey && lamKey !== "none") {
+          const label = stickerLamLabelByKey[lamKey] || String(lamKey);
+          lines.push(`${LBL("Ламинация")} ${label}`);
+        }
+      } else if (g.key === "pin") {
+        const lamKey = pickPinLam(ci);
+        if (lamKey && lamKey !== "pin_base") {
+          const label = pinLamLabelByKey[lamKey] || String(lamKey);
+          lines.push(`${LBL("Ламинация")} ${label}`);
+        }
+      } else {
+        // остальные типы: допок нет
+      }
 
       // пустая строка между позициями
       lines.push("");
     });
 
-    // убираем лишнюю пустую строку в конце секции (оставим ровно одну для разделения)
+    // убираем лишние пустые строки
     while (lines.length && lines[lines.length - 1] === "" && lines[lines.length - 2] === "") {
       lines.pop();
     }
@@ -2269,22 +2347,19 @@ function buildOrderText() {
     lines.push("");
   }
 
-  // итог и доставка
-lines.push(`*Итоговая сумма:* ${money(total)}`);
-lines.push("");
-lines.push("");
-lines.push("*Данные для доставки:*");
-lines.push(`*ФИО:* ${checkout.fio || ""}`);
+  lines.push("");
+  lines.push(`${LBL("Итоговая сумма")} ${money(total)}`);
+  lines.push("");
+  lines.push(`${H("Данные для доставки")}:`);
+  lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
+  lines.push(`${LBL("Номер телефона")} ${asMono(checkout.phone || "")}`);
+  lines.push(`${LBL("Пункт выдачи")} ${pt}`);
+  lines.push(`${LBL("Адрес пункта выдачи")} ${asMono(checkout.pickupAddress || "")}`);
 
-const safePhone = (checkout.phone || "").replace(/`/g, "'");
-const safeAddr = (checkout.pickupAddress || "").replace(/`/g, "'");
-
-lines.push(`*Номер телефона:* ${safePhone ? "`" + safePhone + "`" : ""}`);
-lines.push(`*Пункт выдачи:* ${pt}`);
-lines.push(`*Адрес пункта выдачи:* ${safeAddr ? "`" + safeAddr + "`" : ""}`);
-
-  return lines.join("\n");
+  return lines.join("
+");
 }
+
 
 function renderCheckout() {
   if (!cart || !cart.length) {
