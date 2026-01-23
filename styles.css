@@ -1245,15 +1245,17 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 
 
 .newWrap{
-  position:relative;
   margin-top:10px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
 }
 
 .newCarousel{
   display:flex;
   gap:14px;
   overflow-x:auto;
-  padding:12px 4px 6px;
+  padding:12px 2px 2px;
   scroll-snap-type:x mandatory;
   -webkit-overflow-scrolling: touch;
 }
@@ -1268,22 +1270,24 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   gap:12px;
 }
 
-.newPage .newCard{
-  width:100%;
+.newPage .newCard{ width:100%; }
+
+/* Кнопки навигации под каруселью — видны на всех устройствах */
+.newControls{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  padding:0 6px 10px;
 }
 
-.newNav{
-  position:absolute;
-  top:50%;
-  transform: translateY(-50%);
-  width:42px;
-  height:42px;
+.newNavBtn{
+  width:40px;
+  height:40px;
   border-radius:999px;
   border:1px solid rgba(0,0,0,.10);
-  background: rgba(255,255,255,.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 14px 26px rgba(0,0,0,.18);
+  background: rgba(255,255,255,.95);
+  box-shadow: 0 12px 22px rgba(0,0,0,.12);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -1293,11 +1297,29 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   cursor:pointer;
   user-select:none;
 }
-.newNav:active{ transform: translateY(-50%) scale(.98); }
-.newPrev{ left:8px; }
-.newNext{ right:8px; }
+.newNavBtn:active{ transform: scale(.98); }
+.newNavBtn:disabled{
+  opacity:.35;
+  cursor:default;
+}
 
-@media (hover:none){
-  .newNav{ display:none; }
+.newDots{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:60px;
+  justify-content:center;
+}
+
+.newDot{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background: rgba(20,20,28,.22);
+}
+.newDot.isActive{
+  width:18px;
+  background: linear-gradient(135deg, rgba(160,90,255,.95), rgba(95,210,255,.75));
+  box-shadow: 0 0 12px rgba(170,120,255,.45);
 }
 
