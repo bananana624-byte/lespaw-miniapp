@@ -1198,3 +1198,47 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
               0 0 26px rgba(190,120,255,.45);
 }
 .homeSection .small{ margin-top:-2px; }
+
+/* Home sections: text on white panels */
+.homeSection .h2{ color:#0b0b12; }
+
+/* Новинки: вкусное оформление */
+.newSection{ padding-top:14px; }
+.newHeader{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.newTitleRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.newTitle{
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:.4px;
+  color:#0b0b12;
+}
+.newChip{
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.6px;
+  padding:6px 10px;
+  border-radius:999px;
+  color:#fff;
+  background: linear-gradient(135deg, rgba(160,90,255,.95), rgba(95,210,255,.70));
+  box-shadow: 0 10px 22px rgba(0,0,0,.18), 0 0 18px rgba(190,120,255,.45);
+}
+.newSub{
+  font-size:13px;
+  line-height:1.4;
+  color: rgba(10,10,18,.70);
+}
+.newDivider{
+  height:1px;
+  width:100%;
+  margin-top:10px;
+  background: linear-gradient(90deg, rgba(125,60,255,.00), rgba(125,60,255,.35), rgba(125,60,255,.00));
+}
