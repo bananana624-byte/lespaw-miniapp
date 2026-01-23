@@ -620,17 +620,11 @@ function isDigitStart(name) {
   return /^[0-9]/.test((name || "").trim());
 }
 
-function typeLabel(t, p) {
-  const raw = String(t || "").trim();
-  const k = normalizeTypeKey(raw);
-  if (k === "box") {
-    const lower = (raw + " " + String(p?.name || "")).toLowerCase();
-    return lower.includes("конверт") ? "Сюрприз-конверт" : "Сюрприз-бокс";
-  }
-  const map = { sticker: "Наклейки", pin: "Набор значков", poster: "Постеры" };
-  return map[k] || raw || "";
+function typeLabel(t) {
+  const k = normalizeTypeKey(t);
+  const map = { sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
+  return map[k] || (t || "");
 }
-
 
 // Нормализуем тип товара из CSV (в таблице могут быть как ключи sticker/pin,
 // так и русские подписи вроде "Наклейки", "Набор значков" и т.п.)
@@ -676,25 +670,6 @@ function getProductById(id) {
   return products.find((p) => p.id === id);
 }
 
-function updateBadges() {
-  const favN = fav.length;
-  const cartN = cart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
-
-  if (favCount) {
-    if (favN > 0) {
-      favCount.style.display = "";
-      favCount.textContent = String(favN);
-    } else favCount.style.display = "none";
-  }
-
-  if (cartCount) {
-    if (cartN > 0) {
-      cartCount.style.display = "";
-      cartCount.textContent = String(cartN);
-    } else cartCount.style.display = "none";
-  }
-}
-
 function setCart(next) {
   cart = next;
   saveJSON(LS_CART, cart);
@@ -703,23 +678,21 @@ function setCart(next) {
   updateBadges();
 }
 function setFav(next) {
-  // нормализуем и добавляем стабильный ключ (id + выбранные допки)
-  const arr = Array.isArray(next) ? next : [];
-  const norm = arr
-    .map((x) => normalizeFavItem(x))
-    .filter((x) => x && String(x.id || "").trim())
-    .map((x) => ({ ...x, key: makeFavKey(x.id, x) }));
-
-  fav = norm;
+  fav = next;
   saveJSON(LS_FAV, fav);
   // синхронизация между устройствами (не блокируем UI)
   cloudSet(CS_FAV, JSON.stringify(fav)).catch(() => {});
   updateBadges();
 }
 
+function favIndexById(id){
+  const sid = String(id||"").trim();
+  return (fav || []).findIndex((x) => String(x?.id||"").trim() === sid);
+}
+
 function normalizeFavItem(raw){
   // Поддержка разных форматов избранного (на всякий случай)
-  // Ожидаемый формат: { id, film, lamination, pin_lamination, poster_pack, poster_paper }
+  // Ожидаемый формат: { id, film, lamination, pin_lamination }
   if (raw == null) return { id: "" };
   if (typeof raw === "string" || typeof raw === "number") {
     return { id: String(raw) };
@@ -735,40 +708,14 @@ function normalizeFavItem(raw){
   };
 }
 
-function makeFavKey(id, opts){
-  const sid = String(id||"").trim();
-  const o = normalizeFavItem({ id: sid, ...(opts||{}) });
-  return [
-    sid,
-    `film=${String(o.film||"")}`,
-    `lam=${String(o.lamination||"")}`,
-    `pinlam=${String(o.pin_lamination||"")}`,
-    `pack=${String(o.poster_pack||"")}`,
-    `paper=${String(o.poster_paper||"")}`,
-  ].join("|");
-}
-
-function favIndexByKey(key){
-  const sk = String(key||"").trim();
-  if (!sk) return -1;
-  return (fav || []).findIndex((x) => String(x?.key || makeFavKey(x?.id, x)).trim() === sk);
-}
-
-// Совместимость: если вызвать без opts — проверим только "базовый" вариант (id без допок)
-function isFavId(id, opts){
-  const sid = String(id||"").trim();
-  if (!sid) return false;
-  const key = opts ? makeFavKey(sid, opts) : makeFavKey(sid, {});
-  return favIndexByKey(key) >= 0;
+function isFavId(id){
+  return favIndexById(id) >= 0;
 }
 
 function toggleFav(id, opts){
   const sid = String(id||"").trim();
   if (!sid) return;
-
-  const key = makeFavKey(sid, opts || {});
-  const i = favIndexByKey(key);
-
+  const i = favIndexById(sid);
   if (i >= 0) {
     const next = [...(fav||[])];
     next.splice(i, 1);
@@ -776,8 +723,7 @@ function toggleFav(id, opts){
     toast("Убрано из избранного", "warn");
   } else {
     const next = [...(fav||[])];
-    const base = normalizeFavItem({ id: sid, ...(opts||{}) });
-    next.push({ ...base, key });
+    next.push({ id: sid, film: String(opts?.film||""), lamination: String(opts?.lamination||""), pin_lamination: String(opts?.pin_lamination||""), poster_pack: String(opts?.poster_pack||""), poster_paper: String(opts?.poster_paper||"") });
     setFav(next);
     toast("Добавлено в избранное", "good");
   }
@@ -805,76 +751,91 @@ function addToCartById(id, opts){
     if (!pin_lamination) pin_lamination = "pin_base";
   }
   if (typeKey === "poster") {
-    return [
-      "✨ О товаре
-Набор рандомных фотопостеров с аккуратной печатью и приятной цветопередачей.
-Каждый заказ собирается случайным образом, поэтому каждый набор получается уникальным ✨",
-      "🎲 Важно
-Мы не кладем повторы внутри одного заказа, но при повторных заказах в будущем возможны повторения изображений, так как подбор осуществляется заново.",
-      "📏 Характеристики
-• Тип: фотопостеры
-• Печать: качественная струйная
-• Подбор изображений: рандомный",
-    ].join("
-
-");
+    if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+    if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
   }
 
-  if (typeKey === "box") {
-    const pt = String(p?.product_type || "");
-    const lower = (pt + " " + String(p?.name || "")).toLowerCase();
-    const isEnvelope = lower.includes("конверт");
+  const match = (ci) =>
+    String(ci.id) === sid &&
+    String(ci.film||"") === film &&
+    String(ci.lamination||"") === lamination &&
+    String(ci.pin_lamination||"") === pin_lamination &&
+    String(ci.poster_pack||"") === poster_pack &&
+    String(ci.poster_paper||"") === poster_paper;
 
-    if (isEnvelope) {
-      return [
-        "✨ О товаре
-Небольшой конверт с аккуратно подобранным наполнением.
-Подойдёт для тех, кто любит сюрпризы, атмосферу уюта и приятные мелочи 💌",
-        "📦 Внутри
-• 2 набора наклеек
-• 8 глянцевых фотопостеров 10 × 15 см
-• 3 глянцевых фотопостеров 21 × 30 см",
-        "💜 Важно
-Если вы ранее не покупали наборы наклеек или значков — будут вложены готовые наборы из ассортимента.
+  const existing = (cart||[]).find(match);
+  if (existing) {
+    existing.qty = (Number(existing.qty)||0) + 1;
+    setCart([...(cart||[])]);
+  } else {
+    setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper }]);
+  }
+}
 
-Если вы уже покупали товары из текущего ассортимента — для вас будут собраны новые уникальные наборы (обязательно укажите в комментарии к заказу, что вы уже ранее заказывали).
-После выполнения заказа такие наборы будут добавлены в ассортимент магазина.",
-      ].join("
+function updateBadges() {
+  const favN = fav.length;
+  const cartN = cart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
 
-");
-    }
-
-    return [
-      "✨ О товаре
-Коробочка с тщательно подобранным наполнением и вниманием к деталям.
-Каждый бокс собирается индивидуально и дарит ощущение небольшого, приятного сюрприза 💖",
-      "📦 Внутри
-• 1 набор значков
-• 2 набора наклеек
-• 4 глянцевых фотопостера 10 × 15 см
-• 3 глянцевых фотопостера 21 × 30 см
-• 2 3D-стикера (2,5 × 2,5 см)
-• Круглый металлический брелок (44 мм)",
-      "💜 Важно
-Если вы ранее не покупали наборы наклеек или значков — в бокс будут вложены готовые наборы из ассортимента.
-
-Если вы уже покупали товары из текущего ассортимента — для вас будут собраны новые уникальные наборы (обязательно укажите в комментарии к заказу, что вы уже ранее заказывали).
-После выполнения заказа такие наборы будут добавлены в ассортимент магазина.",
-    ].join("
-
-");
+  if (favCount) {
+    if (favN > 0) {
+      favCount.style.display = "";
+      favCount.textContent = String(favN);
+    } else favCount.style.display = "none";
   }
 
-  return "";
+  if (cartCount) {
+    if (cartN > 0) {
+      cartCount.style.display = "";
+      cartCount.textContent = String(cartN);
+    } else cartCount.style.display = "none";
+  }
 }
 
-function getShortDesc(p) {
-  // support multiple column names
-  const s = pickFirstField(p, ["description_short", "short_description", "description_shor", "desc_short", "meta"]);
-  return s;
+// ===== thumbnails helpers =====
+function imagesField(p) {
+  // Поддерживаем разные названия колонок в CSV (особенно для значков)
+  return (
+    p?.images ||
+    p?.image ||
+    p?.image_url ||
+    p?.photo ||
+    p?.img ||
+    p?.pin_image ||
+    p?.pin_photo ||
+    p?.pin_photo_url ||
+    p?.thumb ||
+    p?.thumb_url ||
+    p?.preview ||
+    p?.preview_url ||
+    p?.cover ||
+    p?.cover_url ||
+    ""
+  );
 }
 
+function firstImageUrl(p) {
+  const imgs = splitList(imagesField(p));
+  return imgs[0] || "";
+}
 
+function cardThumbHTML(p) {
+  const u = firstImageUrl(p);
+  if (!u) return "";
+  return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy" decoding="async">`;
+}
+
+function safeText(s) {
+  return String(s ?? "").trim();
+}
+
+function escapeHTML(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // Render multiline text as readable blocks (blank lines -> separate blocks)
 function renderTextBlocks(raw) {
@@ -926,6 +887,96 @@ function renderTextBlocks(raw) {
       return `<div class="dBlock">${html}</div>`;
     })
     .join("");
+}
+
+function pickFirstField(obj, keys) {
+  for (const k of keys) {
+    const v = obj?.[k];
+    const s = String(v ?? "").trim();
+    if (s) return s;
+  }
+  return "";
+}
+
+function looksLikeGenericDesc(s) {
+  const t = String(s ?? "").trim();
+  if (!t) return true;
+  // if very short and no structure — treat as generic
+  if (t.length < 80 && !t.includes("\n")) return true;
+  // if doesn't include our block markers — often generic
+  const markers = ["✨", "📦", "📏", "🎲", "🖨️", "⚠️", "💜"];
+  const hasMarker = markers.some((m) => t.includes(m));
+  if (!hasMarker && t.length < 160) return true;
+  return false;
+}
+
+function defaultShortByType(p) {
+  const typeKey = normalizeTypeKey(p?.product_type);
+  const nm = String(p?.name || "").toLowerCase();
+
+  if (typeKey === "pin") return "6 значков в наборе • металл • 44 мм";
+  if (typeKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
+  if (typeKey === "poster") return "Рандомные фотопостеры • выбор формата";
+  if (typeKey === "box") {
+    if (nm.includes("конверт")) return "Сюрприз-конверт • компактный набор";
+    return "Большой сюрприз-бокс • много наполнения";
+  }
+  return "";
+}
+
+function defaultFullByType(p) {
+  const typeKey = normalizeTypeKey(p?.product_type);
+  const nm = String(p?.name || "").toLowerCase();
+
+  if (typeKey === "pin") {
+    return [
+      "✨ О товаре\nНабор из шести аккуратных значков с яркой печатью.\nХорошо подойдут для рюкзаков, сумок, курток или коллекций — лёгкие, удобные и приятные в использовании.",
+      "📦 В наборе\n• 6 значков",
+      "📏 Характеристики\n• Размер одного значка: 44 мм\n• Материал: металл\n• Крепление: булавка сзади",
+    ].join("\n\n");
+  }
+
+  if (typeKey === "sticker") {
+    return [
+      "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
+      "📏 Характеристики\n• Размер листа: 16 × 25 см\n• Материал: глянцевая плёнка",
+      "⚠️ Важно\nНаклейки не вырезаны по контуру — лист идёт цельным.",
+    ].join("\n\n");
+  }
+
+  if (typeKey === "poster") {
+    return [
+      "✨ О товаре\nНабор рандомных фотопостеров с аккуратной печатью и приятной цветопередачей.\nКаждый заказ собирается случайным образом, поэтому каждый набор получается уникальным ✨",
+      "🎲 Важно\nФотопостеры в заказе подбираются случайным образом.\n\nМы стараемся не класть повторы внутри одного заказа.\nПри повторных заказах в будущем возможны повторения изображений, так как подбор осуществляется заново.",
+      "📦 Варианты наборов\n• 8 фотопостеров 10 × 15 см — 450 ₽\n• 5 фотопостеров 21 × 30 см — 750 ₽\n• 8 фотопостеров 10 × 15 см + 5 фотопостеров 21 × 30 см — 1100 ₽",
+      "🖨️ Бумага для печати\n• Глянцевая — яркие цвета и выразительный блеск\n• Матовая — мягкая цветопередача без бликов",
+      "📏 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Подбор изображений: рандомный",
+    ].join("\n\n");
+  }
+
+  if (typeKey === "box") {
+    const isEnvelope = nm.includes("конверт");
+    if (isEnvelope) {
+      return [
+        "✨ О товаре\nНебольшой конверт с аккуратно подобранным наполнением.\nПодойдёт для тех, кто любит сюрпризы, атмосферу уюта и приятные мелочи 💌",
+        "📦 Внутри\n• 2 набора наклеек\n\n• 8 глянцевых фотопостеров 10 × 15 см\n• 3 глянцевых фотопостеров 21 × 30 см",
+        "💜 Важно\nЕсли вы ранее не покупали наборы наклеек или значков — будут вложены готовые наборы из ассортимента.\n\nЕсли вы уже покупали товары из текущего ассортимента — для вас будут подготовлены новые уникальные наборы,\nкоторые позже появятся в ассортименте магазина.",
+      ].join("\n\n");
+    }
+    return [
+      "✨ О товаре\nКоробочка с тщательно подобранным наполнением и вниманием к деталям.\nКаждый бокс собирается индивидуально и дарит ощущение небольшого, приятного сюрприза 💖",
+      "📦 Внутри\n• 1 набор значков\n• 2 набора наклеек\n\n• 4 глянцевых фотопостера 10 × 15 см\n• 3 глянцевых фотопостера 21 × 30 см\n\n• 2 3D-стикера (2,5 × 2,5 см)\n• Круглый металлический брелок (44 мм)",
+      "💜 Важно\nЕсли вы ранее не покупали наборы наклеек или значков — в бокс будут вложены готовые наборы из ассортимента.\n\nЕсли вы уже покупали товары из текущего ассортимента — для вас будут собраны новые уникальные наборы.\nПосле выполнения заказа такие наборы будут добавлены в ассортимент магазина.",
+    ].join("\n\n");
+  }
+
+  return "";
+}
+
+function getShortDesc(p) {
+  // support multiple column names
+  const s = pickFirstField(p, ["description_short", "short_description", "description_shor", "desc_short", "meta"]);
+  return s;
 }
 
 function stripPosterStaticChoiceBlocks(raw) {
@@ -1955,7 +2006,7 @@ function renderProduct(productId) {
   }
 
   function render() {
-    const inFavNow = isFavId(p.id, { film: selectedFilm, lamination: selectedStickerLam, pin_lamination: selectedPinLam, poster_pack: selectedPosterPack, poster_paper: selectedPosterPaper });
+    const inFavNow = isFavId(p.id);
     const priceNow = calcPrice();
 
     view.innerHTML = `
@@ -1963,9 +2014,11 @@ function renderProduct(productId) {
         <div class="prodHead">
           <div>
             <div class="h2">${safeText(p.name)}</div>
-            <div class="small">${fandom?.fandom_name ? `<b>${safeText(fandom.fandom_name)}</b> · ` : ""}${typeLabel(p.product_type, p)}</div>
+            <div class="small">${fandom?.fandom_name ? `<b>${safeText(fandom.fandom_name)}</b> · ` : ""}${typeLabel(p.product_type)}</div>
           </div>
-
+          <button class="prodFav ${inFavNow ? "is-active" : ""}" id="btnFav" type="button" aria-label="В избранное">
+            <span class="heartGlyph">${inFavNow ? "♥" : "♡"}</span>
+          </button>
         </div>
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
@@ -1998,6 +2051,7 @@ function renderProduct(productId) {
             `
             : ""
         }
+
         ${
           isPin
             ? `
@@ -2010,13 +2064,7 @@ function renderProduct(productId) {
 
         <hr>
 
-        <div class="prodActionsRow">
-          <button class="btn btnGhost ${inFavNow ? "is-fav" : ""}" id="btnFav" type="button" aria-label="В избранное">
-            <span class="heartGlyph">${inFavNow ? "♥" : "♡"}</span>
-            <span class="btnLabel">В избранное</span>
-          </button>
-          <button class="btn is-active" id="btnCart" type="button">Добавить в корзину · ${money(priceNow)}</button>
-        </div>
+        <button class="btn is-active" id="btnCart" type="button">Добавить в корзину · ${money(priceNow)}</button>
       </div>
     `;
 
@@ -2070,10 +2118,7 @@ function renderProduct(productId) {
 // Favorites
 // =====================
 function renderFavorites() {
-  const items = (fav || [])
-    .map((raw, idx) => ({ idx, fi: normalizeFavItem(raw) }))
-    .filter((x) => getProductById(x.fi.id));
-
+  const items = (fav || []).map(normalizeFavItem).filter((x) => getProductById(x.id));
 
   view.innerHTML = `
     <div class="card">
@@ -2085,7 +2130,7 @@ function renderFavorites() {
         ${
           items.length
             ? items
-                .map(({ fi, idx }) => {
+                .map((fi, idx) => {
                   const p = getProductById(fi.id);
                   const img = firstImageUrl(p);
                   const unit = calcItemUnitPrice(p, fi);
@@ -2542,13 +2587,7 @@ function buildOrderText() {
 
     items.forEach(({ ci, p, qty, unitPrice }) => {
       // название товара без фандома
-      if (g.key === "box") {
-        const lower = (String(p.product_type || "") + " " + String(p.name || "")).toLowerCase();
-        const kind = lower.includes("конверт") ? "конверт" : "коробка";
-        lines.push(`• ${p.name} - ${kind} - (${qty}шт — ${money(unitPrice * qty)})`);
-      } else {
-        lines.push(`• ${p.name} (${qty}шт — ${money(unitPrice * qty)})`);
-      }
+      lines.push(`• ${p.name} (${qty}шт — ${money(unitPrice * qty)})`);
 
       if (g.key === "sticker") {
         const filmKey = pickStickerFilm(ci);
