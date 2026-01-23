@@ -1178,34 +1178,3 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .dText{
   color:rgba(11,11,18,.78);
 }
-
-
-/* --- Product actions row (fav + cart) --- */
-.prodActionsRow{
-  display:flex;
-  gap:12px;
-  align-items:stretch;
-}
-.prodActionsRow .btn{
-  flex:1;
-}
-.btnGhost{
-  background:#f1f0f6;
-  border:1px solid rgba(0,0,0,.08);
-  color:#1b1b24;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-}
-.btnGhost .heartGlyph{
-  font-size:18px;
-  line-height:1;
-}
-.btnGhost .btnLabel{
-  font-weight:800;
-}
-.btnGhost.is-fav{
-  box-shadow:0 0 0 3px rgba(157,110,255,.22);
-  border-color:rgba(157,110,255,.45);
-}
