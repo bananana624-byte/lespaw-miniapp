@@ -685,11 +685,6 @@ function setFav(next) {
   updateBadges();
 }
 
-function favIndexById(id){
-  const sid = String(id||"").trim();
-  return (fav || []).findIndex((x) => String(x?.id||"").trim() === sid);
-}
-
 function normalizeFavItem(raw){
   // Поддержка разных форматов избранного (на всякий случай)
   // Ожидаемый формат: { id, film, lamination, pin_lamination }
@@ -708,14 +703,59 @@ function normalizeFavItem(raw){
   };
 }
 
-function isFavId(id){
-  return favIndexById(id) >= 0;
+
+function normalizeFavOptsByProduct(p, opts){
+  const typeKey = normalizeTypeKey(p?.product_type);
+  let film = String(opts?.film||"");
+  let lamination = String(opts?.lamination||"");
+  let pin_lamination = String(opts?.pin_lamination||"");
+  let poster_pack = String(opts?.poster_pack||"");
+  let poster_paper = String(opts?.poster_paper||"");
+
+  if (typeKey === "sticker") {
+    if (!film) film = "film_glossy";
+    if (!lamination) lamination = "none";
+  }
+  if (typeKey === "pin") {
+    if (!pin_lamination) pin_lamination = "pin_base";
+  }
+  if (typeKey === "poster") {
+    if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+    if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
+  }
+
+  return { film, lamination, pin_lamination, poster_pack, poster_paper };
 }
+
+function favIndexByVariant(id, opts){
+  const sid = String(id||"").trim();
+  if (!sid) return -1;
+  const p = getProductById(sid);
+  const norm = normalizeFavOptsByProduct(p, opts || {});
+  return (fav || []).map(normalizeFavItem).findIndex((x) =>
+    String(x.id||"").trim() === sid &&
+    String(x.film||"") === String(norm.film||"") &&
+    String(x.lamination||"") === String(norm.lamination||"") &&
+    String(x.pin_lamination||"") === String(norm.pin_lamination||"") &&
+    String(x.poster_pack||"") === String(norm.poster_pack||"") &&
+    String(x.poster_paper||"") === String(norm.poster_paper||"")
+  );
+}
+
+function isFav(id, opts){
+  return favIndexByVariant(id, opts) >= 0;
+}
+
+// legacy: старые вызовы по id считаем как «дефолтный вариант»
+function isFavId(id){
+  return isFav(id, {});
+}
+
 
 function toggleFav(id, opts){
   const sid = String(id||"").trim();
   if (!sid) return;
-  const i = favIndexById(sid);
+  const i = favIndexByVariant(sid, opts || {});
   if (i >= 0) {
     const next = [...(fav||[])];
     next.splice(i, 1);
@@ -723,7 +763,9 @@ function toggleFav(id, opts){
     toast("Убрано из избранного", "warn");
   } else {
     const next = [...(fav||[])];
-    next.push({ id: sid, film: String(opts?.film||""), lamination: String(opts?.lamination||""), pin_lamination: String(opts?.pin_lamination||""), poster_pack: String(opts?.poster_pack||""), poster_paper: String(opts?.poster_paper||"") });
+    const p = getProductById(sid);
+    const norm = normalizeFavOptsByProduct(p, opts || {});
+    next.push({ id: sid, ...norm });
     setFav(next);
     toast("Добавлено в избранное", "good");
   }
@@ -1314,8 +1356,8 @@ function renderFandomPage(fandomId) {
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
             <div class="pcardPrice">${moneyDisplay(p.price)}</div>
             <div class="pcardActions">
-              <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
-                <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+              <button class="iconBtn iconBtnHeart ${isFav(p.id, {}) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+                <span class="heartGlyph">${isFav(p.id, {}) ? "♥" : "♡"}</span>
               </button>
               <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
                 <span class="plusGlyph">＋</span>
@@ -1362,13 +1404,17 @@ function renderFandomPage(fandomId) {
     b.onclick = (e) => {
       e.stopPropagation();
       const id = String(b.dataset.fav || "");
-      toggleFav(id);
+      const p = getProductById(id);
+      toggleFav(id, normalizeFavOptsByProduct(p, {}));
       // обновим сердечки не перерисовывая весь экран
       view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
-        x.classList.toggle("is-active", isFavId(id));
+        x.classList.toggle("is-active", isFav(id, {}));
         const g = x.querySelector(".heartGlyph");
-        if (g) g.textContent = isFavId(id) ? "♥" : "♡";
+        if (g) g.textContent = isFav(id, {}) ? "♥" : "♡";
       });
+      updateBadges();
+    };
+  });;
     };
   });
 
@@ -1801,8 +1847,8 @@ function renderSearch(q) {
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
             <div class="pcardPrice">${moneyDisplay(p.price)}</div>
             <div class="pcardActions">
-              <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
-                <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+              <button class="iconBtn iconBtnHeart ${isFav(p.id, {}) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+                <span class="heartGlyph">${isFav(p.id, {}) ? "♥" : "♡"}</span>
               </button>
               <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
                 <span class="plusGlyph">＋</span>
@@ -1924,6 +1970,16 @@ function renderProduct(productId) {
   let selectedPosterPack = POSTER_PACKS?.[0]?.[0] || "p10x15_8"; // default pack
   let selectedPosterPaper = POSTER_PAPERS?.[0]?.[0] || "glossy"; // default paper
 
+  function getSelectedOpts(){
+    return normalizeFavOptsByProduct(p, {
+      film: selectedFilm,
+      lamination: selectedStickerLam,
+      pin_lamination: selectedPinLam,
+      poster_pack: selectedPosterPack,
+      poster_paper: selectedPosterPaper
+    });
+  }
+
 
   const FILM_OPTIONS = [
     ["film_glossy", "Стандартная глянцевая плёнка", 0],
@@ -2006,7 +2062,7 @@ function renderProduct(productId) {
   }
 
   function render() {
-    const inFavNow = isFavId(p.id);
+    const inFavNow = isFav(p.id, getSelectedOpts());
     const priceNow = calcPrice();
 
     view.innerHTML = `
