@@ -1278,10 +1278,16 @@ function renderHome() {
     </div>
 
 
-<div class="homeSection">
-  <div class="h2" style="margin-top:14px">Новинки</div>
-  <div class="small">Последние добавленные товары</div>
-  <div class="grid2" id="newGrid" style="margin-top:10px">
+<div class="homeSection newSection">
+  <div class="newHeader">
+    <div class="newTitleRow">
+      <div class="newTitle">Новинки</div>
+      <div class="newChip">NEW</div>
+    </div>
+    <div class="newSub">Последние добавленные товары</div>
+  </div>
+  <div class="newDivider"></div>
+  <div class="grid2" id="newGrid" style="margin-top:12px">
     ${
       (() => {
         const latest = (products || []).slice(-30).reverse();
