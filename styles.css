@@ -1242,3 +1242,24 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   margin-top:10px;
   background: linear-gradient(90deg, rgba(125,60,255,.00), rgba(125,60,255,.35), rgba(125,60,255,.00));
 }
+
+.newCarousel{
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  padding:12px 2px 4px;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.newCarousel::-webkit-scrollbar{ display:none; }
+.newCarousel{ scrollbar-width:none; }
+
+.newCarousel .newCard{
+  flex:0 0 auto;
+  width:182px;
+  scroll-snap-align:start;
+}
+
+@media (max-width: 360px){
+  .newCarousel .newCard{ width:168px; }
+}
