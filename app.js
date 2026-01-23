@@ -1287,13 +1287,13 @@ function renderHome() {
     <div class="newSub">Последние добавленные товары</div>
   </div>
   <div class="newDivider"></div>
-  <div class="grid2" id="newGrid" style="margin-top:12px">
+  <div class="newCarousel" id="newCarousel" aria-label="Новинки">
     ${
       (() => {
         const latest = (products || []).slice(-30).reverse();
         return latest
           .map((p) => `
-            <div class="pcard pcardMini" data-id="${p.id}">
+            <div class="pcard pcardMini newCard" data-id="${p.id}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${safeText(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -1314,7 +1314,7 @@ function renderHome() {
 bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
 
   // Новинки: тап по карточке открывает товар
-  view.querySelectorAll("#newGrid [data-id]").forEach((el) => {
+  view.querySelectorAll("#newCarousel [data-id]").forEach((el) => {
     bindTap(el, () => openPage(() => renderProduct(el.dataset.id)));
   });
 
