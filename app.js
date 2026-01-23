@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v118
+// LesPaw Mini App — app.js v129
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -204,19 +204,37 @@ const navStack = [];
 let currentRender = null;
 
 function openPage(renderFn) {
+  if (typeof renderFn !== "function") {
+    console.error("openPage: renderFn is not a function", renderFn);
+    return;
+  }
   if (currentRender) navStack.push(currentRender);
   currentRender = renderFn;
   syncNav();
-  renderFn();
+  try { renderFn(); } catch (err) {
+    console.error(err);
+    toast("Ошибка экрана", "warn");
+    currentRender = renderHome;
+    navStack.length = 0;
+    syncNav();
+    renderHome();
+  }
   scrollToTop();
   syncBottomSpace();
 }
 
 function goBack() {
+  if (navStack.length === 0) {
+    resetToHome();
+    return;
+  }
   const prev = navStack.pop();
-  currentRender = prev || renderHome;
+  currentRender = (typeof prev === "function") ? prev : renderHome;
   syncNav();
-  currentRender();
+  try { currentRender(); } catch (err) {
+    console.error(err);
+    resetToHome();
+  }
   scrollToTop();
   syncBottomSpace();
 }
@@ -1270,15 +1288,15 @@ function renderHome() {
 </div>
   `;
 
-  document.getElementById("tCat").onclick = () => openPage(renderFandomTypes);
-  document.getElementById("tEx").onclick = () => openExamples();
-  document.getElementById("tRev").onclick = () => openPage(renderReviews);
+  bindTap(document.getElementById("tCat"), () => openPage(renderFandomTypes));
+  bindTap(document.getElementById("tEx"), () => openExamples());
+  bindTap(document.getElementById("tRev"), () => openPage(renderReviews));
   
-document.getElementById("tInfo").onclick = () => openPage(renderInfo);
+bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
 
   // Новинки: тап по карточке открывает товар
   view.querySelectorAll("#newGrid [data-id]").forEach((el) => {
-    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+    bindTap(el, () => openPage(() => renderProduct(el.dataset.id)));
   });
 
   syncNav();
@@ -1310,7 +1328,7 @@ function renderFandomTypes() {
   `;
 
   view.querySelectorAll("[data-type]").forEach((el) => {
-    el.onclick = () => openPage(() => renderFandomList(el.dataset.type));
+    bindTap(el, () => openPage(() => renderFandomList(el.dataset.type)));
   });
 
   syncNav();
@@ -1356,7 +1374,7 @@ function renderFandomList(type) {
   `;
 
   view.querySelectorAll("[data-id]").forEach((el) => {
-    el.onclick = () => openPage(() => renderFandomPage(el.dataset.id));
+    bindTap(el, () => openPage(() => renderFandomPage(el.dataset.id)));
   });
 
   syncNav();
@@ -1431,17 +1449,17 @@ function renderFandomPage(fandomId) {
 
   // открыть карточку по тапу на карточку
   view.querySelectorAll(".pcard[data-id]").forEach((el) => {
-    el.onclick = (e) => {
-      const t = e.target;
+    bindTap(el, (e) => {
+      const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       openPage(() => renderProduct(el.dataset.id));
-    };
+    });
   });
 
   // мини-действия
   view.querySelectorAll("[data-fav]").forEach((b) => {
-    b.onclick = (e) => {
-      e.stopPropagation();
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.fav || "");
       toggleFav(id);
       // обновим сердечки не перерисовывая весь экран
@@ -1450,16 +1468,16 @@ function renderFandomPage(fandomId) {
         const g = x.querySelector(".heartGlyph");
         if (g) g.textContent = isFavId(id) ? "♥" : "♡";
       });
-    };
+    });
   });
 
   view.querySelectorAll("[data-add]").forEach((b) => {
-    b.onclick = (e) => {
-      e.stopPropagation();
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
       addToCartById(id);
       toast("Добавлено в корзину", "good");
-    };
+    });
   });
 
   syncNav();
@@ -1554,9 +1572,9 @@ function renderInfo() {
     </div>
   `;
 
-  document.getElementById("btnMain").onclick = () => tg?.openTelegramLink(MAIN_CHANNEL_URL);
-  document.getElementById("btnSuggest").onclick = () => tg?.openTelegramLink(SUGGEST_URL);
-  document.getElementById("btnManager").onclick = () => tg?.openTelegramLink(`https://t.me/${MANAGER_USERNAME}`);
+  bindTap(document.getElementById("btnMain"), () => tg?.openTelegramLink(MAIN_CHANNEL_URL));
+  bindTap(document.getElementById("btnSuggest"), () => tg?.openTelegramLink(SUGGEST_URL));
+  bindTap(document.getElementById("btnManager"), () => tg?.openTelegramLink(`https://t.me/${MANAGER_USERNAME}`));
 
   syncNav();
   syncBottomSpace();
