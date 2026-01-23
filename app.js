@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v136
+// LesPaw Mini App — app.js v138
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -46,6 +46,24 @@ try {
   tg?.expand();
 } catch {
   // если вне Telegram — не падаем
+}
+
+// =====================
+// Analytics (GA4) — LesPaw
+// =====================
+function gaEvent(name, params = {}) {
+  try {
+    if (typeof window.gtag === "function") {
+      window.gtag("event", name, params || {});
+    }
+  } catch {}
+}
+
+let __gaAppOpenFired = false;
+function gaAppOpen() {
+  if (__gaAppOpenFired) return;
+  __gaAppOpenFired = true;
+  gaEvent("app_open");
 }
 
 // =====================
@@ -765,6 +783,8 @@ function toggleFavVariant(id, opts){
     const next = [...(fav||[])];
     next.splice(i, 1);
     setFav(next);
+    gaEvent("remove_from_wishlist", { item_id: String(id).trim() });
+    gaEvent("remove_from_favorite", { item_id: String(id).trim() });
     toast("Убрано из избранного", "warn");
   } else {
     const next = [...(fav||[])];
@@ -777,6 +797,8 @@ function toggleFavVariant(id, opts){
       poster_paper: String(opts?.poster_paper||""),
     });
     setFav(next);
+    gaEvent("add_to_wishlist", { item_id: String(id).trim() });
+    gaEvent("add_to_favorite", { item_id: String(id).trim() });
     toast("Добавлено в избранное", "ok");
   }
   updateBadges();
@@ -850,8 +872,10 @@ function addToCartById(id, opts){
   if (existing) {
     existing.qty = (Number(existing.qty)||0) + 1;
     setCart([...(cart||[])]);
+    gaEvent("add_to_cart", { item_id: sid, quantity: 1 });
   } else {
     setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper }]);
+    gaEvent("add_to_cart", { item_id: sid, quantity: 1 });
   }
 }
 
@@ -1229,6 +1253,8 @@ async function init() {
     await loadSyncedState();
     updateBadges();
     resetToHome(); // уже можно открыть меню
+
+    gaAppOpen();
 
     // Параллельно грузим свежие CSV (быстрее, чем по очереди)
     const [fFresh, pFresh, sFresh, rFresh] = await Promise.all([
@@ -2589,6 +2615,7 @@ function renderCart() {
       const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
       setCart(next);
+      gaEvent("add_to_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
       renderCart();
     };
   });
@@ -2601,6 +2628,7 @@ function renderCart() {
       if (q <= 0) next.splice(i, 1);
       else next[i].qty = q;
       setCart(next);
+      gaEvent("remove_from_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
       renderCart();
     };
   });
@@ -2654,6 +2682,7 @@ let checkout = loadJSON(LS_CHECKOUT, {
 });
 
 function openCheckout() {
+  gaEvent("begin_checkout");
   // каждый новый заход в оформление требует открыть "Важную информацию"
   infoViewedThisSession = false;
   openPage(renderCheckout);
