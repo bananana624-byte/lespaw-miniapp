@@ -735,7 +735,7 @@ function isFav(id, opts){
   return favIndexByKey(favKey(id, opts)) >= 0;
 }
 
-function toggleFav(id, opts){
+function toggleFavVariant(id, opts){
   const key = favKey(id, opts);
   if (!String(id||"").trim()) return;
   const i = favIndexByKey(key);
@@ -778,25 +778,16 @@ function normalizeFavItem(raw){
   };
 }
 
+
 function isFavId(id){
-  return favIndexById(id) >= 0;
+  // Для мини-сердечек в сетке: считаем базовый вариант товара (без доп. опций)
+  return isFav(String(id||"").trim(), null);
 }
 
+// В некоторых местах старого кода toggleFav вызывался без опций.
+// Оставляем совместимость: это будет переключать базовый вариант.
 function toggleFav(id, opts){
-  const sid = String(id||"").trim();
-  if (!sid) return;
-  const i = favIndexById(sid);
-  if (i >= 0) {
-    const next = [...(fav||[])];
-    next.splice(i, 1);
-    setFav(next);
-    toast("Убрано из избранного", "warn");
-  } else {
-    const next = [...(fav||[])];
-    next.push({ id: sid, film: String(opts?.film||""), lamination: String(opts?.lamination||""), pin_lamination: String(opts?.pin_lamination||""), poster_pack: String(opts?.poster_pack||""), poster_paper: String(opts?.poster_paper||"") });
-    setFav(next);
-    toast("Добавлено в избранное", "good");
-  }
+  return toggleFavVariant(id, opts);
 }
 
 function addToCartById(id, opts){
@@ -2007,7 +1998,6 @@ function renderProduct(productId, prefill) {
 
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
-
   const overlayDelta = Number(settings.overlay_price_delta) || 100;
   const holoDelta = Number(settings.holo_base_price_delta) || 100;
 
