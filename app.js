@@ -1287,22 +1287,39 @@ function renderHome() {
     <div class="newSub">Последние добавленные товары</div>
   </div>
   <div class="newDivider"></div>
-  <div class="newCarousel" id="newCarousel" aria-label="Новинки">
-    ${
-      (() => {
-        const latest = (products || []).slice(-30).reverse();
-        return latest
-          .map((p) => `
-            <div class="pcard pcardMini newCard" data-id="${p.id}">
-              ${cardThumbHTML(p)}
-              <div class="pcardTitle">${safeText(p.name)}</div>
-              ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
-              <div class="pcardPrice">${moneyDisplay(p.price)}</div>
-            </div>
-          `)
-          .join("");
-      })()
-    }
+
+  <div class="newWrap">
+    <button class="newNav newPrev" id="newPrev" aria-label="Предыдущие">‹</button>
+
+    <div class="newCarousel" id="newCarousel" aria-label="Новинки">
+      ${
+        (() => {
+          const latest = (products || []).slice(-30).reverse();
+          const pages = [];
+          for (let i = 0; i < latest.length; i += 4) pages.push(latest.slice(i, i + 4));
+          return pages
+            .map((page) => `
+              <div class="newPage">
+                ${page
+                  .map(
+                    (p) => `
+                  <div class="pcard pcardMini newCard" data-id="${p.id}">
+                    ${cardThumbHTML(p)}
+                    <div class="pcardTitle">${safeText(p.name)}</div>
+                    ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+                    <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+                  </div>
+                `
+                  )
+                  .join("")}
+              </div>
+            `)
+            .join("");
+        })()
+      }
+    </div>
+
+    <button class="newNav newNext" id="newNext" aria-label="Следующие">›</button>
   </div>
 </div>
   `;
@@ -1317,6 +1334,20 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
   view.querySelectorAll("#newCarousel [data-id]").forEach((el) => {
     bindTap(el, () => openPage(() => renderProduct(el.dataset.id)));
   });
+
+  // Новинки: стрелки (удобно на ПК)
+  const nc = document.getElementById("newCarousel");
+  const prevBtn = document.getElementById("newPrev");
+  const nextBtn = document.getElementById("newNext");
+  const scrollByPage = (dir) => {
+    if (!nc) return;
+    const w = nc.getBoundingClientRect().width || nc.clientWidth || 0;
+    if (!w) return;
+    nc.scrollBy({ left: dir * w, behavior: "smooth" });
+  };
+  if (prevBtn) bindTap(prevBtn, () => scrollByPage(-1));
+  if (nextBtn) bindTap(nextBtn, () => scrollByPage(1));
+
 
   syncNav();
   syncBottomSpace();
