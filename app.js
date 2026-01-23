@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v129
+// LesPaw Mini App — app.js v136
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1132,15 +1132,39 @@ function openExternal(url) {
 function bindTap(el, handler) {
   if (!el) return;
 
-  // Telegram WebView can "eat" clicks on some devices (especially iOS),
-  // so we bind multiple end-events and guard against double-fires.
-  let lastFire = 0;
+  // Telegram/WebView and mobile browsers can generate a "ghost click":
+  // touchend/pointerup fires, the UI rerenders, then a delayed click lands
+  // on a NEW element under the finger (e.g. opens the first fandom).
+  // We guard globally, not per-element.
+  window.__LP_LAST_TAP_TS = window.__LP_LAST_TAP_TS || 0;
+  window.__LP_LAST_TAP_SRC = window.__LP_LAST_TAP_SRC || "";
+
   let touchMoved = false;
 
-  const fire = (e) => {
+  const fire = (e, src) => {
     const now = Date.now();
-    if (now - lastFire < 320) return; // защита от дублей
-    lastFire = now;
+
+    // Suppress delayed ghost clicks after a touch/pointer action.
+    if (src === "click" && now - window.__LP_LAST_TAP_TS < 700) {
+      try { e?.preventDefault?.(); } catch {}
+      try { e?.stopPropagation?.(); } catch {}
+      return;
+    }
+
+    // Deduplicate very close events (same element).
+    // (We use the same global stamp to also dedupe pointerup+touchend on hybrid devices.)
+    if (now - window.__LP_LAST_TAP_TS < 140 && window.__LP_LAST_TAP_SRC !== "click") {
+      try { e?.preventDefault?.(); } catch {}
+      try { e?.stopPropagation?.(); } catch {}
+      return;
+    }
+
+    // Record real taps (not delayed clicks).
+    if (src !== "click") {
+      window.__LP_LAST_TAP_TS = now;
+      window.__LP_LAST_TAP_SRC = src;
+    }
+
     try { e?.preventDefault?.(); } catch {}
     try { e?.stopPropagation?.(); } catch {}
     try { handler(e); } catch (err) {
@@ -1154,17 +1178,17 @@ function bindTap(el, handler) {
   el.addEventListener("touchmove", () => { touchMoved = true; }, { passive: true });
   el.addEventListener("touchend", (e) => {
     if (touchMoved) return;
-    fire(e);
+    fire(e, "touch");
   }, { passive: false });
 
-  // pointer / click path
-  el.addEventListener("pointerup", fire, { passive: false });
-  el.addEventListener("click", fire, { passive: false });
+  // pointer path (desktop + modern mobile)
+  el.addEventListener("pointerup", (e) => fire(e, "pointer"), { passive: false });
 
-  // fallback (some WebViews behave better with property handler)
-  try { el.onclick = fire; } catch {}
+  // click fallback (desktop / some WebViews)
+  el.addEventListener("click", (e) => fire(e, "click"), { passive: false });
 }
 
+//
 // =====================
 // Init
 // =====================
@@ -2974,7 +2998,6 @@ function renderCheckout() {
             </label>
           </div>
         </div>
-
         <div class="checkoutNote">
           После нажатия <b>«Оформить заказ»</b> откроется чат с менеджеркой с готовым текстом заказа.
           Пожалуйста, отправь его <b>без изменений</b>.
