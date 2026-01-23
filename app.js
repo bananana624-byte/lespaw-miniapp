@@ -1289,12 +1289,10 @@ function renderHome() {
   <div class="newDivider"></div>
 
   <div class="newWrap">
-    <button class="newNav newPrev" id="newPrev" aria-label="Предыдущие">‹</button>
-
     <div class="newCarousel" id="newCarousel" aria-label="Новинки">
       ${
         (() => {
-          const latest = (products || []).slice(-30).reverse();
+          const latest = (products || []).slice(-28).reverse();
           const pages = [];
           for (let i = 0; i < latest.length; i += 4) pages.push(latest.slice(i, i + 4));
           return pages
@@ -1319,7 +1317,11 @@ function renderHome() {
       }
     </div>
 
-    <button class="newNav newNext" id="newNext" aria-label="Следующие">›</button>
+    <div class="newControls" aria-label="Навигация новинок">
+      <button class="newNavBtn" id="newPrev" type="button" aria-label="Предыдущие">‹</button>
+      <div class="newDots" id="newDots" aria-hidden="true"></div>
+      <button class="newNavBtn" id="newNext" type="button" aria-label="Следующие">›</button>
+    </div>
   </div>
 </div>
   `;
@@ -1335,18 +1337,72 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
     bindTap(el, () => openPage(() => renderProduct(el.dataset.id)));
   });
 
-  // Новинки: стрелки (удобно на ПК)
+  // Новинки: кнопки + точки (чтобы было понятно на телефоне)
   const nc = document.getElementById("newCarousel");
   const prevBtn = document.getElementById("newPrev");
   const nextBtn = document.getElementById("newNext");
-  const scrollByPage = (dir) => {
+  const dots = document.getElementById("newDots");
+
+  const pageCount = (() => {
+    if (!nc) return 0;
+    const n = nc.querySelectorAll(".newPage").length;
+    return n || 0;
+  })();
+
+  const renderDots = () => {
+    if (!dots) return;
+    if (pageCount <= 1) {
+      dots.innerHTML = "";
+      return;
+    }
+    dots.innerHTML = new Array(pageCount)
+      .fill(0)
+      .map((_, i) => `<span class="newDot" data-i="${i}"></span>`)
+      .join("");
+  };
+
+  const getActivePage = () => {
+    if (!nc || !pageCount) return 0;
+    const w = nc.getBoundingClientRect().width || nc.clientWidth || 1;
+    const x = nc.scrollLeft || 0;
+    return Math.max(0, Math.min(pageCount - 1, Math.round(x / w)));
+  };
+
+  const setActiveDot = () => {
+    if (!dots || !pageCount) return;
+    const a = getActivePage();
+    dots.querySelectorAll(".newDot").forEach((d, i) => d.classList.toggle("isActive", i === a));
+    if (prevBtn) prevBtn.disabled = a <= 0;
+    if (nextBtn) nextBtn.disabled = a >= pageCount - 1;
+  };
+
+  const scrollToPage = (i) => {
     if (!nc) return;
     const w = nc.getBoundingClientRect().width || nc.clientWidth || 0;
     if (!w) return;
-    nc.scrollBy({ left: dir * w, behavior: "smooth" });
+    nc.scrollTo({ left: i * w, behavior: "smooth" });
   };
+
+  const scrollByPage = (dir) => scrollToPage(getActivePage() + dir);
+
+  renderDots();
+  setActiveDot();
+
   if (prevBtn) bindTap(prevBtn, () => scrollByPage(-1));
   if (nextBtn) bindTap(nextBtn, () => scrollByPage(1));
+
+  if (dots) {
+    dots.querySelectorAll("[data-i]").forEach((el) => {
+      bindTap(el, () => scrollToPage(parseInt(el.dataset.i || "0", 10)));
+    });
+  }
+
+  if (nc) {
+    nc.addEventListener("scroll", () => {
+      // троттлинг не нужен — лёгкая логика
+      setActiveDot();
+    }, { passive: true });
+  }
 
 
   syncNav();
