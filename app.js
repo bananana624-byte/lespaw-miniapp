@@ -685,9 +685,61 @@ function setFav(next) {
   updateBadges();
 }
 
-function favIndexById(id){
-  const sid = String(id||"").trim();
-  return (fav || []).findIndex((x) => String(x?.id||"").trim() === sid);
+
+function favKeyFromParts(parts){
+  // parts: {id, film, lamination, pin_lamination, poster_pack, poster_paper}
+  const id = String(parts?.id || "").trim();
+  const film = String(parts?.film || "").trim();
+  const lam = String(parts?.lamination || "").trim();
+  const pinLam = String(parts?.pin_lamination || "").trim();
+  const pack = String(parts?.poster_pack || parts?.poster_pack || "").trim();
+  const paper = String(parts?.poster_paper || "").trim();
+  return [id, film, lam, pinLam, pack, paper].join("|");
+}
+
+function favKey(id, opts){
+  return favKeyFromParts({
+    id,
+    film: opts?.film,
+    lamination: opts?.lamination,
+    pin_lamination: opts?.pin_lamination,
+    poster_pack: opts?.poster_pack,
+    poster_paper: opts?.poster_paper
+  });
+}
+
+function favIndexByKey(key){
+  const k = String(key||"").trim();
+  return (fav || []).findIndex((x) => favKeyFromParts(normalizeFavItem(x)) === k);
+}
+
+function isFav(id, opts){
+  return favIndexByKey(favKey(id, opts)) >= 0;
+}
+
+function toggleFav(id, opts){
+  const key = favKey(id, opts);
+  if (!String(id||"").trim()) return;
+  const i = favIndexByKey(key);
+  if (i >= 0) {
+    const next = [...(fav||[])];
+    next.splice(i, 1);
+    setFav(next);
+    toast("Убрано из избранного", "warn");
+  } else {
+    const next = [...(fav||[])];
+    next.push({
+      id: String(id).trim(),
+      film: String(opts?.film||""),
+      lamination: String(opts?.lamination||""),
+      pin_lamination: String(opts?.pin_lamination||""),
+      poster_pack: String(opts?.poster_pack||""),
+      poster_paper: String(opts?.poster_paper||""),
+    });
+    setFav(next);
+    toast("Добавлено в избранное", "ok");
+  }
+  updateBadges();
 }
 
 function normalizeFavItem(raw){
@@ -1193,12 +1245,41 @@ function renderHome() {
       <div class="tileTitle">Важная информация</div>
       <div class="tileSub">Оплата, сроки, доставка</div>
     </div>
+
+
+<div class="homeSection">
+  <div class="h2" style="margin-top:14px">Новинки</div>
+  <div class="small">Последние добавленные товары</div>
+  <div class="grid2" id="newGrid" style="margin-top:10px">
+    ${
+      (() => {
+        const latest = (products || []).slice(-30).reverse();
+        return latest
+          .map((p) => `
+            <div class="pcard pcardMini" data-id="${p.id}">
+              ${cardThumbHTML(p)}
+              <div class="pcardTitle">${safeText(p.name)}</div>
+              ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+              <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+            </div>
+          `)
+          .join("");
+      })()
+    }
+  </div>
+</div>
   `;
 
   document.getElementById("tCat").onclick = () => openPage(renderFandomTypes);
   document.getElementById("tEx").onclick = () => openExamples();
   document.getElementById("tRev").onclick = () => openPage(renderReviews);
-  document.getElementById("tInfo").onclick = () => openPage(renderInfo);
+  
+document.getElementById("tInfo").onclick = () => openPage(renderInfo);
+
+  // Новинки: тап по карточке открывает товар
+  view.querySelectorAll("#newGrid [data-id]").forEach((el) => {
+    el.onclick = () => openPage(() => renderProduct(el.dataset.id));
+  });
 
   syncNav();
   syncBottomSpace();
@@ -1897,7 +1978,7 @@ function renderSearch(q) {
 // =====================
 // Product page (полная карточка)
 // =====================
-function renderProduct(productId) {
+function renderProduct(productId, prefill) {
   const p = getProductById(productId);
   if (!p) {
     view.innerHTML = `<div class="card"><div class="h2">Товар не найден</div></div>`;
@@ -1923,6 +2004,21 @@ function renderProduct(productId) {
   let selectedPinLam = "pin_base"; // default: глянцевая базовая
   let selectedPosterPack = POSTER_PACKS?.[0]?.[0] || "p10x15_8"; // default pack
   let selectedPosterPaper = POSTER_PAPERS?.[0]?.[0] || "glossy"; // default paper
+
+
+// --- prefill (из корзины/избранного) ---
+const pf = prefill || {};
+if (isSticker) {
+  if (pf.film) selectedFilm = String(pf.film);
+  if (pf.lamination) selectedStickerLam = String(pf.lamination);
+}
+if (isPin) {
+  if (pf.pin_lamination) selectedPinLam = String(pf.pin_lamination);
+}
+if (isPoster) {
+  if (pf.poster_pack) selectedPosterPack = String(pf.poster_pack);
+  if (pf.poster_paper) selectedPosterPaper = String(pf.poster_paper);
+}
 
 
   const FILM_OPTIONS = [
@@ -2006,7 +2102,7 @@ function renderProduct(productId) {
   }
 
   function render() {
-    const inFavNow = isFavId(p.id);
+    const inFavNow = isFav(p.id, currentOpts());
     const priceNow = calcPrice();
 
     view.innerHTML = `
@@ -2016,10 +2112,7 @@ function renderProduct(productId) {
             <div class="h2">${safeText(p.name)}</div>
             <div class="small">${fandom?.fandom_name ? `<b>${safeText(fandom.fandom_name)}</b> · ` : ""}${typeLabel(p.product_type)}</div>
           </div>
-          <button class="prodFav ${inFavNow ? "is-active" : ""}" id="btnFav" type="button" aria-label="В избранное">
-            <span class="heartGlyph">${inFavNow ? "♥" : "♡"}</span>
-          </button>
-        </div>
+</div>
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
@@ -2064,7 +2157,12 @@ function renderProduct(productId) {
 
         <hr>
 
-        <button class="btn is-active" id="btnCart" type="button">Добавить в корзину · ${money(priceNow)}</button>
+        <div class="row" style="gap:10px">
+  <button class="btn btnIcon" id="btnFav" type="button" aria-label="В избранное">
+    <span class="heartGlyph">${inFavNow ? "♥" : "♡"}</span>
+  </button>
+  <button class="btn is-active" id="btnCart" type="button">Добавить в корзину · ${money(priceNow)}</button>
+</div>
       </div>
     `;
 
@@ -2136,7 +2234,7 @@ function renderFavorites() {
                   const unit = calcItemUnitPrice(p, fi);
                   const pairs = optionPairsFor(fi, p);
                   return `
-                    <div class="item" data-open="${p.id}">
+                    <div class="item" data-open="${p.id}" data-idx="${idx}">
                       <div class="miniRow">
                         ${img ? `<img class="miniThumb" src="${img}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
@@ -2171,7 +2269,9 @@ function renderFavorites() {
     el.onclick = (e) => {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-      openPage(() => renderProduct(el.dataset.open));
+      const idx = Number(el.dataset.idx || 0);
+      const fi = items[idx];
+      openPage(() => renderProduct(el.dataset.open, fi));
     };
   });
 
@@ -2290,7 +2390,7 @@ function renderCart() {
                   const unit = calcItemUnitPrice(p, ci);
                   const pairs = optionPairsFor(ci, p);
                   return `
-                    <div class="item" data-idx="${idx}">
+                    <div class="item" data-idx="${idx}" data-open="${p.id}">
                       <div class="miniRow">
                         ${img ? `<img class="miniThumb" src="${img}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
@@ -2357,7 +2457,20 @@ function renderCart() {
     };
   });
 
-  const goCats = document.getElementById("goCatsFromEmptyCart");
+  
+// Открытие карточки товара по тапу на позицию (кроме кнопок)
+view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
+  el.onclick = (e) => {
+    const t = e.target;
+    if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+    const idx = Number(el.dataset.idx || 0);
+    const ci = items[idx];
+    if (!ci) return;
+    openPage(() => renderProduct(ci.id, ci));
+  };
+});
+
+const goCats = document.getElementById("goCatsFromEmptyCart");
   if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
 
   const btnClear = document.getElementById("btnClear");
@@ -2587,7 +2700,15 @@ function buildOrderText() {
 
     items.forEach(({ ci, p, qty, unitPrice }) => {
       // название товара без фандома
-      lines.push(`• ${p.name} (${qty}шт — ${money(unitPrice * qty)})`);
+
+if (g.key === "box") {
+  const pt = String(p.product_type || "").toLowerCase();
+  const boxKind = pt.includes("конверт") ? "конверт" : "коробка";
+  lines.push(`• ${p.name} - ${boxKind} - (${qty}шт — ${money(unitPrice * qty)})`);
+} else {
+  // название товара без фандома
+  lines.push(`• ${p.name} (${qty}шт — ${money(unitPrice * qty)})`);
+}
 
       if (g.key === "sticker") {
         const filmKey = pickStickerFilm(ci);
