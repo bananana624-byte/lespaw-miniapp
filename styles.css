@@ -1,7 +1,7 @@
 /* LESPAW STYLE v100 — FIX LAYOUT + THUMBS */
 
 *{ box-sizing:border-box; }
-html,body{ height:100%; }
+html,body{ height:100%; overflow-x:hidden; }
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
@@ -1243,23 +1243,61 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   background: linear-gradient(90deg, rgba(125,60,255,.00), rgba(125,60,255,.35), rgba(125,60,255,.00));
 }
 
+
+.newWrap{
+  position:relative;
+  margin-top:10px;
+}
+
 .newCarousel{
   display:flex;
-  gap:12px;
+  gap:14px;
   overflow-x:auto;
-  padding:12px 2px 4px;
+  padding:12px 4px 6px;
   scroll-snap-type:x mandatory;
   -webkit-overflow-scrolling: touch;
 }
 .newCarousel::-webkit-scrollbar{ display:none; }
 .newCarousel{ scrollbar-width:none; }
 
-.newCarousel .newCard{
-  flex:0 0 auto;
-  width:182px;
+.newPage{
+  flex:0 0 100%;
   scroll-snap-align:start;
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:12px;
 }
 
-@media (max-width: 360px){
-  .newCarousel .newCard{ width:168px; }
+.newPage .newCard{
+  width:100%;
 }
+
+.newNav{
+  position:absolute;
+  top:50%;
+  transform: translateY(-50%);
+  width:42px;
+  height:42px;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 14px 26px rgba(0,0,0,.18);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:26px;
+  font-weight:900;
+  color:#14141c;
+  cursor:pointer;
+  user-select:none;
+}
+.newNav:active{ transform: translateY(-50%) scale(.98); }
+.newPrev{ left:8px; }
+.newNext{ right:8px; }
+
+@media (hover:none){
+  .newNav{ display:none; }
+}
+
