@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v143
+// LesPaw Mini App — app.js v144
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1058,20 +1058,40 @@ function applySurpriseInsideOverride(rawDesc, p) {
   } else {
     // If there is no "Внутри" section, insert after "О товаре" block if present, else prepend.
     const reAbout = /(^|\n)\s*(?:✨\s*)?О\s+товаре\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
-    if (reAbout.test(out)) {
-      out = out.replace(reAbout, (m0) => `${m0}\n\n${replacement}`);
-    } else {
-      out = `${replacement}\n\n${out}`.trim();
-    }
+    if (reAbout.test(out)) out = out.replace(reAbout, (m0) => `${m0}\n\n${replacement}`);
+    else out = `${replacement}\n\n${out}`.trim();
   }
 
-  // IMPORTANT: keep "📦 Внутри" as a separate block (so renderTextBlocks doesn't glue it to "О товаре")
-  // Convert single newline before "Внутри" into a blank line.
+  // Ensure blank line before the "📦 Внутри" header (so it becomes its own block)
   out = out.replace(/([^\n])\n(?!\n)(?:📦\s*)?Внутри\s*\n/g, "$1\n\n📦 Внутри\n");
 
-  // Cleanup: avoid 3+ blank lines
-  out = out.replace(/\n{3,}/g, "\n\n").trim();
+  // IMPORTANT: remove "dangling" bullet-only blocks that came from the old CSV "Внутри"
+  // (они могли быть разнесены на отдельные блоки без заголовка и оставались после замены)
+  const blocks = out.split(/\n\s*\n+/g).map((b) => b.trim()).filter(Boolean);
+  const rebuilt = [];
+  let seenInside = false;
 
+  const isInsideHeader = (b) => /^(?:📦\s*)?Внутри\b/i.test(String(b || "").split("\n")[0].trim());
+  const isBulletOnlyBlock = (b) => {
+    const lines = String(b || "").split("\n").map((x) => x.trim()).filter(Boolean);
+    if (!lines.length) return false;
+    return lines.every((ln) => ln.startsWith("•"));
+  };
+
+  for (const b of blocks) {
+    if (isInsideHeader(b)) {
+      rebuilt.push(b);
+      seenInside = true;
+      continue;
+    }
+    if (seenInside && isBulletOnlyBlock(b)) {
+      // skip bullet-only continuation blocks after "Внутри"
+      continue;
+    }
+    rebuilt.push(b);
+  }
+
+  out = rebuilt.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
   return out;
 }
 
