@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v142
+// LesPaw Mini App — app.js v143
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1051,17 +1051,28 @@ function applySurpriseInsideOverride(rawDesc, p) {
   // Replace a whole "Внутри" section (with or without 📦) until next section or end.
   const reInside = /(^|\n)\s*(?:📦\s*)?Внутри\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
 
-  if (reInside.test(desc)) {
-    return desc.replace(reInside, (m0, p1) => `${p1}${replacement}\n\n`);
+  let out = desc;
+
+  if (reInside.test(out)) {
+    out = out.replace(reInside, (m0, p1) => `${p1}${replacement}\n\n`);
+  } else {
+    // If there is no "Внутри" section, insert after "О товаре" block if present, else prepend.
+    const reAbout = /(^|\n)\s*(?:✨\s*)?О\s+товаре\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
+    if (reAbout.test(out)) {
+      out = out.replace(reAbout, (m0) => `${m0}\n\n${replacement}`);
+    } else {
+      out = `${replacement}\n\n${out}`.trim();
+    }
   }
 
-  // If there is no "Внутри" section, insert after "О товаре" block if present, else prepend.
-  const reAbout = /(^|\n)\s*(?:✨\s*)?О\s+товаре\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
-  if (reAbout.test(desc)) {
-    return desc.replace(reAbout, (m0) => `${m0}\n\n${replacement}`);
-  }
+  // IMPORTANT: keep "📦 Внутри" as a separate block (so renderTextBlocks doesn't glue it to "О товаре")
+  // Convert single newline before "Внутри" into a blank line.
+  out = out.replace(/([^\n])\n(?!\n)(?:📦\s*)?Внутри\s*\n/g, "$1\n\n📦 Внутри\n");
 
-  return `${replacement}\n\n${desc}`.trim();
+  // Cleanup: avoid 3+ blank lines
+  out = out.replace(/\n{3,}/g, "\n\n").trim();
+
+  return out;
 }
 
 
