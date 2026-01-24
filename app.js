@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v144
+// LesPaw Mini App — app.js v145
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1030,69 +1030,95 @@ function applySurpriseInsideOverride(rawDesc, p) {
 
   if (!isEnvelope && !isBox) return desc;
 
-  const insideEnvelope =
-    "📦 Внутри\n" +
-    "• 2 набора наклеек\n" +
-    "• 8 глянцевых фотопостера 10 × 15 см\n" +
-    "• 5 глянцевых фотопостера 21 × 30 см\n" +
-    "• 2 3D-стикера (2,5 × 2,5 см)";
+  const replacementLines = isEnvelope
+    ? [
+        "📦 Внутри",
+        "• 2 набора наклеек",
+        "• 8 глянцевых фотопостера 10 × 15 см",
+        "• 5 глянцевых фотопостера 21 × 30 см",
+        "• 2 3D-стикера (2,5 × 2,5 см)",
+      ]
+    : [
+        "📦 Внутри",
+        "• 1 набор значков",
+        "• 2 набора наклеек",
+        "• 4 глянцевых фотопостера 10 × 15 см",
+        "• 3 глянцевых фотопостера 21 × 30 см",
+        "• 2 3D-стикера (2,5 × 2,5 см)",
+        "• Круглый металлический брелок (44 мм)",
+      ];
 
-  const insideBox =
-    "📦 Внутри\n" +
-    "• 1 набор значков\n" +
-    "• 2 набора наклеек\n" +
-    "• 4 глянцевых фотопостера 10 × 15 см\n" +
-    "• 3 глянцевых фотопостера 21 × 30 см\n" +
-    "• 2 3D-стикера (2,5 × 2,5 см)\n" +
-    "• Круглый металлический брелок (44 мм)";
+  // ===== Line-based replacement (robust against CSV "dangling" bullets) =====
+  const lines = desc.split("\n");
 
-  const replacement = isEnvelope ? insideEnvelope : insideBox;
-
-  // Replace a whole "Внутри" section (with or without 📦) until next section or end.
-  const reInside = /(^|\n)\s*(?:📦\s*)?Внутри\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
-
-  let out = desc;
-
-  if (reInside.test(out)) {
-    out = out.replace(reInside, (m0, p1) => `${p1}${replacement}\n\n`);
-  } else {
-    // If there is no "Внутри" section, insert after "О товаре" block if present, else prepend.
-    const reAbout = /(^|\n)\s*(?:✨\s*)?О\s+товаре\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
-    if (reAbout.test(out)) out = out.replace(reAbout, (m0) => `${m0}\n\n${replacement}`);
-    else out = `${replacement}\n\n${out}`.trim();
-  }
-
-  // Ensure blank line before the "📦 Внутри" header (so it becomes its own block)
-  out = out.replace(/([^\n])\n(?!\n)(?:📦\s*)?Внутри\s*\n/g, "$1\n\n📦 Внутри\n");
-
-  // IMPORTANT: remove "dangling" bullet-only blocks that came from the old CSV "Внутри"
-  // (они могли быть разнесены на отдельные блоки без заголовка и оставались после замены)
-  const blocks = out.split(/\n\s*\n+/g).map((b) => b.trim()).filter(Boolean);
-  const rebuilt = [];
-  let seenInside = false;
-
-  const isInsideHeader = (b) => /^(?:📦\s*)?Внутри\b/i.test(String(b || "").split("\n")[0].trim());
-  const isBulletOnlyBlock = (b) => {
-    const lines = String(b || "").split("\n").map((x) => x.trim()).filter(Boolean);
-    if (!lines.length) return false;
-    return lines.every((ln) => ln.startsWith("•"));
+  const isInsideHeaderLine = (ln) => {
+    const s = String(ln || "").trim();
+    return /^(?:📦\s*)?Внутри$/i.test(s);
   };
+  const isBulletLine = (ln) => String(ln || "").trim().startsWith("•");
 
-  for (const b of blocks) {
-    if (isInsideHeader(b)) {
-      rebuilt.push(b);
-      seenInside = true;
-      continue;
+  // Find "Внутри" header line
+  let insideIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (isInsideHeaderLine(lines[i])) {
+      insideIdx = i;
+      break;
     }
-    if (seenInside && isBulletOnlyBlock(b)) {
-      // skip bullet-only continuation blocks after "Внутри"
-      continue;
-    }
-    rebuilt.push(b);
   }
 
-  out = rebuilt.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
-  return out;
+  // If no "Внутри" in text — insert after "О товаре" header if present, else prepend.
+  if (insideIdx === -1) {
+    let aboutIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const s = String(lines[i] || "").trim();
+      if (/^(?:✨\s*)?О\s+товаре$/i.test(s)) {
+        aboutIdx = i;
+        break;
+      }
+    }
+    if (aboutIdx >= 0) {
+      // insert after the "О товаре" block (until next empty line or end)
+      let j = aboutIdx + 1;
+      while (j < lines.length && String(lines[j] || "").trim() !== "") j++;
+      const before = lines.slice(0, j);
+      const after = lines.slice(j);
+      const outLines = [...before, "", ...replacementLines, "", ...after];
+      return outLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    }
+    const outLines = [...replacementLines, "", ...lines];
+    return outLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  // We have "Внутри" header. Keep everything before it, then insert replacement block,
+  // then SKIP any following bullet lines (even if they belong to the old CSV and were duplicated),
+  // until we hit a non-bullet line that is not just empty spacing.
+  const before = lines.slice(0, insideIdx);
+
+  // move pointer after header line
+  let k = insideIdx + 1;
+
+  // skip old inside content: bullets and empty lines
+  while (k < lines.length) {
+    const s = String(lines[k] || "").trim();
+    if (s === "" || isBulletLine(lines[k])) {
+      k++;
+      continue;
+    }
+    break; // reached next section
+  }
+
+  const after = lines.slice(k);
+
+  // Ensure blank line separation so renderTextBlocks makes a clean block
+  const outLines = [
+    ...before,
+    ...(before.length && String(before[before.length - 1] || "").trim() !== "" ? [""] : []),
+    ...replacementLines,
+    "",
+    ...after,
+  ];
+
+  return outLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 
@@ -2972,7 +2998,6 @@ if (g.key === "box") {
       if (g.key === "sticker") {
         const filmKey = pickStickerFilm(ci);
         const lamKey = pickStickerLam(ci);
-
         // Плёнка: базовую не пишем
         if (filmKey && filmKey !== "film_glossy" && filmKey !== "none") {
           const label = filmLabelByKey[filmKey] || String(filmKey);
