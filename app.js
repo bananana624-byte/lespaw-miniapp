@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v138
+// LesPaw Mini App — app.js v139
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -3075,17 +3075,19 @@ function renderCheckout() {
   // визуальный статус для заблокированной галочки
   if (rowAgreeInfo && !infoViewedThisSession) rowAgreeInfo.classList.add("is-disabled");
 
-  // если важная инфа ещё не открывалась — ловим клик по строке (чекбокс disabled и сам клики не отдаёт)
-  bindTap(rowAgreeInfo, (e) => {
+  // если важная инфа ещё не открывалась — не даём поставить галочку
+  // ВАЖНО: тут нельзя использовать bindTap(), потому что он делает preventDefault всегда,
+  // и тогда чекбокс не переключается даже когда он разблокирован.
+  rowAgreeInfo?.addEventListener("click", (e) => {
     if (!infoViewedThisSession) {
-      e.preventDefault();
-      e.stopPropagation();
+      try { e?.preventDefault?.(); } catch {}
+      try { e?.stopPropagation?.(); } catch {}
       toast("Сначала открой «Важную информацию» 💜", "warn");
       rowAgreeInfo?.classList.add("is-error");
       // удобно: сразу ведём на вкладку
       setTimeout(() => openPage(renderInfo), 150);
     }
-  });
+  }, { passive: false });
 
   agreeInfo?.addEventListener("change", () => rowAgreeInfo?.classList.remove("is-error"));
   confirmItems?.addEventListener("change", () => rowConfirmItems?.classList.remove("is-error"));
