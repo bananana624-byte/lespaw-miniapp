@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v141
+// LesPaw Mini App — app.js v142
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1017,6 +1017,54 @@ function looksLikeGenericDesc(s) {
   return false;
 }
 
+// =====================
+// Surprise items: enforce different "Внутри" blocks for Сюрприз-конверт vs Сюрприз-бокс
+// (нужно на всех товарах, даже если описание приходит из CSV)
+// =====================
+function applySurpriseInsideOverride(rawDesc, p) {
+  const desc = String(rawDesc ?? "").replace(/\r/g, "");
+  const blob = (String(p?.name || "") + " " + String(p?.product_type || "")).toLowerCase();
+
+  const isEnvelope = blob.includes("конверт");
+  const isBox = blob.includes("бокс") || blob.includes("короб");
+
+  if (!isEnvelope && !isBox) return desc;
+
+  const insideEnvelope =
+    "📦 Внутри\n" +
+    "• 2 набора наклеек\n" +
+    "• 8 глянцевых фотопостера 10 × 15 см\n" +
+    "• 5 глянцевых фотопостера 21 × 30 см\n" +
+    "• 2 3D-стикера (2,5 × 2,5 см)";
+
+  const insideBox =
+    "📦 Внутри\n" +
+    "• 1 набор значков\n" +
+    "• 2 набора наклеек\n" +
+    "• 4 глянцевых фотопостера 10 × 15 см\n" +
+    "• 3 глянцевых фотопостера 21 × 30 см\n" +
+    "• 2 3D-стикера (2,5 × 2,5 см)\n" +
+    "• Круглый металлический брелок (44 мм)";
+
+  const replacement = isEnvelope ? insideEnvelope : insideBox;
+
+  // Replace a whole "Внутри" section (with or without 📦) until next section or end.
+  const reInside = /(^|\n)\s*(?:📦\s*)?Внутри\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
+
+  if (reInside.test(desc)) {
+    return desc.replace(reInside, (m0, p1) => `${p1}${replacement}\n\n`);
+  }
+
+  // If there is no "Внутри" section, insert after "О товаре" block if present, else prepend.
+  const reAbout = /(^|\n)\s*(?:✨\s*)?О\s+товаре\s*\n[\s\S]*?(?=(\n\s*\n(?:[✨📦📏🎲🖨️⚠️💜]|[A-Za-zА-Яа-я]).*)|$)/m;
+  if (reAbout.test(desc)) {
+    return desc.replace(reAbout, (m0) => `${m0}\n\n${replacement}`);
+  }
+
+  return `${replacement}\n\n${desc}`.trim();
+}
+
+
 function defaultShortByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
@@ -1072,7 +1120,7 @@ function defaultFullByType(p) {
     }
     return [
       "✨ О товаре\nКоробочка с тщательно подобранным наполнением и вниманием к деталям.\nКаждый бокс собирается индивидуально и дарит ощущение небольшого, приятного сюрприза 💖",
-      "📦 Внутри\n• 2 набора наклеек\n• 8 глянцевых фотопостера 10 × 15 см\n• 5 глянцевых фотопостера 21 × 30 см\n• 2 3D-стикера (2,5 × 2,5 см)",
+      "📦 Внутри\n• 1 набор значков\n• 2 набора наклеек\n\n• 4 глянцевых фотопостера 10 × 15 см\n• 3 глянцевых фотопостера 21 × 30 см\n\n• 2 3D-стикера (2,5 × 2,5 см)\n• Круглый металлический брелок (44 мм)",
       "💜 Важно\nЕсли вы ранее не покупали наборы наклеек или значков — в бокс будут вложены готовые наборы из ассортимента.\n\nЕсли вы уже покупали товары из текущего ассортимента — для вас будут собраны новые уникальные наборы (обязательно укажите в комментарии к заказу, что вы уже ранее заказывали).\nПосле выполнения заказа такие наборы будут добавлены в ассортимент магазина.",
     ].join("\n\n");
   }
@@ -1101,10 +1149,13 @@ function stripPosterStaticChoiceBlocks(raw) {
 
 function getFullDesc(p) {
   const fromCsv = pickFirstField(p, ["description_full", "description", "full_description", "descriptionFull", "desc"]);
-  if (!fromCsv) return defaultFullByType(p) || "";
+  if (!fromCsv) return applySurpriseInsideOverride((defaultFullByType(p) || ""), p);
+
   // If the csv text is too generic, upgrade to our default template
-  if (looksLikeGenericDesc(fromCsv)) return defaultFullByType(p) || fromCsv;
-  return fromCsv;
+  if (looksLikeGenericDesc(fromCsv)) return applySurpriseInsideOverride((defaultFullByType(p) || fromCsv), p);
+
+  // Even if description comes from CSV — we still enforce different "Внутри" for конверт/бокс
+  return applySurpriseInsideOverride(fromCsv, p);
 }
 
 function cardMetaText(p) {
