@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v153
+// LesPaw Mini App — app.js v154
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1024,7 +1024,10 @@ function escapeHTML(s) {
   });
 }
 // Частый кейс: текст из таблицы, который пойдёт в innerHTML
-var h = (s) => escapeHTML(safeText(s));
+function h(s) {
+  return escapeHTML(safeText(s));
+}
+
 // Безопасный URL для src/href (отбрасываем javascript:)
 function safeUrl(u) {
   const raw = String(u ?? "").trim();
@@ -3355,3 +3358,30 @@ function renderCheckout() {
   syncNav();
   syncBottomSpace();
 }
+
+// =====================
+// Bootstrap
+// =====================
+(function bootLesPaw() {
+  const run = () => {
+    try {
+      const p = init();
+      // init is async; ensure unhandled rejections don't get swallowed
+      if (p && typeof p.then === "function") {
+        p.catch((err) => {
+          console.error(err);
+          try { showDataError(err); } catch {}
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      try { showDataError(err); } catch {}
+    }
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
+  }
+})();
