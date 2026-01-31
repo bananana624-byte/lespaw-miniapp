@@ -1253,3 +1253,8 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+
+/* Inline field error text */
+.fieldHelp{ display:none; margin-top:6px; color: rgba(255,59,107,.9); }
+.fieldHelp.is-show{ display:block; }
