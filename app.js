@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v169 (hotfix: syntax + csv bg update)
+// LesPaw Mini App — app.js v170 (hotfix: syntax + csv bg update)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -292,26 +292,12 @@ function openPage(renderFn) {
     console.error("openPage: renderFn is not a function", renderFn);
     return;
   }
-
-  // Защита от "гонок" перерисовки: каждый переход повышает epoch,
-  // старые async-обновления не смогут дорисовать не тот экран.
-  renderEpoch += 1;
-  const myEpoch = renderEpoch;
-
-  const wrapped = () => {
-    if (myEpoch !== renderEpoch) return;
-    renderFn();
-  };
-  wrapped._base = renderFn;
-
   if (currentRender) navStack.push(currentRender);
-  currentRender = wrapped;
-
+  currentRender = renderFn;
   syncNav();
-  try { wrapped(); } catch (err) {
+  try { renderFn(); } catch (err) {
     console.error(err);
     toast("Ошибка экрана", "warn");
-    renderEpoch += 1;
     currentRender = renderHome;
     navStack.length = 0;
     syncNav();
@@ -338,7 +324,6 @@ function goBack() {
 }
 
 function resetToHome() {
-  renderEpoch += 1;
   navStack.length = 0;
   currentRender = renderHome;
   if (globalSearch) globalSearch.value = "";
@@ -524,7 +509,7 @@ function onCsvBackgroundUpdate(cacheKey, freshData) {
     } else return;
 
     try {
-      if (typeof currentRender === "function") { const base = currentRender._base || currentRender; if (base !== renderHome) currentRender(); }
+      if (typeof currentRender === "function" && currentRender !== renderHome) currentRender();
     } catch {}
 
     if (!_csvBgToastShown) {
@@ -998,6 +983,7 @@ function addToCartById(id, opts){
 
   const p = getProductById(sid);
   const typeKey = normalizeTypeKey(p?.product_type);
+
   // options (with safe defaults)
   let film = String(opts?.film||"");
   let lamination = String(opts?.lamination||"");
@@ -1142,23 +1128,26 @@ function haptic(kind) {
 }
 
 function formatPhoneLive(raw) {
-  // Оставляем только цифры и ограничиваем до 11 (строго)
   const digitsRaw = String(raw || "").replace(/\D+/g, "");
   const digits = digitsRaw.slice(0, 11);
   if (!digits) return "";
-
-  // Формат: 1-3-3-2-2 (пример: 8-952-512-62-98 или 7-999-123-45-67)
-  const groups = [1, 3, 3, 2, 2];
+  // Preferred RU-ish groups:
+  // 11 digits -> 1-3-3-2-2  (8-952-512-62-98)
+  // 10 digits -> 3-3-2-2   (952-512-62-98)
+  const groups = (digits.length <= 10) ? [3,3,2,2] : [1,3,3,2,2];
   let out = "";
   let i = 0;
-
   for (let gi = 0; gi < groups.length && i < digits.length; gi++) {
     const take = Math.min(groups[gi], digits.length - i);
     const part = digits.slice(i, i + take);
     if (part) out += (out ? "-" : "") + part;
     i += take;
   }
-
+  // If there are still digits left (non-standard length), append grouped by 3
+  if (i < digits.length) {
+    const rest = digits.slice(i);
+    out += (out ? "-" : "") + rest.replace(/(\d{3})(?=\d)/g, "$1-");
+  }
   return out;
 }
 
@@ -1598,9 +1587,15 @@ function bindTap(el, handler) {
 
 //
 // =====================
+// Render epoch (protect against async race)
+// =====================
+let renderEpoch = 0;
+
+// =====================
 // Init
 // =====================
 async function init() {
+  const myEpoch = ++renderEpoch;
 
   // FIX: blur search as early as possible on nav taps (prevents backspace-like behavior)
   try {
@@ -1702,6 +1697,9 @@ async function init() {
       fetchCSVWithCache(CSV_SETTINGS_URL, LS_CSV_CACHE_SETTINGS),
       CSV_REVIEWS_URL ? fetchCSVWithCache(CSV_REVIEWS_URL, LS_CSV_CACHE_REVIEWS) : Promise.resolve([]),
     ]);
+
+    // If another init/render cycle started while we were fetching — ignore stale result.
+    if (myEpoch !== renderEpoch) return;
 
     fandoms = fFresh || [];
     products = pFresh || [];
@@ -2000,7 +1998,6 @@ function renderFandomList(type) {
 function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
-
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
     { key: "pin", title: "Значки" },
@@ -2015,8 +2012,6 @@ function renderFandomPage(fandomId) {
 
   const other = all.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
-
-  const nothingFound = !fHits.length && !grouped.length;
 
   const sectionHtml = (title, items) => {
     const cards = items
@@ -2541,18 +2536,11 @@ function renderSearch(q) {
   view.innerHTML = `
     <div class="card">
       <div class="h2">Поиск: “${h(q)}”</div>
-
-      ${nothingFound ? `
+      ${(!fHits.length && !rawPHits.length) ? `
         <div class="emptyState">
           <div class="emptyTitle">Ничего не найдено</div>
-          <div class="emptyText small">Попробуй другое слово или проверь раскладку клавиатуры.</div>
-          <div class="emptyTips small">
-            <div class="emptyTip">• Можно искать по названию фандома или товара</div>
-            <div class="emptyTip">• Работают части слов (например: «арк», «кольц», «неж»)</div>
-            <div class="emptyTip">• Попробуй убрать лишние символы и эмодзи</div>
-          </div>
+          <div class="emptyText small">Попробуй другое слово или проверь раскладку. Можно искать по фандому, названию товара или ключевым словам.</div>
         </div>
-        <div style="height:12px"></div>
       ` : ``}
 
       <div class="small"><b>Фандомы</b></div>
@@ -3008,7 +2996,6 @@ function optionPairsHTML(pairs) {
     .map((x) => `<div><span class="optKey">${h(x.k)}:</span> ${h(x.v)}</div>`)
     .join("")}</div>`;
 }
-
 
 function calcCartTotal() {
   let total = 0;
@@ -3499,8 +3486,7 @@ function renderCheckout() {
 
         <div class="checkoutBlock" id="blockInfoGate">
           <div class="checkoutBlockTop">
-            <div class="checkoutBlockTitle">Важная информация</div>
-            <div class="infoStatus ${infoViewedThisSession ? "is-done" : "is-todo"}">${infoViewedThisSession ? "прочитано ✓" : "не прочитано"}</div>
+            <div class="checkoutBlockTitle">Важная информация <span class="checkStatus">${infoViewedThisSession ? "прочитано ✓" : "не прочитано"}</span></div>
             <button class="btn btnGhost btnSmall" id="openInfoFromCheckout" type="button">Открыть</button>
           </div>
           <div class="checkoutBlockText small">
@@ -3653,10 +3639,7 @@ function renderCheckout() {
       const digits = (phone || "").replace(/\D/g, "");
       if (digits.length !== 11) {
         cPhone?.classList.add("field-error");
-        if (errPhone) { 
-          errPhone.textContent = "Номер телефона должен содержать ровно 11 цифр.";
-          errPhone.classList.add("is-show");
-        }
+        if (errPhone) { errPhone.textContent = "Номер телефона должен содержать ровно 11 цифр."; errPhone.classList.add("is-show"); }
         ok = false;
       }
     }
