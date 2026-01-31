@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v145
+// LesPaw Mini App — app.js v150
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
