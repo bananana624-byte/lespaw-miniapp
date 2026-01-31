@@ -1069,7 +1069,7 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${safeUrl(u)}" alt="Фото товара" loading="eager" fetchpriority="high" decoding="async">`;
+  return `<img class="pcardImg" src="${safeUrl(u)}" alt="Фото товара" loading="lazy" decoding="async" onerror="this.style.display='none'">`;
 }
 
 function safeText(s) {
@@ -2200,7 +2200,7 @@ function renderReviews() {
 
               const photoHtml = r.photo_url
                 ? `<div class="reviewPhotoWrap">
-                     <img class="reviewPhoto" src="${safeUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async">
+                     <img class="reviewPhoto" src="${safeUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async" onerror="this.style.display='none'">
                    </div>`
                 : ``;
 
@@ -2357,7 +2357,7 @@ function renderLaminationExamples() {
         .map((ex) => {
           const img = ex.images?.[0] || "";
           const imgHTML = img
-            ? `<img class="exImg" src="${safeUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async">`
+            ? `<img class="exImg" src="${safeUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">`
             : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
 
           return `
@@ -2423,7 +2423,7 @@ function renderLaminationExampleDetail(exId) {
                 .map(
                   (u) => `
                 <div class="exBigBtn" style="cursor:default">
-                  <img class="exBigImg" src="${safeUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async">
+                  <img class="exBigImg" src="${safeUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">
                 </div>
               `
                 )
@@ -2717,7 +2717,7 @@ if (isPoster) {
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${safeUrl(img)}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
+        ${img ? `<img class="thumb" src="${safeUrl(img)}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px" onerror="this.style.display='none'">` : ""}
 
         ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -2837,7 +2837,7 @@ function renderFavorites() {
                   return `
                     <div class="item" data-open="${p.id}" data-idx="${idx}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}</div>
@@ -2994,7 +2994,7 @@ function renderCart() {
                   return `
                     <div class="item" data-idx="${idx}" data-open="${p.id}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
@@ -3574,7 +3574,16 @@ function renderCheckout() {
     const addr = (cPickupAddress?.value || "").trim();
 
     if (!fio) { cFio?.classList.add("field-error"); ok = false; }
-    if (!phone) { cPhone?.classList.add("field-error"); ok = false; }
+    if (!phone) { 
+      cPhone?.classList.add("field-error"); 
+      ok = false; 
+    } else {
+      const digits = (phone || "").replace(/\D/g, "");
+      if (digits.length < 10) {
+        cPhone?.classList.add("field-error");
+        ok = false;
+      }
+    }
     if (!addr) { cPickupAddress?.classList.add("field-error"); ok = false; }
 
     // гейт: без открытия важной информации нельзя подтверждать
