@@ -107,6 +107,7 @@ let infoViewedThisSession = false;
 const CS_CART = "lespaw_cart";
 const CS_FAV = "lespaw_fav";
 const CS_INFO_VIEWED = "lespaw_info_viewed";
+const CS_CHECKOUT = "lespaw_checkout_v2";
 
 function loadJSON(key, fallback) {
   try {
@@ -170,7 +171,7 @@ async function loadSyncedState() {
   const localFavN = normalizeSynced(localFavRaw);
 
   // 2) облако (может быть пустым / старым / в старом формате-массиве)
-  const [cloudCartRawStr, cloudFavRawStr, cloudInfoRawStr] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV), cloudGet(CS_INFO_VIEWED)]);
+  const [cloudCartRawStr, cloudFavRawStr, cloudInfoRawStr, cloudCheckoutRawStr] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV), cloudGet(CS_INFO_VIEWED), cloudGet(CS_CHECKOUT)]);
   let cloudCartRaw = null;
   let cloudFavRaw = null;
 
@@ -233,6 +234,32 @@ async function loadSyncedState() {
       cloudSet(CS_INFO_VIEWED, "1").catch(() => {});
     }
   } catch {}
+  // 7) синхронизация черновика оформления (ФИО/телефон/пункт/адрес/коммент) между устройствами
+  try {
+    let cloudCheckout = null;
+    try { if (cloudCheckoutRawStr) cloudCheckout = JSON.parse(cloudCheckoutRawStr); } catch {}
+    // допустим формат: { data: {...}, updatedAt: number } или просто объект полей
+    const cloudData = (cloudCheckout && typeof cloudCheckout === "object" && cloudCheckout.data) ? cloudCheckout.data : cloudCheckout;
+    const cloudTs = Number((cloudCheckout && cloudCheckout.updatedAt) || 0) || 0;
+
+    const localRaw = loadJSON(LS_CHECKOUT, null);
+    const localData = (localRaw && typeof localRaw === "object" && localRaw.data) ? localRaw.data : localRaw;
+    const localTs = Number((localRaw && localRaw.updatedAt) || 0) || 0;
+
+    // Если в облаке есть данные и они свежее — применим
+    if (cloudData && cloudTs >= localTs) {
+      if (typeof checkout === "object" && checkout) {
+        checkout = { ...checkout, ...cloudData };
+        saveJSON(LS_CHECKOUT, { data: checkout, updatedAt: cloudTs || Date.now() });
+      }
+    } else if (localData && !cloudData) {
+      // Если в облаке пусто, но локально есть — инициализируем облако
+      const payload = JSON.stringify({ data: (typeof checkout === "object" && checkout) ? checkout : localData, updatedAt: localTs || Date.now() });
+      cloudSet(CS_CHECKOUT, payload).catch(() => {});
+    }
+  } catch {}
+
+
 
 }
 
@@ -1016,7 +1043,7 @@ function addToCartById(id, opts){
   }
 
   // tactile feedback
-  haptic("light");
+  haptic("success");
 
 }
 
@@ -1100,15 +1127,28 @@ function haptic(kind) {
   try {
     const hf = tg?.HapticFeedback;
     if (!hf) return;
+
+    // Telegram WebApp HapticFeedback:
+    // - notificationOccurred('success'|'warning'|'error')
+    // - impactOccurred('light'|'medium'|'heavy'|'rigid'|'soft')  (may be unsupported on some devices)
+    // - selectionChanged()
     if (kind === "success" || kind === "warning" || kind === "error") {
       hf.notificationOccurred(kind);
       return;
     }
-    hf.impactOccurred(kind || "light");
+
+    if (kind === "selection" || kind === "light") {
+      if (hf.selectionChanged) hf.selectionChanged();
+      else if (hf.impactOccurred) hf.impactOccurred("light");
+      return;
+    }
+
+    if (hf.impactOccurred) hf.impactOccurred(kind || "light");
+    else if (hf.selectionChanged) hf.selectionChanged();
   } catch {}
 }
 
-function normalizePhone(raw) {
+function normalizePhone(raw) {(raw) {
   let s = String(raw || "").trim();
   if (!s) return "";
   // Remove spaces, dashes, parentheses etc, keep leading +
@@ -2995,6 +3035,7 @@ function renderCart() {
       const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
       setCart(next);
+      haptic("selection");
       gaEvent("add_to_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
       renderCart();
     });
@@ -3008,6 +3049,7 @@ function renderCart() {
       if (q <= 0) next.splice(i, 1);
       else next[i].qty = q;
       setCart(next);
+      haptic("selection");
       gaEvent("remove_from_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
       renderCart();
     });
@@ -3053,13 +3095,18 @@ const LS_CHECKOUT = "lespaw_checkout_v2";
 // Миграция со старых полей (чтобы пользовательки не потеряли введённые данные)
 const oldCheckout = loadJSON("lespaw_checkout_v1", null);
 
-let checkout = loadJSON(LS_CHECKOUT, {
+let checkout = (function(){
+  const raw = loadJSON(LS_CHECKOUT, null);
+  const data = (raw && typeof raw === "object" && raw.data) ? raw.data : raw;
+  const base = {
   fio: oldCheckout?.name || "",
   phone: oldCheckout?.contact || "",
   pickupType: "yandex", // yandex | 5post
   pickupAddress: (oldCheckout?.delivery || ""),
   comment: oldCheckout?.comment || "",
-});
+};
+  return (data && typeof data === "object") ? { ...base, ...data } : base;
+})();
 
 function openCheckout() {
   gaEvent("begin_checkout");
@@ -3070,7 +3117,9 @@ function openCheckout() {
 
 function saveCheckout(next) {
   checkout = next;
-  saveJSON(LS_CHECKOUT, checkout);
+  const payload = { data: checkout, updatedAt: Date.now() };
+  saveJSON(LS_CHECKOUT, payload);
+  cloudSet(CS_CHECKOUT, JSON.stringify(payload)).catch(() => {});
 }
 
 
@@ -3121,21 +3170,23 @@ function buildOrderText() {
   const pinLamLabelByKey = Object.fromEntries(PIN_LAM_OPTIONS.map((x) => [x[0], x[1]]));
 
   // Выделение "жирным" (симуляция): капс + двоеточие
-  const H = (s) => String(s || "").toUpperCase(); // заголовок/лейбл
+  const H = (s) => String(s || ""); // обычный текст
   const LBL = (s) => `${H(s)}:`; // лейбл с двоеточием
 
-  // "Моно" (симуляция): заменяем цифры на математические моно-цифры + обрамляем скобками
-  const monoDigits = {
-    "0": "𝟶", "1": "𝟷", "2": "𝟸", "3": "𝟹", "4": "𝟺",
-    "5": "𝟻", "6": "𝟼", "7": "𝟽", "8": "𝟾", "9": "𝟿",
+  const formatPhoneForMessage = (raw) => {
+    const norm = normalizePhone(raw);
+    const digits = norm.replace(/[^0-9]/g, "");
+    if (!digits) return "";
+    if (digits.length === 11) {
+      return `${digits[0]}-${digits.slice(1,4)}-${digits.slice(4,7)}-${digits.slice(7,9)}-${digits.slice(9,11)}`;
+    }
+    if (digits.length === 10) {
+      return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6,8)}-${digits.slice(8,10)}`;
+    }
+    return digits;
   };
-  const asMono = (s) => {
-    const str = String(s || "");
-    if (!str) return "";
-    const mapped = str.replace(/[0-9]/g, (d) => monoDigits[d] || d);
-    // симпатичные "моно-скобки"
-    return `⟦${mapped}⟧`;
-  };
+
+  const asPlain = (s) => String(s || "").trim();
 
   const pt = checkout.pickupType === "5post" ? "5Post" : "Яндекс";
 
@@ -3287,9 +3338,9 @@ if (g.key === "box") {
   lines.push("");
   lines.push(`${H("Данные для доставки")}:`);
   lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
-  lines.push(`${LBL("Номер телефона")} ${asMono(normalizePhone(checkout.phone || ""))}`);
+  lines.push(`${LBL("Номер телефона")} ${formatPhoneForMessage(checkout.phone || "")}`);
   lines.push(`${LBL("Пункт выдачи")} ${pt}`);
-  lines.push(`${LBL("Адрес пункта выдачи")} ${asMono(checkout.pickupAddress || "")}`);
+  lines.push(`${LBL("Адрес пункта выдачи")} ${asPlain(checkout.pickupAddress || "")}`);
 
   return lines.join("\n");
 }
