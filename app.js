@@ -1439,10 +1439,21 @@ async function init() {
     bindTap(navFav, () => openPage(renderFavorites));
     bindTap(navCart, () => openPage(renderCart));
 
+    // Поиск: лёгкий debounce, чтобы не перерисовывать экран на каждый символ (особенно на больших CSV)
+    let __searchTimer = null;
     globalSearch.addEventListener("input", (e) => {
       const q = e.target.value || "";
-      if (q.trim()) openPage(() => renderSearch(q));
-      else resetToHome();
+      try { if (__searchTimer) clearTimeout(__searchTimer); } catch {}
+
+      // Если поле пустое — возвращаемся домой сразу (без задержки)
+      if (!q.trim()) {
+        resetToHome();
+        return;
+      }
+
+      __searchTimer = setTimeout(() => {
+        openPage(() => renderSearch(q));
+      }, 200);
     });
     // Быстрый старт: пробуем взять данные из кеша (если есть)
     // и сразу показываем главную, чтобы меню не "висело" пустым.
