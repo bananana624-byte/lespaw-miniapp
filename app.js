@@ -107,7 +107,6 @@ let infoViewedThisSession = false;
 const CS_CART = "lespaw_cart";
 const CS_FAV = "lespaw_fav";
 const CS_INFO_VIEWED = "lespaw_info_viewed";
-const CS_CHECKOUT = "lespaw_checkout_v2";
 
 function loadJSON(key, fallback) {
   try {
@@ -171,7 +170,7 @@ async function loadSyncedState() {
   const localFavN = normalizeSynced(localFavRaw);
 
   // 2) облако (может быть пустым / старым / в старом формате-массиве)
-  const [cloudCartRawStr, cloudFavRawStr, cloudInfoRawStr, cloudCheckoutRawStr] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV), cloudGet(CS_INFO_VIEWED), cloudGet(CS_CHECKOUT)]);
+  const [cloudCartRawStr, cloudFavRawStr, cloudInfoRawStr] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV), cloudGet(CS_INFO_VIEWED)]);
   let cloudCartRaw = null;
   let cloudFavRaw = null;
 
@@ -234,32 +233,6 @@ async function loadSyncedState() {
       cloudSet(CS_INFO_VIEWED, "1").catch(() => {});
     }
   } catch {}
-  // 7) синхронизация черновика оформления (ФИО/телефон/пункт/адрес/коммент) между устройствами
-  try {
-    let cloudCheckout = null;
-    try { if (cloudCheckoutRawStr) cloudCheckout = JSON.parse(cloudCheckoutRawStr); } catch {}
-    // допустим формат: { data: {...}, updatedAt: number } или просто объект полей
-    const cloudData = (cloudCheckout && typeof cloudCheckout === "object" && cloudCheckout.data) ? cloudCheckout.data : cloudCheckout;
-    const cloudTs = Number((cloudCheckout && cloudCheckout.updatedAt) || 0) || 0;
-
-    const localRaw = loadJSON(LS_CHECKOUT, null);
-    const localData = (localRaw && typeof localRaw === "object" && localRaw.data) ? localRaw.data : localRaw;
-    const localTs = Number((localRaw && localRaw.updatedAt) || 0) || 0;
-
-    // Если в облаке есть данные и они свежее — применим
-    if (cloudData && cloudTs >= localTs) {
-      if (typeof checkout === "object" && checkout) {
-        checkout = { ...checkout, ...cloudData };
-        saveJSON(LS_CHECKOUT, { data: checkout, updatedAt: cloudTs || Date.now() });
-      }
-    } else if (localData && !cloudData) {
-      // Если в облаке пусто, но локально есть — инициализируем облако
-      const payload = JSON.stringify({ data: (typeof checkout === "object" && checkout) ? checkout : localData, updatedAt: localTs || Date.now() });
-      cloudSet(CS_CHECKOUT, payload).catch(() => {});
-    }
-  } catch {}
-
-
 
 }
 
@@ -1128,27 +1101,27 @@ function haptic(kind) {
     const hf = tg?.HapticFeedback;
     if (!hf) return;
 
-    // Telegram WebApp HapticFeedback:
-    // - notificationOccurred('success'|'warning'|'error')
-    // - impactOccurred('light'|'medium'|'heavy'|'rigid'|'soft')  (may be unsupported on some devices)
-    // - selectionChanged()
+    if (kind === "select") {
+      if (hf.selectionChanged) hf.selectionChanged();
+      return;
+    }
+
     if (kind === "success" || kind === "warning" || kind === "error") {
       hf.notificationOccurred(kind);
       return;
     }
 
-    if (kind === "selection" || kind === "light") {
-      if (hf.selectionChanged) hf.selectionChanged();
-      else if (hf.impactOccurred) hf.impactOccurred("light");
+    // On some Telegram clients impactOccurred("light") is unreliable — prefer selectionChanged when available.
+    if ((kind || "light") === "light" && hf.selectionChanged) {
+      hf.selectionChanged();
       return;
     }
 
-    if (hf.impactOccurred) hf.impactOccurred(kind || "light");
-    else if (hf.selectionChanged) hf.selectionChanged();
+    hf.impactOccurred(kind || "light");
   } catch {}
 }
 
-function normalizePhone(raw) {(raw) {
+function normalizePhone(raw) {
   let s = String(raw || "").trim();
   if (!s) return "";
   // Remove spaces, dashes, parentheses etc, keep leading +
@@ -3035,8 +3008,8 @@ function renderCart() {
       const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
       setCart(next);
-      haptic("selection");
       gaEvent("add_to_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
+      haptic("select");
       renderCart();
     });
   });
@@ -3049,8 +3022,8 @@ function renderCart() {
       if (q <= 0) next.splice(i, 1);
       else next[i].qty = q;
       setCart(next);
-      haptic("selection");
       gaEvent("remove_from_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
+      haptic("select");
       renderCart();
     });
   });
@@ -3091,35 +3064,71 @@ const goCats = document.getElementById("goCatsFromEmptyCart");
 // Checkout
 // =====================
 const LS_CHECKOUT = "lespaw_checkout_v2";
+const CLOUD_CHECKOUT = "lespaw_checkout_cloud_v2";
 
 // Миграция со старых полей (чтобы пользовательки не потеряли введённые данные)
 const oldCheckout = loadJSON("lespaw_checkout_v1", null);
 
-let checkout = (function(){
-  const raw = loadJSON(LS_CHECKOUT, null);
-  const data = (raw && typeof raw === "object" && raw.data) ? raw.data : raw;
-  const base = {
+let checkout = loadJSON(LS_CHECKOUT, {
   fio: oldCheckout?.name || "",
   phone: oldCheckout?.contact || "",
   pickupType: "yandex", // yandex | 5post
   pickupAddress: (oldCheckout?.delivery || ""),
   comment: oldCheckout?.comment || "",
-};
-  return (data && typeof data === "object") ? { ...base, ...data } : base;
-})();
+});
 
-function openCheckout() {
+let checkoutCloudTimer = null;
+
+async function openCheckout() {
   gaEvent("begin_checkout");
   // каждый новый заход в оформление требует открыть "Важную информацию"
   infoViewedThisSession = false;
+  await syncCheckoutFromCloud();
   openPage(renderCheckout);
 }
 
 function saveCheckout(next) {
-  checkout = next;
-  const payload = { data: checkout, updatedAt: Date.now() };
-  saveJSON(LS_CHECKOUT, payload);
-  cloudSet(CS_CHECKOUT, JSON.stringify(payload)).catch(() => {});
+  const stamped = { ...(next || {}), _updatedAt: Date.now() };
+  checkout = stamped;
+  saveJSON(LS_CHECKOUT, checkout);
+
+  // Sync to Telegram CloudStorage so checkout fields follow the user across devices (same Telegram account).
+  try {
+    if (checkoutCloudTimer) clearTimeout(checkoutCloudTimer);
+    checkoutCloudTimer = setTimeout(() => {
+      (async () => {
+        try {
+          const payload = JSON.stringify({ data: checkout, updatedAt: checkout._updatedAt });
+          await cloudSet(CLOUD_CHECKOUT, payload);
+        } catch {}
+      })();
+    }, 350);
+  } catch {}
+}
+
+async function syncCheckoutFromCloud() {
+  try {
+    const raw = await cloudGet(CLOUD_CHECKOUT);
+    if (!raw) return;
+
+    let cloudObj = null;
+    try { cloudObj = JSON.parse(raw); } catch { cloudObj = null; }
+    const cloudData = cloudObj?.data || null;
+    const cloudTs = Number(cloudObj?.updatedAt || cloudData?._updatedAt || 0) || 0;
+    const localTs = Number(checkout?._updatedAt || 0) || 0;
+
+    if (cloudData && cloudTs > localTs) {
+      checkout = { ...(checkout || {}), ...(cloudData || {}), _updatedAt: cloudTs };
+      saveJSON(LS_CHECKOUT, checkout);
+      return;
+    }
+
+    // If local is newer (or cloud missing ts), push local up.
+    if (localTs && localTs >= cloudTs) {
+      const payload = JSON.stringify({ data: checkout, updatedAt: localTs });
+      await cloudSet(CLOUD_CHECKOUT, payload);
+    }
+  } catch {}
 }
 
 
@@ -3170,23 +3179,25 @@ function buildOrderText() {
   const pinLamLabelByKey = Object.fromEntries(PIN_LAM_OPTIONS.map((x) => [x[0], x[1]]));
 
   // Выделение "жирным" (симуляция): капс + двоеточие
-  const H = (s) => String(s || ""); // обычный текст
+  const H = (s) => String(s || "").toUpperCase(); // заголовок/лейбл
   const LBL = (s) => `${H(s)}:`; // лейбл с двоеточием
 
-  const formatPhoneForMessage = (raw) => {
-    const norm = normalizePhone(raw);
-    const digits = norm.replace(/[^0-9]/g, "");
-    if (!digits) return "";
-    if (digits.length === 11) {
-      return `${digits[0]}-${digits.slice(1,4)}-${digits.slice(4,7)}-${digits.slice(7,9)}-${digits.slice(9,11)}`;
-    }
-    if (digits.length === 10) {
-      return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6,8)}-${digits.slice(8,10)}`;
-    }
-    return digits;
-  };
+  // "Моно" (симуляция): заменяем цифры на математические моно-цифры + обрамляем скобками
+  const formatPlainValue = (s) => String(s || "").trim();
 
-  const asPlain = (s) => String(s || "").trim();
+  const formatPhoneForOrder = (s) => {
+    const d = String(s || "").replace(/\D+/g, "");
+    if (!d) return "";
+    // Prefer 1-3-3-2-2: 8-952-512-62-98 (works well for RU 11-digit numbers)
+    if (d.length === 11) {
+      return `${d[0]}-${d.slice(1,4)}-${d.slice(4,7)}-${d.slice(7,9)}-${d.slice(9,11)}`;
+    }
+    if (d.length === 10) {
+      return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6,8)}-${d.slice(8,10)}`;
+    }
+    // Fallback: group by 3s
+    return d.replace(/(\d{3})(?=\d)/g, "$1-");
+  };
 
   const pt = checkout.pickupType === "5post" ? "5Post" : "Яндекс";
 
@@ -3338,9 +3349,9 @@ if (g.key === "box") {
   lines.push("");
   lines.push(`${H("Данные для доставки")}:`);
   lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
-  lines.push(`${LBL("Номер телефона")} ${formatPhoneForMessage(checkout.phone || "")}`);
+  lines.push(`${LBL("Номер телефона")} ${formatPlainValue(normalizePhone(checkout.phone || ""))}`);
   lines.push(`${LBL("Пункт выдачи")} ${pt}`);
-  lines.push(`${LBL("Адрес пункта выдачи")} ${asPlain(checkout.pickupAddress || "")}`);
+  lines.push(`${LBL("Адрес пункта выдачи")} ${formatPlainValue(checkout.pickupAddress || "")}`);
 
   return lines.join("\n");
 }
