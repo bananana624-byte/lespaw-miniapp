@@ -216,7 +216,6 @@ let fav = [];
 let cartUpdatedAt = 0;
 let favUpdatedAt = 0;
 
-let fav = [];
 
 // =====================
 // Toast
@@ -434,10 +433,27 @@ async function fetchCSVWithCache(url, cacheKey) {
 let _csvBgToastShown = false;
 function onCsvBackgroundUpdate(cacheKey, freshData) {
   try {
-    if (cacheKey === "products") {
+    if (cacheKey === LS_CSV_CACHE_PRODUCTS) {
       products = normalizeProducts(freshData || []);
-    } else if (cacheKey === "reviews") {
+    } else if (cacheKey === LS_CSV_CACHE_REVIEWS) {
       reviews = normalizeReviews(freshData || []);
+    } else if (cacheKey === LS_CSV_CACHE_FANDOMS) {
+      fandoms = (freshData || []);
+    } else if (cacheKey === LS_CSV_CACHE_SETTINGS) {
+      // пересобираем settings из свежих (сохраняем дефолты, если ключей нет)
+      const next = {
+        overlay_price_delta: settings?.overlay_price_delta ?? 100,
+        holo_base_price_delta: settings?.holo_base_price_delta ?? 100,
+        examples_url: settings?.examples_url ?? "https://t.me/LesPaw",
+      };
+      (freshData || []).forEach((row) => {
+        const k = row?.key;
+        const v = row?.value;
+        if (!k) return;
+        if (k === "overlay_price_delta" || k === "holo_base_price_delta") next[k] = Number(v);
+        else next[k] = v;
+      });
+      settings = next;
     } else {
       return;
     }
@@ -452,6 +468,7 @@ function onCsvBackgroundUpdate(cacheKey, freshData) {
     }
   } catch {}
 }
+
 
 
 
@@ -1011,23 +1028,6 @@ function safeText(s) {
 }
 
 // Экранирование HTML (защита от XSS из таблиц/CSV)
-function escapeHTML(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (ch) => {
-    switch (ch) {
-      case "&": return "&amp;";
-      case "<": return "&lt;";
-      case ">": return "&gt;";
-      case '"': return "&quot;";
-      case "'": return "&#39;";
-      default: return ch;
-    }
-  });
-}
-// Частый кейс: текст из таблицы, который пойдёт в innerHTML
-function h(s) {
-  return escapeHTML(safeText(s));
-}
-
 // Безопасный URL для src/href (отбрасываем javascript:)
 function safeUrl(u) {
   const raw = String(u ?? "").trim();
