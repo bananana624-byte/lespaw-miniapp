@@ -1139,18 +1139,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   flex-direction:column;
   gap:10px;
 }
-.newCarousel{
-  width:100%;
-  display:flex;
-  overflow-x:auto;
-  overflow-y:hidden;
-  scroll-snap-type:x mandatory;
-  -webkit-overflow-scrolling:touch;
-  scroll-behavior:smooth;
-  gap:0;
-  padding:2px 2px 0;
-  scrollbar-width:none;
-}
 .newCarousel::-webkit-scrollbar{ display:none; }
 .newCarousel{ scrollbar-width:none; }
 
@@ -1214,3 +1202,16 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   background: linear-gradient(135deg, rgba(160,90,255,.95), rgba(95,210,255,.75));
   box-shadow: 0 0 12px rgba(170,120,255,.45);
 }
+
+
+/* === PATCH v161: восстановление карусели "Новинки" (4 товара на страницу, листание) === */
+.newCarousel{
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scroll-snap-type:x mandatory;
+  padding:10px 2px 14px;
+  scrollbar-width:none;
+}
+.newCarousel::-webkit-scrollbar{ display:none; }
