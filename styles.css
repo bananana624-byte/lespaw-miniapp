@@ -165,13 +165,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   border-color:rgba(125,60,255,.35);
   box-shadow: 0 0 0 3px rgba(125,60,255,.22), 0 0 30px rgba(190,120,255,.40);
 }
-
-.btnGhost{
-  background:transparent;
-  border:1px dashed rgba(0,0,0,.20);
-  box-shadow:none;
-}
-
 /* product header */
 .prodHead{ display:flex; gap:12px; align-items:flex-start; justify-content:space-between; }
 .prodFav{
@@ -272,30 +265,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   font-weight:1000;
   color:#0b0b12;
 }
-
-.pcardActions{
-  display:flex;
-  gap:10px;
-  margin-top:10px;
-}
-.iconBtn{
-  flex:1;
-  border:1px solid rgba(0,0,0,.14);
-  border-radius:14px;
-  background:rgba(0,0,0,.03);
-  padding:10px 12px;
-  cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  font-weight:1000;
-  color:#0b0b12;
-}
-.iconBtn:active{
-  transform:scale(.985);
-  box-shadow: 0 0 0 3px rgba(125,60,255,.16), 0 0 22px rgba(190,120,255,.25);
-}
 .iconBtn .i{
   font-size:16px;
   line-height:1;
@@ -315,34 +284,7 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   gap:12px;
   align-items:flex-start;
 }
-.miniThumb{
-  width:56px;
-  height:56px;
-  border-radius:14px;
-  border:1px solid rgba(0,0,0,.10);
-  object-fit:cover;
-  background:rgba(0,0,0,.06);
-  flex:0 0 auto;
-}
 .miniBody{ flex:1; min-width:0; }
-.miniTitle{
-  font-weight:1000;
-  line-height:1.2;
-  white-space:normal;
-}
-.miniPrice{
-  margin-top:6px;
-  font-weight:1000;
-  font-size:14px;
-  line-height:1.1;
-}
-.miniOpt{
-  margin-top:6px;
-  font-size:12px;
-  line-height:1.25;
-  color:rgba(11,11,18,.70);
-}
-
 .miniOpts{
   margin-top:6px;
   font-size:12px;
@@ -376,34 +318,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   border-radius:16px;
   padding:12px;
 }
-.optTitle{
-  font-weight:1000;
-  margin:0;
-  font-size:13px;
-  letter-spacing:.2px;
-}
-.optHint{ margin-top:4px; font-size:12px; color:rgba(11,11,18,.70); }
-.optList{ display:grid; gap:8px; margin-top:10px; }
-.optItem{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:10px 10px;
-  border-radius:14px;
-  border:1px solid rgba(0,0,0,.10);
-  background:rgba(255,255,255,.60);
-  cursor:pointer;
-  text-align:left;
-}
-.optBox{
-  width:18px;
-  height:18px;
-  border-radius:6px;
-  border:2px solid rgba(0,0,0,.22);
-  display:grid;
-  place-items:center;
-  flex:0 0 auto;
-}
 .optFill{
   width:10px;
   height:10px;
@@ -417,17 +331,7 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   border-color:rgba(125,60,255,.32);
   box-shadow: 0 0 0 3px rgba(125,60,255,.12);
 }
-.optItem.is-active .optBox{
-  border-color:rgba(125,60,255,.55);
-}
 .optItem.is-active .optBox .tick{ opacity:1; }
-.optLabel{ font-weight:900; font-size:13px; line-height:1.2; }
-
-.btnGhost{
-  border:1px dashed rgba(125,60,255,.40);
-  background:rgba(125,60,255,.06);
-}
-
 /* =====================
    Compact grids (Categories / Fandoms)
 ===================== */
@@ -727,8 +631,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 /* nav responsive */
 @media (max-width: 380px){
   .navBar{ gap:14px; }
-  .navBtn{ width:66px; height:60px; }
-  .navIco{ width:28px; height:28px; }
 }
 .navBtn{
   position:relative;
@@ -1096,7 +998,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   display:grid;
   gap:10px;
 }
-
 .checkRow{
   display:flex;
   gap:10px;
@@ -1110,18 +1011,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   font-weight:900;
   color:rgba(124,45,255,.95);
 }
-
-.checkoutNote{
-  background: linear-gradient(180deg, rgba(190,120,255,.18), rgba(125,60,255,.10));
-  border:1px solid rgba(125,60,255,.35);
-  border-radius:16px;
-  padding:12px;
-  font-size:13px;
-  line-height:1.45;
-  color:rgba(11,11,18,.85);
-}
-
-
 /* Indent rows under thumb (Cart qty row) */
 .miniIndentRow{ margin-left: calc(56px + 12px); }
 
@@ -1249,15 +1138,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   display:flex;
   flex-direction:column;
   gap:10px;
-}
-
-.newCarousel{
-  display:flex;
-  gap:14px;
-  overflow-x:auto;
-  padding:12px 2px 2px;
-  scroll-snap-type:x mandatory;
-  -webkit-overflow-scrolling: touch;
 }
 .newCarousel::-webkit-scrollbar{ display:none; }
 .newCarousel{ scrollbar-width:none; }
