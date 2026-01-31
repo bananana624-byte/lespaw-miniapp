@@ -3358,3 +3358,29 @@ function renderCheckout() {
   syncNav();
   syncBottomSpace();
 }
+
+
+/* === v162: безопасный автозапуск (чтобы не было пустого экрана) === */
+function bootInit() {
+  try {
+    if (typeof init === "function") init();
+    else console.error("init() не найдена");
+  } catch (e) {
+    console.error(e);
+    try {
+      const view = document.getElementById("view");
+      if (view) {
+        view.innerHTML = `
+          <div class="card" style="margin:14px;">
+            <div class="cardTitle">Ошибка запуска</div>
+            <div class="muted" style="margin-top:6px;">Пожалуйста, перезапусти мини‑приложение. Если не поможет — напиши менеджерке.</div>
+          </div>`;
+      }
+    } catch(_) {}
+  }
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootInit, { once:true });
+} else {
+  bootInit();
+}
