@@ -94,10 +94,17 @@ const LS_FAV = "lespaw_fav_v41";
 
 // Гейт важной информации (для оформления)
 const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
+// Плашка-онбординг на главной (можно скрыть)
+const LS_HOME_TIP_DISMISSED = "lespaw_home_tip_dismissed_v1";
 
 // Флаг: ознакомилась ли пользователька с "Важной информацией"
 let infoViewed = false;
-try { infoViewed = (localStorage.getItem(LS_INFO_VIEWED) === "1"); } catch {}
+try {
+  const v = localStorage.getItem(LS_INFO_VIEWED);
+  infoViewed = (v === IMPORTANT_INFO_VERSION);
+  // поддержка старого формата: "1"
+  if (!infoViewed && v === "1" && IMPORTANT_INFO_VERSION === "1") infoViewed = true;
+} catch {}
 
 // Флаг на текущую сессию оформления: галочку можно поставить только после перехода на вкладку
 let infoViewedThisSession = false;
@@ -214,25 +221,45 @@ async function loadSyncedState() {
   saveJSON(LS_FAV, { items: fav, updatedAt: favUpdatedAt || 0 });
 
 
-  // 6) синхронизация гейта "Важная информация" (однажды прочитала — сохраняем навсегда)
+  // 6) синхронизация гейта "Важная информация" (храним версию; при изменениях версии статус "прочитано" сбрасывается)
   try {
-    let cloudInfo = null;
-    if (cloudInfoRawStr) {
-      // поддержка старых форматов: "1" или {"v":1}
-      if (cloudInfoRawStr === "1") cloudInfo = 1;
-      else {
-        try { const o = JSON.parse(cloudInfoRawStr); cloudInfo = (o?.v === 1 || o?.v === "1") ? 1 : null; } catch {}
-      }
-    }
-    if (cloudInfo === 1) {
+    const normalizeInfoVer = (raw) => {
+      if (!raw) return null;
+      if (raw === "1") return "legacy";
+      // может прилетать JSON {"v":"..."} или {"v":1}
+      try {
+        const o = JSON.parse(raw);
+        const vv = o?.v;
+        if (vv === 1 || vv === "1") return "legacy";
+        if (typeof vv === "string") return vv;
+      } catch {}
+      // или сразу строка-версия
+      if (typeof raw === "string") return raw;
+      return null;
+    };
+
+    const cloudVer = normalizeInfoVer(cloudInfoRawStr);
+    let localVer = null;
+    try { localVer = localStorage.getItem(LS_INFO_VIEWED); } catch {}
+
+    // определяем локальный статус
+    infoViewed = (localVer === IMPORTANT_INFO_VERSION);
+
+    // если облако уже содержит текущую версию — синкаем в локалку
+    if (cloudVer === IMPORTANT_INFO_VERSION) {
       infoViewed = true;
-      try { localStorage.setItem(LS_INFO_VIEWED, "1"); } catch {}
-  cloudSet(CS_INFO_VIEWED, "1").catch(() => {});
+      try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
+  cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
+      cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
     } else if (infoViewed) {
-      // если локально уже было "прочитано", а в облаке пусто — инициализируем облако
-      cloudSet(CS_INFO_VIEWED, "1").catch(() => {});
+      // если локально уже актуальная версия, а в облаке не она — обновляем облако
+      cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
+    } else {
+      // если в облаке legacy, а версия уже другая — считаем НЕ прочитанным (чтобы увидеть обновления)
+      // ничего не делаем
     }
   } catch {}
+
 
 }
 
@@ -1095,6 +1122,16 @@ function escapeHTML(s) {
     }
   });
 }
+
+function shuffleArray(arr) {
+  const a = [...(arr || [])];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 // Частый кейс: текст из таблицы, который пойдёт в innerHTML
 function h(s) {
   return escapeHTML(safeText(s));
@@ -1761,7 +1798,24 @@ async function init() {
 // HOME (плитки)
 // =====================
 function renderHome() {
+  let homeTipDismissed = false;
+  try { homeTipDismissed = (localStorage.getItem(LS_HOME_TIP_DISMISSED) === "1"); } catch {}
   view.innerHTML = `
+    ${!homeTipDismissed ? `
+      <div class="card onboardingCard">
+        <div class="h2" style="margin-bottom:6px">Как заказать</div>
+        <ul class="infoList" style="margin-top:8px">
+          <li>Выбери товары и добавь в корзину.</li>
+          <li>В оформлении заполни данные и поставь обязательные галочки.</li>
+          <li>После «Оформить заказ» откроется чат с менеджеркой с готовым текстом — отправь его без изменений.</li>
+        </ul>
+        <div class="row" style="margin-top:10px">
+          <button class="btn btnGhost" id="homeHowInfo" type="button">Важная информация</button>
+          <button class="btn" id="homeHowHide" type="button">Скрыть</button>
+        </div>
+      </div>
+      <div style="height:6px"></div>
+    ` : ``}
     <div class="tile" id="tCat">
       <div class="tileTitle">Категории</div>
       <div class="tileSub">Выбор фандома по типу</div>
@@ -1910,7 +1964,20 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
   }
 
 
-  syncNav();
+  
+  const homeHowInfo = document.getElementById("homeHowInfo");
+  if (homeHowInfo) bindTap(homeHowInfo, () => openPage(renderInfo));
+
+  const homeHowHide = document.getElementById("homeHowHide");
+  if (homeHowHide) {
+    bindTap(homeHowHide, () => {
+      try { localStorage.setItem(LS_HOME_TIP_DISMISSED, "1"); } catch {}
+      haptic("select");
+      renderHome();
+    });
+  }
+
+syncNav();
   syncBottomSpace();
 }
 
@@ -1998,6 +2065,7 @@ function renderFandomList(type) {
 function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
+
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
     { key: "pin", title: "Значки" },
@@ -2101,7 +2169,7 @@ function renderInfo() {
   // фиксируем факт ознакомления: пользователька открыла вкладку
   infoViewed = true;
   infoViewedThisSession = true;
-  try { localStorage.setItem(LS_INFO_VIEWED, "1"); } catch {}
+  try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
   view.innerHTML = `
     <div class="card">
       <div class="h2">Важная информация</div>
@@ -2607,7 +2675,19 @@ function renderSearch(q) {
     });
   });
 
-  syncNav();
+  
+  // открыть похожие товары
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      const id = String(el.dataset.id || "");
+      if (!id) return;
+      openPage(() => renderProduct(id));
+    });
+  });
+
+syncNav();
   syncBottomSpace();
 }
 
@@ -2632,6 +2712,13 @@ function renderProduct(productId, prefill) {
 
   const typeKey = normalizeTypeKey(p.product_type);
   const isSticker = typeKey === "sticker";
+  // Похожие товары: из этого же фандома и/или этого же типа
+  const sameFandom = (products || []).filter((x) => String(x.fandom_id) === String(p.fandom_id) && String(x.id) !== String(p.id));
+  const sameType = (products || []).filter((x) => normalizeTypeKey(x.product_type) === typeKey && String(x.id) !== String(p.id));
+  const pickFew = (arr, n) => arr.slice(0, n);
+  const similarFandom = pickFew(shuffleArray(sameFandom), 4);
+  const similarType = pickFew(shuffleArray(sameType.filter((x)=> String(x.fandom_id) !== String(p.fandom_id))), 4);
+
   const isPin = typeKey === "pin";
   const isPoster = typeKey === "poster";
 
@@ -2911,7 +2998,6 @@ function renderFavorites() {
       openPage(() => renderProduct(el.dataset.open, fi));
     });
   });
-
   const goCats = document.getElementById("goCatsFromEmptyFav");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
@@ -2997,6 +3083,7 @@ function optionPairsHTML(pairs) {
     .join("")}</div>`;
 }
 
+
 function calcCartTotal() {
   let total = 0;
   (cart || []).forEach((ci) => {
@@ -3056,20 +3143,23 @@ function renderCart() {
         }
       </div>
 
-      ${
-        items.length
-          ? `
-        <hr>
-        <div class="small">Итого: <b>${money(calcCartTotal())}</b><span class="totalNote">(без учёта доставки — она рассчитывается менеджеркой индивидуально)</span></div>
-        <div style="height:10px"></div>
-        <div class="row">
-          <button class="btn" id="btnClear" type="button">Очистить</button>
-          <button class="btn is-active" id="btnCheckout" type="button">Оформить заказ</button>
+      ${items.length ? `<div class="cartBarSpacer"></div>` : ""}
+    
+      </div>
+      ${items.length ? `
+        <div class="cartBar">
+          <div class="cartBarInner">
+            <div class="cartBarTotal">
+              <div class="cartBarSum">Итого: <b>${money(calcCartTotal())}</b></div>
+              <div class="cartBarNote small">(без учёта доставки — она рассчитывается менеджеркой индивидуально)</div>
+            </div>
+            <div class="cartBarActions">
+              <button class="btn" id="btnClear" type="button">Очистить</button>
+              <button class="btn is-active" id="btnCheckout" type="button">Оформить</button>
+            </div>
+          </div>
         </div>
-      `
-          : ""
-      }
-    </div>
+      ` : ``}
   `;
 
   view.querySelectorAll("[data-inc]").forEach((b) => {
@@ -3134,6 +3224,12 @@ const goCats = document.getElementById("goCatsFromEmptyCart");
 // Checkout
 // =====================
 const LS_CHECKOUT = "lespaw_checkout_v2";
+
+
+// Версия "Важной информации".
+// ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация", просто увеличьте версию ниже.
+// Тогда у всех клиенток статус "прочитано" автоматически сбросится.
+const IMPORTANT_INFO_VERSION = "2026-01-31-1";
 const CLOUD_CHECKOUT = "lespaw_checkout_cloud_v2";
 
 // Миграция со старых полей (чтобы пользовательки не потеряли введённые данные)
@@ -3151,8 +3247,9 @@ let checkoutCloudTimer = null;
 
 async function openCheckout() {
   gaEvent("begin_checkout");
-  // каждый новый заход в оформление требует открыть "Важную информацию"
-  infoViewedThisSession = false;
+  // Если пользователька уже открывала «Важную информацию» ранее — считаем её прочитанной и в оформлении.
+  // (Если хочет перечитать — кнопка «Открыть» рядом.)
+  infoViewedThisSession = !!infoViewed;
   await syncCheckoutFromCloud();
   openPage(renderCheckout);
 }
@@ -3524,6 +3621,35 @@ function renderCheckout() {
       <div class="row">
         <button class="btn is-active" id="btnSend" type="button">Оформить заказ</button>
       </div>
+
+      ${ (similarFandom.length || similarType.length) ? `
+        <hr>
+        <div class="h3">Похожие товары</div>
+        ${similarFandom.length ? `
+          <div class="small" style="margin-top:10px"><b>Ещё из этого фандома</b></div>
+          <div class="grid2" style="margin-top:10px">
+            ${similarFandom.map((sp) => `
+              <div class="pcard pcardSmall" data-id="${sp.id}">
+                ${cardThumbHTML(sp)}
+                <div class="pcardTitle">${h(sp.name)}</div>
+                <div class="pcardPrice">${moneyDisplay(sp.price)}</div>
+              </div>
+            `).join("")}
+          </div>
+        ` : ``}
+        ${similarType.length ? `
+          <div class="small" style="margin-top:14px"><b>Ещё такого типа</b></div>
+          <div class="grid2" style="margin-top:10px">
+            ${similarType.map((sp) => `
+              <div class="pcard pcardSmall" data-id="${sp.id}">
+                ${cardThumbHTML(sp)}
+                <div class="pcardTitle">${h(sp.name)}</div>
+                <div class="pcardPrice">${moneyDisplay(sp.price)}</div>
+              </div>
+            `).join("")}
+          </div>
+        ` : ``}
+      ` : ``}
     </div>
   `;
 
