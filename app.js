@@ -71,6 +71,8 @@ function gaAppOpen() {
 // =====================
 const view = document.getElementById("view");
 const globalSearch = document.getElementById("globalSearch");
+const searchClear = document.getElementById("searchClear");
+const searchWrap = globalSearch ? globalSearch.closest(".searchWrap") : null;
 
 const navBack = document.getElementById("navBack");
 const navHome = document.getElementById("navHome");
@@ -919,6 +921,7 @@ function toggleFavVariant(id, opts){
     gaEvent("remove_from_wishlist", { item_id: String(id).trim() });
     gaEvent("remove_from_favorite", { item_id: String(id).trim() });
     toast("Убрано из избранного", "warn");
+    haptic("light");
   } else {
     const next = [...(fav||[])];
     next.push({
@@ -933,6 +936,7 @@ function toggleFavVariant(id, opts){
     gaEvent("add_to_wishlist", { item_id: String(id).trim() });
     gaEvent("add_to_favorite", { item_id: String(id).trim() });
     toast("Добавлено в избранное", "ok");
+    haptic("success");
   }
   updateBadges();
 }
@@ -1010,6 +1014,10 @@ function addToCartById(id, opts){
     setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper }]);
     gaEvent("add_to_cart", { item_id: sid, quantity: 1 });
   }
+
+  // tactile feedback
+  haptic("light");
+
 }
 
 function updateBadges() {
@@ -1061,7 +1069,7 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${safeUrl(u)}" alt="Фото товара" loading="lazy" decoding="async">`;
+  return `<img class="pcardImg" src="${safeUrl(u)}" alt="Фото товара" loading="eager" fetchpriority="high" decoding="async">`;
 }
 
 function safeText(s) {
@@ -1087,6 +1095,36 @@ function h(s) {
 }
 
 // Безопасный URL для src/href (отбрасываем javascript:)
+
+function haptic(kind) {
+  try {
+    const hf = tg?.HapticFeedback;
+    if (!hf) return;
+    if (kind === "success" || kind === "warning" || kind === "error") {
+      hf.notificationOccurred(kind);
+      return;
+    }
+    hf.impactOccurred(kind || "light");
+  } catch {}
+}
+
+function normalizePhone(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return "";
+  // Remove spaces, dashes, parentheses etc, keep leading +
+  s = s.replace(/[\s\-()]/g, "");
+  // If there are multiple +, keep only the first at start
+  s = s.replace(/(?!^)\+/g, "");
+  // If starts with 8 or 7 and has 11 digits, normalize to +7...
+  const digits = s.replace(/\D/g, "");
+  if (digits.length === 11 && digits[0] === "8") return "+7" + digits.slice(1);
+  if (digits.length === 11 && digits[0] === "7") return "+7" + digits.slice(1);
+  // If user typed without + but looks like a Russian number starting with 9 and 10 digits
+  if (!s.startsWith("+") && digits.length === 10 && digits[0] === "9") return "+7" + digits;
+  // Otherwise return trimmed (but collapse repeated spaces etc already removed)
+  return s;
+}
+
 function safeUrl(u) {
   const raw = String(u ?? "").trim();
   if (!raw) return "";
@@ -1519,6 +1557,12 @@ async function init() {
     let __searchTimer = null;
     globalSearch.addEventListener("input", (e) => {
       const q = e.target.value || "";
+      try {
+        if (searchWrap) {
+          if (q.trim()) searchWrap.classList.add("hasText");
+          else searchWrap.classList.remove("hasText");
+        }
+      } catch {}
       try { if (__searchTimer) clearTimeout(__searchTimer); } catch {}
 
       // Если поле пустое — возвращаемся домой сразу (без задержки)
@@ -1531,6 +1575,17 @@ async function init() {
         openPage(() => renderSearch(q));
       }, 200);
     });
+
+    // Clear search
+    if (searchClear) {
+      bindTap(searchClear, () => {
+        try { globalSearch.value = ""; } catch {}
+        try { if (searchWrap) searchWrap.classList.remove("hasText"); } catch {}
+        resetToHome();
+        try { globalSearch.focus(); } catch {}
+      });
+    }
+
     // Быстрый старт: пробуем взять данные из кеша (если есть)
     // и сразу показываем главную, чтобы меню не "висело" пустым.
     try {
@@ -2784,6 +2839,7 @@ function renderFavorites() {
       next.splice(i, 1);
       setFav(next);
       toast("Убрано из избранного", "warn");
+    haptic("light");
       renderFavorites();
     });
   });
@@ -3231,7 +3287,7 @@ if (g.key === "box") {
   lines.push("");
   lines.push(`${H("Данные для доставки")}:`);
   lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
-  lines.push(`${LBL("Номер телефона")} ${asMono(checkout.phone || "")}`);
+  lines.push(`${LBL("Номер телефона")} ${asMono(normalizePhone(checkout.phone || ""))}`);
   lines.push(`${LBL("Пункт выдачи")} ${pt}`);
   lines.push(`${LBL("Адрес пункта выдачи")} ${asMono(checkout.pickupAddress || "")}`);
 
@@ -3348,6 +3404,19 @@ function renderCheckout() {
     });
   }
   [cFio, cPhone, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", () => { el.classList.remove("field-error"); syncCheckout(); }));
+
+  // Normalize phone on blur (does not interfere while typing)
+  if (cPhone) {
+    cPhone.addEventListener("blur", () => {
+      try {
+        const n = normalizePhone(cPhone.value || "");
+        if (n && n !== cPhone.value) {
+          cPhone.value = n;
+          syncCheckout();
+        }
+      } catch {}
+    });
+  }
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
