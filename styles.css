@@ -1258,3 +1258,46 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 /* Inline field error text */
 .fieldHelp{ display:none; margin-top:6px; color: rgba(255,59,107,.9); }
 .fieldHelp.is-show{ display:block; }
+
+
+/* v169 — UX: search empty state + info gate status badge */
+.emptyState{
+  padding:14px 14px;
+  border-radius:16px;
+  border:1px solid rgba(190,120,255,.25);
+  background: rgba(30,10,55,.55);
+  box-shadow: 0 0 18px rgba(190,120,255,.15);
+}
+.emptyTitle{
+  font-weight:800;
+  letter-spacing:.2px;
+  margin-bottom:6px;
+}
+.emptyText{ opacity:.92; }
+.emptyTips{ margin-top:8px; opacity:.9; }
+.emptyTip{ margin:3px 0; }
+
+.infoStatus{
+  margin-left:auto;
+  align-self:center;
+  font-size:12px;
+  font-weight:800;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.88);
+  white-space:nowrap;
+}
+.infoStatus.is-done{
+  border-color: rgba(120,255,200,.35);
+  background: rgba(120,255,200,.10);
+  color: rgba(210,255,240,.95);
+  box-shadow: 0 0 16px rgba(120,255,200,.10);
+}
+.infoStatus.is-todo{
+  border-color: rgba(255,190,120,.30);
+  background: rgba(255,190,120,.08);
+  color: rgba(255,230,210,.92);
+  box-shadow: 0 0 16px rgba(255,190,120,.08);
+}
