@@ -2,15 +2,6 @@
 
 *{ box-sizing:border-box; }
 html,body{ height:100%; overflow-x:hidden; }
-
-/* Accessibility: respect system setting to reduce motion */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    animation: none !important;
-    scroll-behavior: auto !important;
-  }
-}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
@@ -1220,4 +1211,10 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   width:18px;
   background: linear-gradient(135deg, rgba(160,90,255,.95), rgba(95,210,255,.75));
   box-shadow: 0 0 12px rgba(170,120,255,.45);
+}
+
+
+/* Accessibility: respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
