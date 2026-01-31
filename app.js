@@ -1802,19 +1802,19 @@ function renderHome() {
   try { homeTipDismissed = (localStorage.getItem(LS_HOME_TIP_DISMISSED) === "1"); } catch {}
   view.innerHTML = `
     ${!homeTipDismissed ? `
-      <div class="card onboardingCard">
-        <div class="h2" style="margin-bottom:6px">Как заказать</div>
-        <ul class="infoList" style="margin-top:8px">
-          <li>Выбери товары и добавь в корзину.</li>
-          <li>В оформлении заполни данные и поставь обязательные галочки.</li>
-          <li>После «Оформить заказ» откроется чат с менеджеркой с готовым текстом — отправь его без изменений.</li>
-        </ul>
-        <div class="row" style="margin-top:10px">
+      <div class="homeHint">
+        <div class="homeHintRow">
+          <div class="homeHintTitle">Как заказать</div>
+          <button class="homeHintClose" id="homeTipHide" type="button" aria-label="Скрыть">×</button>
+        </div>
+        <div class="homeHintText">
+          Выбери товары → заполни данные и поставь обязательные галочки → отправь готовый текст менеджерке без изменений.
+        </div>
+        <div class="homeHintActions">
           <button class="btn btnGhost" id="homeHowInfo" type="button">Важная информация</button>
-          <button class="btn" id="homeHowHide" type="button">Скрыть</button>
+          <button class="btn" id="homeTipHideDup" type="button">Скрыть</button>
         </div>
       </div>
-      <div style="height:6px"></div>
     ` : ``}
     <div class="tile" id="tCat">
       <div class="tileTitle">Категории</div>
@@ -1968,14 +1968,16 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
   const homeHowInfo = document.getElementById("homeHowInfo");
   if (homeHowInfo) bindTap(homeHowInfo, () => openPage(renderInfo));
 
-  const homeHowHide = document.getElementById("homeHowHide");
-  if (homeHowHide) {
-    bindTap(homeHowHide, () => {
+  const hideIds = ["homeTipHide", "homeTipHideDup", "homeHowHide"];
+  hideIds.forEach((hid) => {
+    const b = document.getElementById(hid);
+    if (!b) return;
+    bindTap(b, () => {
       try { localStorage.setItem(LS_HOME_TIP_DISMISSED, "1"); } catch {}
       haptic("select");
       renderHome();
     });
-  }
+  });
 
 syncNav();
   syncBottomSpace();
@@ -2998,6 +3000,7 @@ function renderFavorites() {
       openPage(() => renderProduct(el.dataset.open, fi));
     });
   });
+
   const goCats = document.getElementById("goCatsFromEmptyFav");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
@@ -3142,24 +3145,21 @@ function renderCart() {
             `
         }
       </div>
-
-      ${items.length ? `<div class="cartBarSpacer"></div>` : ""}
-    
-      </div>
       ${items.length ? `
-        <div class="cartBar">
-          <div class="cartBarInner">
-            <div class="cartBarTotal">
-              <div class="cartBarSum">Итого: <b>${money(calcCartTotal())}</b></div>
-              <div class="cartBarNote small">(без учёта доставки — она рассчитывается менеджеркой индивидуально)</div>
-            </div>
-            <div class="cartBarActions">
-              <button class="btn" id="btnClear" type="button">Очистить</button>
-              <button class="btn is-active" id="btnCheckout" type="button">Оформить</button>
-            </div>
+        <hr>
+        <div class="cartSummary">
+          <div class="cartSummaryLeft">
+            <div class="cartSummarySum">Итого: <b>${money(calcCartTotal())}</b></div>
+            <div class="cartSummaryNote small">Без учёта доставки — она рассчитывается менеджеркой индивидуально.</div>
+          </div>
+          <div class="cartSummaryActions">
+            <button class="btn" id="btnClear" type="button">Очистить</button>
+            <button class="btn is-active" id="btnCheckout" type="button">Оформить</button>
           </div>
         </div>
       ` : ``}
+
+    </div>
   `;
 
   view.querySelectorAll("[data-inc]").forEach((b) => {
