@@ -2086,7 +2086,7 @@ function renderReviews() {
         mode = b.dataset.mode || "all";
         reviewsVisibleCount = 8;
         render();
-      };
+      });
     });
 
     // open all / leave
@@ -2103,7 +2103,7 @@ function renderReviews() {
       bindTap(el, () => {
         const url = decodeURIComponent(el.dataset.source || "");
         openExternal(url);
-      };
+      });
     });
 
     function toggleReview(idx) {
@@ -2336,7 +2336,7 @@ function renderSearch(q) {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       openPage(() => renderProduct(el.dataset.id));
-    };
+    });
   });
 
   // сердечки
@@ -2350,7 +2350,7 @@ function renderSearch(q) {
         const g = x.querySelector(".heartGlyph");
         if (g) g.textContent = isFavId(id) ? "♥" : "♡";
       });
-    };
+    });
   });
 
   // в корзину
@@ -2360,7 +2360,7 @@ function renderSearch(q) {
       const id = String(b.dataset.add || "");
       addToCartById(id);
       toast("Добавлено в корзину", "good");
-    };
+    });
   });
 
   syncNav();
@@ -2567,7 +2567,7 @@ if (isPoster) {
       bindTap(btnFav, () => {
         toggleFav(p.id, currentOpts());
         render();
-      };
+      });
     }
 
     if (btnCart) {
@@ -2575,7 +2575,7 @@ if (isPoster) {
         addToCartById(p.id, currentOpts());
         toast("Добавлено в корзину", "good");
         render();
-      };
+      });
     }
 
     // опции (делаем радиогруппы)
@@ -2590,7 +2590,7 @@ if (isPoster) {
           else if (isPoster && title === "Варианты наборов") selectedPosterPack = key;
           else if (isPoster && title === "Бумага для печати") selectedPosterPaper = key;
           render();
-        };
+        });
       });
     });
 
@@ -2665,7 +2665,7 @@ function renderFavorites() {
       const idx = Number(el.dataset.idx || 0);
       const fi = items[idx];
       openPage(() => renderProduct(el.dataset.open, fi));
-    };
+    });
   });
 
   const goCats = document.getElementById("goCatsFromEmptyFav");
@@ -2680,7 +2680,7 @@ function renderFavorites() {
       setFav(next);
       toast("Убрано из избранного", "warn");
       renderFavorites();
-    };
+    });
   });
 
   view.querySelectorAll("[data-to-cart]").forEach((b) => {
@@ -2691,7 +2691,7 @@ function renderFavorites() {
       addToCartById(fi.id, fi);
       toast("Добавлено в корзину", "good");
       renderFavorites();
-    };
+    });
   });
 
   syncNav();
@@ -2836,7 +2836,7 @@ function renderCart() {
       setCart(next);
       gaEvent("add_to_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
       renderCart();
-    };
+    });
   });
 
   view.querySelectorAll("[data-dec]").forEach((b) => {
@@ -2849,7 +2849,7 @@ function renderCart() {
       setCart(next);
       gaEvent("remove_from_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
       renderCart();
-    };
+    });
   });
 
   
@@ -2862,7 +2862,7 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
     const ci = items[idx];
     if (!ci) return;
     openPage(() => renderProduct(ci.id, ci));
-  };
+  });
 });
 
 const goCats = document.getElementById("goCatsFromEmptyCart");
@@ -2874,7 +2874,7 @@ const goCats = document.getElementById("goCatsFromEmptyCart");
       setCart([]);
       toast("Корзина очищена", "warn");
       renderCart();
-    };
+    });
   }
 
   const btnCheckout = document.getElementById("btnCheckout");
@@ -3277,8 +3277,8 @@ function renderCheckout() {
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
-  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); };
-  bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); };
+  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); });
+  bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); });
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   bindTap(openInfoFromCheckout, () => openPage(renderInfo));
