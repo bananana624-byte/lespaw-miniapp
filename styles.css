@@ -1265,3 +1265,44 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .emptyTitle{font-weight:800;font-size:18px;letter-spacing:.2px;margin-bottom:6px}
 .emptyText{opacity:.92;line-height:1.35}
 .checkStatus{display:inline-block;margin-left:8px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;vertical-align:middle;border:1px solid rgba(255,255,255,.20);opacity:.9}
+
+
+/* ===== Cart sticky bar ===== */
+.cartBarSpacer{ height:130px; }
+.cartBar{
+  position:fixed;
+  left:0; right:0;
+  bottom:calc(80px + env(safe-area-inset-bottom));
+  z-index:40;
+  pointer-events:none;
+}
+.cartBarInner{
+  max-width:860px;
+  margin:0 auto;
+  padding:10px 16px;
+}
+.cartBarInner > .cartBarTotal,
+.cartBarInner > .cartBarActions{ pointer-events:auto; }
+
+.cartBarInner{
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(190,120,255,.35);
+  border-radius:18px;
+  box-shadow:0 12px 28px rgba(0,0,0,.16);
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:space-between;
+}
+.cartBarTotal{ flex:1; min-width:0; }
+.cartBarSum{ font-size:15px; }
+.cartBarNote{ opacity:.85; margin-top:2px; line-height:1.2; }
+.cartBarActions{ display:flex; gap:10px; flex-wrap:nowrap; }
+
+/* ===== Home onboarding ===== */
+.onboardingCard .h2{ margin:0; }
+.onboardingCard ul{ margin-bottom:0; }
+.onboardingCard .btn{ white-space:nowrap; }
+
+/* ===== Smaller product cards for "similar" ===== */
+.pcardSmall .pcardTitle{ -webkit-line-clamp:2; line-clamp:2; }
