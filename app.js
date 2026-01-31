@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v155 (hotfix: syntax + csv bg update)
+// LesPaw Mini App — app.js v145
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -216,6 +216,7 @@ let fav = [];
 let cartUpdatedAt = 0;
 let favUpdatedAt = 0;
 
+
 // =====================
 // Toast
 // =====================
@@ -432,24 +433,13 @@ async function fetchCSVWithCache(url, cacheKey) {
 let _csvBgToastShown = false;
 function onCsvBackgroundUpdate(cacheKey, freshData) {
   try {
-    if (cacheKey === LS_CSV_CACHE_PRODUCTS) {
+    if (cacheKey === "products") {
       products = normalizeProducts(freshData || []);
-    } else if (cacheKey === LS_CSV_CACHE_REVIEWS) {
+    } else if (cacheKey === "reviews") {
       reviews = normalizeReviews(freshData || []);
-    } else if (cacheKey === LS_CSV_CACHE_FANDOMS) {
-      fandoms = normalizeFandoms(freshData || []);
-    } else if (cacheKey === LS_CSV_CACHE_SETTINGS) {
-      // settings хранится как объект key->value
-      const next = {};
-      (freshData || []).forEach((row) => {
-        const k = String(row.key || "").trim();
-        const v = String(row.value ?? "").trim();
-        if (!k) return;
-        if (k === "overlay_price_delta" || k === "holo_base_price_delta") next[k] = Number(v);
-        else next[k] = v;
-      });
-      settings = next;
-    } else return;
+    } else {
+      return;
+    }
 
     try {
       if (typeof currentRender === "function" && currentRender !== renderHome) currentRender();
@@ -1008,7 +998,6 @@ function firstImageUrl(p) {
   const imgs = splitList(imagesField(p));
   return imgs[0] || "";
 }
-
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
@@ -1051,6 +1040,15 @@ function safeUrl(u) {
   }
 }
 
+
+function escapeHTML(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // Render multiline text as readable blocks (blank lines -> separate blocks)
 function renderTextBlocks(raw) {
@@ -1519,22 +1517,7 @@ async function init() {
     syncBottomSpace();
   }
 }
-
-// безопасный запуск (даже если script без defer)
-(function boot(){
-  function start(){
-    try { init(); } catch (e) {
-      try {
-        const v = document.getElementById("view");
-        if (v) v.innerHTML = `<div class="card"><div class="h2">Ошибка запуска</div><div class="small">${escapeHTML(String(e))}</div></div>`;
-      } catch {}
-    }
-  }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
-  else start();
-})();
-
-
+init();
 
 // =====================
 // HOME (плитки)
@@ -3295,10 +3278,7 @@ function renderCheckout() {
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
-  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); });
-  bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); });
-
-  const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
+  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); });bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); });const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   bindTap(openInfoFromCheckout, () => openPage(renderInfo));
 
   const btnSend = document.getElementById("btnSend");
