@@ -104,6 +104,7 @@ let infoViewedThisSession = false;
 // облачные ключи (единые для одного Telegram-аккаунта на всех устройствах)
 const CS_CART = "lespaw_cart";
 const CS_FAV = "lespaw_fav";
+const CS_INFO_VIEWED = "lespaw_info_viewed";
 
 function loadJSON(key, fallback) {
   try {
@@ -167,7 +168,7 @@ async function loadSyncedState() {
   const localFavN = normalizeSynced(localFavRaw);
 
   // 2) облако (может быть пустым / старым / в старом формате-массиве)
-  const [cloudCartRawStr, cloudFavRawStr] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV)]);
+  const [cloudCartRawStr, cloudFavRawStr, cloudInfoRawStr] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV), cloudGet(CS_INFO_VIEWED)]);
   let cloudCartRaw = null;
   let cloudFavRaw = null;
 
@@ -209,6 +210,28 @@ async function loadSyncedState() {
   // 5) сохраним в локалку выбранное (быстрый старт дальше)
   saveJSON(LS_CART, { items: cart, updatedAt: cartUpdatedAt || 0 });
   saveJSON(LS_FAV, { items: fav, updatedAt: favUpdatedAt || 0 });
+
+
+  // 6) синхронизация гейта "Важная информация" (однажды прочитала — сохраняем навсегда)
+  try {
+    let cloudInfo = null;
+    if (cloudInfoRawStr) {
+      // поддержка старых форматов: "1" или {"v":1}
+      if (cloudInfoRawStr === "1") cloudInfo = 1;
+      else {
+        try { const o = JSON.parse(cloudInfoRawStr); cloudInfo = (o?.v === 1 || o?.v === "1") ? 1 : null; } catch {}
+      }
+    }
+    if (cloudInfo === 1) {
+      infoViewed = true;
+      try { localStorage.setItem(LS_INFO_VIEWED, "1"); } catch {}
+  cloudSet(CS_INFO_VIEWED, "1").catch(() => {});
+    } else if (infoViewed) {
+      // если локально уже было "прочитано", а в облаке пусто — инициализируем облако
+      cloudSet(CS_INFO_VIEWED, "1").catch(() => {});
+    }
+  } catch {}
+
 }
 
 let cart = [];
@@ -404,6 +427,32 @@ async function fetchCSV(url) {
   return parseCSV(await res.text());
 }
 
+// Быстрое сравнение больших CSV без JSON.stringify (меньше лагов на слабых телефонах)
+function fnv1aUpdate(h, str) {
+  str = String(str ?? "");
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function hashRows(rows) {
+  if (!Array.isArray(rows)) return 0;
+  let h = 2166136261 >>> 0;
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r] || {};
+    for (const k in row) {
+      h = fnv1aUpdate(h, k);
+      h = fnv1aUpdate(h, row[k]);
+    }
+    h = fnv1aUpdate(h, "\n");
+  }
+  // смешаем ещё длину
+  h = fnv1aUpdate(h, rows.length);
+  return h >>> 0;
+}
+
+
 async function fetchCSVWithCache(url, cacheKey) {
   const cached = loadCsvCache(cacheKey);
   // Если кеш свежий — используем сразу и параллельно обновляем в фоне
@@ -412,7 +461,7 @@ async function fetchCSVWithCache(url, cacheKey) {
     fetchCSV(url)
       .then((fresh) => {
         try {
-          const same = JSON.stringify(fresh) === JSON.stringify(cached.data);
+          const same = (hashRows(fresh) === hashRows(cached.data));
           saveCsvCache(cacheKey, fresh);
           if (!same) onCsvBackgroundUpdate(cacheKey, fresh);
         } catch {
@@ -2969,45 +3018,14 @@ function saveCheckout(next) {
 }
 
 
-function optionLabelForCartItem(ci) {
-  const parts = [];
-  const overlayMap = {
-    none: "без плёнки",
-    matte: "матовая",
-    glossy: "глянцевая",
-    sparkle: "с блёстками",
-    holo: "голографическая",
-  };
-  const baseMap = {
-    normal: "обычная",
-    holo: "голография",
-  };
-  const lamMap = {
-    none: "без ламинации",
-    matte: "матовая",
-    glossy: "глянцевая",
-    softtouch: "софт-тач",
-    sparkle: "с блёстками",
-  };
-
-  const overlay = (ci?.overlay || "").trim();
-  const base = (ci?.base || "").trim();
-  const lam = (ci?.lamination || "").trim();
-  const film = (ci?.film || "").trim();
-  const pinLam = (ci?.pin_lamination || "").trim();
-
-  // stickers: overlay/base
-  if (overlay) parts.push(`Плёнка: ${overlayMap[overlay] || overlay}`);
-  if (base) parts.push(`Основа: ${baseMap[base] || base}`);
-
-  // posters/prints etc: lamination/film
-  if (lam) parts.push(`Ламинация: ${lamMap[lam] || lam}`);
-  if (film) parts.push(`Плёнка: ${overlayMap[film] || film}`);
-
-  // pins
-  if (pinLam) parts.push(`Ламинация значка: ${lamMap[pinLam] || pinLam}`);
-
-  return parts.filter(Boolean).join(" · ");
+function optionLabelForCartItem(ci, p) {
+  // Унифицированный вывод опций через актуальный optionPairsFor()
+  try {
+    const pairs = optionPairsFor(ci || {}, p || { product_type: ci?.product_type || ci?.type || "" });
+    return (pairs || []).map(({ k, v }) => `${k}: ${v}`).join(" · ");
+  } catch {
+    return "";
+  }
 }
 
 
