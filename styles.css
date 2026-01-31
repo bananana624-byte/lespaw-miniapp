@@ -1267,42 +1267,47 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .checkStatus{display:inline-block;margin-left:8px;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;vertical-align:middle;border:1px solid rgba(255,255,255,.20);opacity:.9}
 
 
-/* ===== Cart sticky bar ===== */
-.cartBarSpacer{ height:130px; }
-.cartBar{
-  position:fixed;
-  left:0; right:0;
-  bottom:calc(80px + env(safe-area-inset-bottom));
-  z-index:40;
-  pointer-events:none;
-}
-.cartBarInner{
-  max-width:860px;
-  margin:0 auto;
-  padding:10px 16px;
-}
-.cartBarInner > .cartBarTotal,
-.cartBarInner > .cartBarActions{ pointer-events:auto; }
-
-.cartBarInner{
-  background:rgba(255,255,255,.92);
-  border:1px solid rgba(190,120,255,.35);
-  border-radius:18px;
-  box-shadow:0 12px 28px rgba(0,0,0,.16);
+/* ===== Cart summary ===== */
+.cartSummary{
   display:flex;
   gap:12px;
   align-items:center;
   justify-content:space-between;
+  flex-wrap:wrap;
+  padding:12px 12px;
+  border-radius:16px;
+  background:rgba(0,0,0,.10);
+  border:1px solid rgba(255,255,255,.18);
 }
-.cartBarTotal{ flex:1; min-width:0; }
-.cartBarSum{ font-size:15px; }
-.cartBarNote{ opacity:.85; margin-top:2px; line-height:1.2; }
-.cartBarActions{ display:flex; gap:10px; flex-wrap:nowrap; }
+.cartSummaryLeft{min-width:200px}
+.cartSummarySum{font-weight:900;font-size:16px;letter-spacing:.2px}
+.cartSummaryNote{opacity:.9;max-width:520px;line-height:1.25}
+.cartSummaryActions{display:flex;gap:10px;flex-wrap:wrap}
+.cartSummaryActions .btn{min-width:120px}
 
-/* ===== Home onboarding ===== */
-.onboardingCard .h2{ margin:0; }
-.onboardingCard ul{ margin-bottom:0; }
-.onboardingCard .btn{ white-space:nowrap; }
+
+/* ===== Home hint ===== */
+.homeHint{
+  padding:12px 14px;
+  border-radius:18px;
+  background:rgba(0,0,0,.12);
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 10px 22px rgba(0,0,0,.14);
+}
+.homeHintRow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.homeHintTitle{font-weight:900;font-size:14px;letter-spacing:.3px;opacity:.98}
+.homeHintClose{
+  width:34px;height:34px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.10);
+  color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;line-height:1;
+}
+.homeHintText{margin-top:6px;opacity:.92;line-height:1.25;font-size:13px}
+.homeHintActions{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
+.homeHintActions .btn{white-space:nowrap}
+
 
 /* ===== Smaller product cards for "similar" ===== */
 .pcardSmall .pcardTitle{ -webkit-line-clamp:2; line-clamp:2; }
