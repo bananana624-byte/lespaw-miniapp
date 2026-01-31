@@ -1810,10 +1810,6 @@ function renderHome() {
       <div class="tileSub">Выбор фандома по типу</div>
     </div>
 
-      <div class="tileTitle">Категории</div>
-      <div class="tileSub">Выбор фандома по типу</div>
-    </div>
-
     <div class="tile" id="tEx">
       <div class="tileTitle">Примеры ламинации и пленки</div>
       <div class="tileSub">Как выглядит</div>
@@ -1955,7 +1951,6 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
       setActiveDot();
     }, { passive: true });
   }
-  });
 
 syncNav();
   syncBottomSpace();
