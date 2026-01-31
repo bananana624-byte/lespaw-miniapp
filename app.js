@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v155 (hotfix: syntax + csv bg update)
+// LesPaw Mini App — app.js v160 (hotfix: syntax + csv bg update)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -1433,8 +1433,35 @@ function bindTap(el, handler) {
 // Init
 // =====================
 async function init() {
+
+  // FIX: blur search as early as possible on nav taps (prevents backspace-like behavior)
   try {
-    bindTap(navBack, () => goBack());
+    const earlyBlur = () => {
+      try {
+        if (document.activeElement === globalSearch) globalSearch.blur();
+      } catch {}
+    };
+    navBack?.addEventListener("pointerdown", earlyBlur, { passive: true });
+    navBack?.addEventListener("touchstart", earlyBlur, { passive: true });
+  } catch {}
+  try {
+    bindTap(navBack, () => {
+      // FIX: если фокус в глобальном поиске, Telegram WebView может трактовать "Назад"
+      // как backspace и удалять текст по букве. Нам нужно: 1) снять фокус, 2) очистить поле,
+      // 3) выполнить навигацию назад.
+      try {
+        if (globalSearch) {
+          const had = String(globalSearch.value || "").length > 0;
+          globalSearch.blur();
+          if (had) {
+            globalSearch.value = "";
+            // Триггерим обработчики ввода, чтобы UI сразу вернулся к нормальному состоянию.
+            try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {}
+          }
+        }
+      } catch {}
+      goBack();
+    });
     bindTap(navHome, () => resetToHome());
     bindTap(navFav, () => openPage(renderFavorites));
     bindTap(navCart, () => openPage(renderCart));
