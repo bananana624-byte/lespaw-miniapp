@@ -1139,6 +1139,18 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   flex-direction:column;
   gap:10px;
 }
+.newCarousel{
+  width:100%;
+  display:flex;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+  scroll-behavior:smooth;
+  gap:0;
+  padding:2px 2px 0;
+  scrollbar-width:none;
+}
 .newCarousel::-webkit-scrollbar{ display:none; }
 .newCarousel{ scrollbar-width:none; }
 
