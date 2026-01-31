@@ -118,6 +118,20 @@ function saveJSON(key, value) {
   } catch {}
 }
 
+// Формат синхронизации: { items: [...], updatedAt: number }
+// Для обратной совместимости принимаем и массив.
+function normalizeSynced(raw) {
+  try {
+    if (Array.isArray(raw)) return { items: raw, updatedAt: 0 };
+    if (raw && typeof raw === "object" && Array.isArray(raw.items)) {
+      const ts = Number(raw.updatedAt || 0);
+      return { items: raw.items, updatedAt: Number.isFinite(ts) ? ts : 0 };
+    }
+  } catch {}
+  return { items: [], updatedAt: 0 };
+}
+
+
 function cloudAvailable() {
   return !!tg?.CloudStorage?.getItem && !!tg?.CloudStorage?.setItem;
 }
@@ -147,38 +161,61 @@ function cloudSet(key, value) {
 
 async function loadSyncedState() {
   // 1) локальное состояние (быстрый старт)
-  const localCart = loadJSON(LS_CART, []);
-  const localFav = loadJSON(LS_FAV, []);
+  const localCartRaw = loadJSON(LS_CART, []);
+  const localFavRaw = loadJSON(LS_FAV, []);
+  const localCartN = normalizeSynced(localCartRaw);
+  const localFavN = normalizeSynced(localFavRaw);
 
-  // 2) облако — источник истины, если там уже есть данные
-  const [cloudCartRaw, cloudFavRaw] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV)]);
-  let cloudCart = null;
-  let cloudFav = null;
+  // 2) облако (может быть пустым / старым / в старом формате-массиве)
+  const [cloudCartRawStr, cloudFavRawStr] = await Promise.all([cloudGet(CS_CART), cloudGet(CS_FAV)]);
+  let cloudCartRaw = null;
+  let cloudFavRaw = null;
 
-  try { if (cloudCartRaw) cloudCart = JSON.parse(cloudCartRaw); } catch {}
-  try { if (cloudFavRaw) cloudFav = JSON.parse(cloudFavRaw); } catch {}
+  try { if (cloudCartRawStr) cloudCartRaw = JSON.parse(cloudCartRawStr); } catch {}
+  try { if (cloudFavRawStr) cloudFavRaw = JSON.parse(cloudFavRawStr); } catch {}
 
-  // если в облаке есть данные — берём их
-  if (Array.isArray(cloudCart)) cart = cloudCart;
-  else cart = localCart;
+  const cloudCartN = normalizeSynced(cloudCartRaw);
+  const cloudFavN = normalizeSynced(cloudFavRaw);
 
-  if (Array.isArray(cloudFav)) fav = cloudFav;
-  else fav = localFav;
+  // 3) выбор источника истины: если в облаке есть данные — сравним свежесть
+  const pickNewer = (a, b) => (Number(a.updatedAt || 0) >= Number(b.updatedAt || 0) ? a : b);
 
-  // если облако пустое, но локальные данные есть — зальём их в облако (инициализация)
-  if (!Array.isArray(cloudCart) && Array.isArray(localCart) && localCart.length) {
-    cloudSet(CS_CART, JSON.stringify(localCart)).catch(() => {});
+  const chosenCartN =
+    (cloudCartN.items && cloudCartN.items.length)
+      ? (localCartN.items && localCartN.items.length ? pickNewer(cloudCartN, localCartN) : cloudCartN)
+      : localCartN;
+
+  const chosenFavN =
+    (cloudFavN.items && cloudFavN.items.length)
+      ? (localFavN.items && localFavN.items.length ? pickNewer(cloudFavN, localFavN) : cloudFavN)
+      : localFavN;
+
+  cart = Array.isArray(chosenCartN.items) ? chosenCartN.items : [];
+  fav = Array.isArray(chosenFavN.items) ? chosenFavN.items : [];
+
+  cartUpdatedAt = Number(chosenCartN.updatedAt || 0) || 0;
+  favUpdatedAt = Number(chosenFavN.updatedAt || 0) || 0;
+
+  // 4) если облако пустое, но локальные данные есть — зальём их в облако (инициализация)
+  if (!(cloudCartN.items && cloudCartN.items.length) && cart.length) {
+    cartUpdatedAt = cartUpdatedAt || Date.now();
+    cloudSet(CS_CART, JSON.stringify({ items: cart, updatedAt: cartUpdatedAt })).catch(() => {});
   }
-  if (!Array.isArray(cloudFav) && Array.isArray(localFav) && localFav.length) {
-    cloudSet(CS_FAV, JSON.stringify(localFav)).catch(() => {});
+  if (!(cloudFavN.items && cloudFavN.items.length) && fav.length) {
+    favUpdatedAt = favUpdatedAt || Date.now();
+    cloudSet(CS_FAV, JSON.stringify({ items: fav, updatedAt: favUpdatedAt })).catch(() => {});
   }
 
-  // сохраним в локалку то, что выбрали (чтобы дальше было быстро)
-  saveJSON(LS_CART, cart);
-  saveJSON(LS_FAV, fav);
+  // 5) сохраним в локалку выбранное (быстрый старт дальше)
+  saveJSON(LS_CART, { items: cart, updatedAt: cartUpdatedAt || 0 });
+  saveJSON(LS_FAV, { items: fav, updatedAt: favUpdatedAt || 0 });
 }
 
 let cart = [];
+let fav = [];
+let cartUpdatedAt = 0;
+let favUpdatedAt = 0;
+
 let fav = [];
 
 // =====================
@@ -375,7 +412,15 @@ async function fetchCSVWithCache(url, cacheKey) {
   if (cached && Date.now() - (cached.ts || 0) < CSV_CACHE_TTL_MS) {
     // фон-обновление (не блокируем UI)
     fetchCSV(url)
-      .then((fresh) => saveCsvCache(cacheKey, fresh))
+      .then((fresh) => {
+        try {
+          const same = JSON.stringify(fresh) === JSON.stringify(cached.data);
+          saveCsvCache(cacheKey, fresh);
+          if (!same) onCsvBackgroundUpdate(cacheKey, fresh);
+        } catch {
+          saveCsvCache(cacheKey, fresh);
+        }
+      })
       .catch(() => {});
     return cached.data;
   }
@@ -384,6 +429,30 @@ async function fetchCSVWithCache(url, cacheKey) {
   saveCsvCache(cacheKey, fresh);
   return fresh;
 }
+
+
+let _csvBgToastShown = false;
+function onCsvBackgroundUpdate(cacheKey, freshData) {
+  try {
+    if (cacheKey === "products") {
+      products = normalizeProducts(freshData || []);
+    } else if (cacheKey === "reviews") {
+      reviews = normalizeReviews(freshData || []);
+    } else {
+      return;
+    }
+
+    try {
+      if (typeof currentRender === "function" && currentRender !== renderHome) currentRender();
+    } catch {}
+
+    if (!_csvBgToastShown) {
+      _csvBgToastShown = true;
+      toast("Каталог обновлён ✨");
+    }
+  } catch {}
+}
+
 
 
 // =====================
@@ -730,16 +799,22 @@ function getProductById(id) {
 
 function setCart(next) {
   cart = next;
-  saveJSON(LS_CART, cart);
+  cartUpdatedAt = Date.now();
+  const payload = { items: cart, updatedAt: cartUpdatedAt };
+
+  saveJSON(LS_CART, payload);
   // синхронизация между устройствами (не блокируем UI)
-  cloudSet(CS_CART, JSON.stringify(cart)).catch(() => {});
+  cloudSet(CS_CART, JSON.stringify(payload)).catch(() => {});
   updateBadges();
 }
 function setFav(next) {
   fav = next;
-  saveJSON(LS_FAV, fav);
+  favUpdatedAt = Date.now();
+  const payload = { items: fav, updatedAt: favUpdatedAt };
+
+  saveJSON(LS_FAV, payload);
   // синхронизация между устройствами (не блокируем UI)
-  cloudSet(CS_FAV, JSON.stringify(fav)).catch(() => {});
+  cloudSet(CS_FAV, JSON.stringify(payload)).catch(() => {});
   updateBadges();
 }
 
@@ -928,12 +1003,45 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${u}" alt="Фото товара" loading="lazy" decoding="async">`;
+  return `<img class="pcardImg" src="${safeUrl(u)}" alt="Фото товара" loading="lazy" decoding="async">`;
 }
 
 function safeText(s) {
   return String(s ?? "").trim();
 }
+
+// Экранирование HTML (защита от XSS из таблиц/CSV)
+function escapeHTML(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      case "'": return "&#39;";
+      default: return ch;
+    }
+  });
+}
+// Частый кейс: текст из таблицы, который пойдёт в innerHTML
+function h(s) {
+  return escapeHTML(safeText(s));
+}
+
+// Безопасный URL для src/href (отбрасываем javascript:)
+function safeUrl(u) {
+  const raw = String(u ?? "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw, window.location.href);
+    const p = url.protocol.toLowerCase();
+    if (p === "http:" || p === "https:" || p === "tg:") return url.href;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 
 function escapeHTML(s) {
   return String(s ?? "")
@@ -1400,7 +1508,7 @@ async function init() {
     view.innerHTML = `
       <div class="card">
         <div class="h2">Ошибка загрузки данных</div>
-        <div class="small">${String(e)}</div>
+        <div class="small">${escapeHTML(String(e))}</div>
         <hr>
         <div class="small">Проверь публикацию таблиц и CSV-ссылки.</div>
       </div>
@@ -1461,7 +1569,7 @@ function renderHome() {
                     (p) => `
                   <div class="pcard pcardMini newCard" data-id="${p.id}">
                     ${cardThumbHTML(p)}
-                    <div class="pcardTitle">${safeText(p.name)}</div>
+                    <div class="pcardTitle">${h(p.name)}</div>
                     ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
                     <div class="pcardPrice">${moneyDisplay(p.price)}</div>
                   </div>
@@ -1673,7 +1781,7 @@ function renderFandomPage(fandomId) {
         (p) => `
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
-            <div class="pcardTitle">${safeText(p.name)}</div>
+            <div class="pcardTitle">${h(p.name)}</div>
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
             <div class="pcardPrice">${moneyDisplay(p.price)}</div>
             <div class="pcardActions">
@@ -1884,7 +1992,7 @@ function renderReviews() {
 
               const photoHtml = r.photo_url
                 ? `<div class="reviewPhotoWrap">
-                     <img class="reviewPhoto" src="${r.photo_url}" alt="Фото отзыва" loading="lazy" decoding="async">
+                     <img class="reviewPhoto" src="${safeUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async">
                    </div>`
                 : ``;
 
@@ -1892,12 +2000,15 @@ function renderReviews() {
                 ? `<button class="btn btnMini" data-source="${encodeURIComponent(r.source_url)}">К оригиналу</button>`
                 : ``;
 
+              const author = safeText(r.author) || "Покупательница";
+              const initial = (author.slice(0, 1).toUpperCase() || "★");
+
               return `
                 <div class="reviewCard">
                   <div class="reviewTop">
-                    <div class="reviewAvatar" aria-hidden="true">${safeText(r.author).slice(0, 1).toUpperCase() || "★"}</div>
+                    <div class="reviewAvatar" aria-hidden="true">${escapeHTML(initial)}</div>
                     <div class="reviewHead">
-                      <div class="reviewAuthor">${safeText(r.author) || "Покупательница"}</div>
+                      <div class="reviewAuthor">${escapeHTML(author)}</div>
                       <div class="reviewMeta">
                         ${dateText ? `<span class="reviewDate">${dateText}</span>` : ``}
                         ${stars}
@@ -1971,7 +2082,7 @@ function renderReviews() {
 
     // chips
     view.querySelectorAll("[data-mode]").forEach((b) => {
-      b.onclick = () => {
+      bindTap(b, () => {
         mode = b.dataset.mode || "all";
         reviewsVisibleCount = 8;
         render();
@@ -1989,7 +2100,7 @@ function renderReviews() {
 
     // open source
     view.querySelectorAll("[data-source]").forEach((el) => {
-      el.onclick = () => {
+      bindTap(el, () => {
         const url = decodeURIComponent(el.dataset.source || "");
         openExternal(url);
       };
@@ -2006,12 +2117,12 @@ function renderReviews() {
 
     // expand text on tap (folded by CSS)
     view.querySelectorAll("[data-expand]").forEach((el) => {
-      el.onclick = () => toggleReview(el.dataset.expand);
+      bindTap(el, () => toggleReview(el.dataset.expand));
     });
 
     // explicit "show full" button
     view.querySelectorAll("[data-more]").forEach((el) => {
-      el.onclick = () => toggleReview(el.dataset.more);
+      bindTap(el, () => toggleReview(el.dataset.more));
     });
   };
 
@@ -2038,14 +2149,14 @@ function renderLaminationExamples() {
         .map((ex) => {
           const img = ex.images?.[0] || "";
           const imgHTML = img
-            ? `<img class="exImg" src="${img}" alt="${safeText(ex.title)}" loading="lazy" decoding="async">`
+            ? `<img class="exImg" src="${safeUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async">`
             : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
 
           return `
             <div class="exCard" data-exid="${ex.id}">
               ${imgHTML}
-              <div class="exTitle">${safeText(ex.title)}</div>
-              ${ex.subtitle ? `<div class="exMeta">${safeText(ex.subtitle)}</div>` : ``}
+              <div class="exTitle">${h(ex.title)}</div>
+              ${ex.subtitle ? `<div class="exMeta">${h(ex.subtitle)}</div>` : ``}
             </div>
           `;
         })
@@ -2070,7 +2181,7 @@ function renderLaminationExamples() {
   `;
 
   view.querySelectorAll("[data-exid]").forEach((el) => {
-    el.onclick = () => openPage(() => renderLaminationExampleDetail(el.dataset.exid));
+    bindTap(el, () => openPage(() => renderLaminationExampleDetail(el.dataset.exid)));
   });
 
   syncNav();
@@ -2091,9 +2202,9 @@ function renderLaminationExampleDetail(exId) {
 
   view.innerHTML = `
     <div class="card">
-      <div class="h2">${safeText(ex.title)}</div>
-      ${ex.subtitle ? `<div class="small">${safeText(ex.subtitle)}</div>` : ``}
-      ${ex.description ? `<div class="small" style="margin-top:8px">${safeText(ex.description)}</div>` : ``}
+      <div class="h2">${h(ex.title)}</div>
+      ${ex.subtitle ? `<div class="small">${h(ex.subtitle)}</div>` : ``}
+      ${ex.description ? `<div class="small" style="margin-top:8px">${h(ex.description)}</div>` : ``}
 
       <hr>
 
@@ -2104,7 +2215,7 @@ function renderLaminationExampleDetail(exId) {
                 .map(
                   (u) => `
                 <div class="exBigBtn" style="cursor:default">
-                  <img class="exBigImg" src="${u}" alt="${safeText(ex.title)}" loading="lazy" decoding="async">
+                  <img class="exBigImg" src="${safeUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async">
                 </div>
               `
                 )
@@ -2160,7 +2271,7 @@ function renderSearch(q) {
         (p) => `
           <div class="pcard" data-id="${p.id}">
             ${cardThumbHTML(p)}
-            <div class="pcardTitle">${safeText(p.name)}</div>
+            <div class="pcardTitle">${h(p.name)}</div>
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
             <div class="pcardPrice">${moneyDisplay(p.price)}</div>
             <div class="pcardActions">
@@ -2186,7 +2297,7 @@ function renderSearch(q) {
 
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Поиск: “${safeText(q)}”</div>
+      <div class="h2">Поиск: “${h(q)}”</div>
 
       <div class="small"><b>Фандомы</b></div>
       <div class="list">
@@ -2196,8 +2307,8 @@ function renderSearch(q) {
                 .map(
                   (f) => `
           <div class="item" data-fid="${f.fandom_id}">
-            <div class="title">${safeText(f.fandom_name)}</div>
-            <div class="meta">${safeText(f.fandom_type)}</div>
+            <div class="title">${h(f.fandom_name)}</div>
+            <div class="meta">${h(f.fandom_type)}</div>
           </div>
         `
                 )
@@ -2217,11 +2328,11 @@ function renderSearch(q) {
     </div>
   `;
 
-  view.querySelectorAll("[data-fid]").forEach((el) => (el.onclick = () => openPage(() => renderFandomPage(el.dataset.fid))));
+  view.querySelectorAll("[data-fid]").forEach((el) => (bindTap(el, () => openPage(() => renderFandomPage(el.dataset.fid)))));
 
   // открыть карточку товара по тапу на карточку
   view.querySelectorAll(".pcard[data-id]").forEach((el) => {
-    el.onclick = (e) => {
+    bindTap(el, (e) => {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       openPage(() => renderProduct(el.dataset.id));
@@ -2230,7 +2341,7 @@ function renderSearch(q) {
 
   // сердечки
   view.querySelectorAll("[data-fav]").forEach((b) => {
-    b.onclick = (e) => {
+    bindTap(b, (e) => {
       e.stopPropagation();
       const id = String(b.dataset.fav || "");
       toggleFav(id);
@@ -2244,7 +2355,7 @@ function renderSearch(q) {
 
   // в корзину
   view.querySelectorAll("[data-add]").forEach((b) => {
-    b.onclick = (e) => {
+    bindTap(b, (e) => {
       e.stopPropagation();
       const id = String(b.dataset.add || "");
       addToCartById(id);
@@ -2391,14 +2502,14 @@ if (isPoster) {
       <div class="card">
         <div class="prodHead">
           <div>
-            <div class="h2">${safeText(p.name)}</div>
-            <div class="small">${fandom?.fandom_name ? `<b>${safeText(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
+            <div class="h2">${h(p.name)}</div>
+            <div class="small">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
           </div>
 </div>
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${img}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
+        ${img ? `<img class="thumb" src="${safeUrl(img)}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px">` : ""}
 
         ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -2453,14 +2564,14 @@ if (isPoster) {
     const btnExamples = document.getElementById("btnExamples");
 
     if (btnFav) {
-      btnFav.onclick = () => {
+      bindTap(btnFav, () => {
         toggleFav(p.id, currentOpts());
         render();
       };
     }
 
     if (btnCart) {
-      btnCart.onclick = () => {
+      bindTap(btnCart, () => {
         addToCartById(p.id, currentOpts());
         toast("Добавлено в корзину", "good");
         render();
@@ -2471,7 +2582,7 @@ if (isPoster) {
     view.querySelectorAll(".optPanel").forEach((panel) => {
       const title = panel.querySelector(".optTitle")?.textContent?.trim() || "";
       panel.querySelectorAll("[data-opt]").forEach((b) => {
-        b.onclick = () => {
+        bindTap(b, () => {
           const key = b.dataset.opt;
           if (isSticker && title === "Плёнка") selectedFilm = key;
           else if (isSticker && title === "Ламинация") selectedStickerLam = key;
@@ -2484,7 +2595,7 @@ if (isPoster) {
     });
 
     if (btnExamples) {
-      btnExamples.onclick = () => openExamples();
+      bindTap(btnExamples, () => openExamples());
     }
 
     syncNav();
@@ -2518,9 +2629,9 @@ function renderFavorites() {
                   return `
                     <div class="item" data-open="${p.id}" data-idx="${idx}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${img}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
-                          <div class="title">${safeText(p.name)}</div>
+                          <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}</div>
                           ${optionPairsHTML(pairs)}
 
@@ -2548,7 +2659,7 @@ function renderFavorites() {
   `;
 
   view.querySelectorAll("[data-open]").forEach((el) => {
-    el.onclick = (e) => {
+    bindTap(el, (e) => {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const idx = Number(el.dataset.idx || 0);
@@ -2558,10 +2669,10 @@ function renderFavorites() {
   });
 
   const goCats = document.getElementById("goCatsFromEmptyFav");
-  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
+  if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
   view.querySelectorAll("[data-remove]").forEach((b) => {
-    b.onclick = (e) => {
+    bindTap(b, (e) => {
       e.stopPropagation();
       const i = Number(b.dataset.remove);
       const next = [...(fav || [])];
@@ -2573,7 +2684,7 @@ function renderFavorites() {
   });
 
   view.querySelectorAll("[data-to-cart]").forEach((b) => {
-    b.onclick = (e) => {
+    bindTap(b, (e) => {
       e.stopPropagation();
       const i = Number(b.dataset.toCart);
       const fi = normalizeFavItem((fav || [])[i]);
@@ -2637,7 +2748,7 @@ function optionPairsFor(ci, p) {
 function optionPairsHTML(pairs) {
   if (!pairs?.length) return "";
   return `<div class="miniOpts">${pairs
-    .map((x) => `<div><span class="optKey">${safeText(x.k)}:</span> ${safeText(x.v)}</div>`)
+    .map((x) => `<div><span class="optKey">${h(x.k)}:</span> ${h(x.v)}</div>`)
     .join("")}</div>`;
 }
 
@@ -2674,9 +2785,9 @@ function renderCart() {
                   return `
                     <div class="item" data-idx="${idx}" data-open="${p.id}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${img}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
-                          <div class="title">${safeText(p.name)}</div>
+                          <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
                           ${optionPairsHTML(pairs)}
                         </div>
@@ -2718,7 +2829,7 @@ function renderCart() {
   `;
 
   view.querySelectorAll("[data-inc]").forEach((b) => {
-    b.onclick = () => {
+    bindTap(b, () => {
       const i = Number(b.dataset.inc);
       const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
@@ -2729,7 +2840,7 @@ function renderCart() {
   });
 
   view.querySelectorAll("[data-dec]").forEach((b) => {
-    b.onclick = () => {
+    bindTap(b, () => {
       const i = Number(b.dataset.dec);
       const next = [...cart];
       const q = (Number(next[i].qty) || 1) - 1;
@@ -2744,7 +2855,7 @@ function renderCart() {
   
 // Открытие карточки товара по тапу на позицию (кроме кнопок)
 view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
-  el.onclick = (e) => {
+  bindTap(el, (e) => {
     const t = e.target;
     if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
     const idx = Number(el.dataset.idx || 0);
@@ -2755,11 +2866,11 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
 });
 
 const goCats = document.getElementById("goCatsFromEmptyCart");
-  if (goCats) goCats.onclick = () => openPage(renderFandomTypes);
+  if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
-    btnClear.onclick = () => {
+    bindTap(btnClear, () => {
       setCart([]);
       toast("Корзина очищена", "warn");
       renderCart();
@@ -3064,7 +3175,7 @@ function renderCheckout() {
         <button class="btn is-active" id="goHome">На главную</button>
       </div>
     `;
-    document.getElementById("goHome").onclick = () => resetToHome();
+    bindTap(document.getElementById("goHome"), () => resetToHome());
     syncNav();
     syncBottomSpace();
     return;
@@ -3166,11 +3277,11 @@ function renderCheckout() {
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
-  ptYandex.onclick = () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); };
-  pt5Post.onclick = () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); };
+  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); };
+  bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); };
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
-  openInfoFromCheckout.onclick = () => openPage(renderInfo);
+  bindTap(openInfoFromCheckout, () => openPage(renderInfo));
 
   const btnSend = document.getElementById("btnSend");
   const agreeInfo = document.getElementById("agreeInfo");
