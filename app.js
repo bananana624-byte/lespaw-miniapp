@@ -1510,13 +1510,31 @@ async function init() {
         <div class="h2">Ошибка загрузки данных</div>
         <div class="small">${escapeHTML(String(e))}</div>
         <hr>
-        <div class="small">Проверь публикацию таблиц и CSV-ссылки.</div>
+        <div class="small">Проверь интернет и публикацию таблиц/CSV-ссылки.</div>
+        <div style="height:10px"></div>
+        <button class="btn" id="retryLoad">Повторить</button>
       </div>
     `;
+    try { bindTap(document.getElementById("retryLoad"), () => { _csvBgToastShown = false; init(); }); } catch {}
     syncBottomSpace();
   }
 }
-init();
+
+// безопасный запуск (даже если script без defer)
+(function boot(){
+  function start(){
+    try { init(); } catch (e) {
+      try {
+        const v = document.getElementById("view");
+        if (v) v.innerHTML = `<div class="card"><div class="h2">Ошибка запуска</div><div class="small">${escapeHTML(String(e))}</div></div>`;
+      } catch {}
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
+})();
+
+
 
 // =====================
 // HOME (плитки)
