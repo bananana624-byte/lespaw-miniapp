@@ -2,6 +2,15 @@
 
 *{ box-sizing:border-box; }
 html,body{ height:100%; overflow-x:hidden; }
+
+/* Accessibility: respect system setting to reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
