@@ -244,12 +244,18 @@ let favUpdatedAt = 0;
 // =====================
 // Toast
 // =====================
+let __toastEl = null;
 function toast(msg, kind = "") {
+  try { __toastEl?.remove?.(); } catch {}
   const el = document.createElement("div");
   el.className = `toast ${kind}`.trim();
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2200);
+  __toastEl = el;
+  setTimeout(() => {
+    if (__toastEl === el) __toastEl = null;
+    el.remove();
+  }, 2200);
 }
 
 
@@ -1069,7 +1075,7 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${safeUrl(u)}" alt="Фото товара" loading="lazy" decoding="async" onerror="this.style.display='none'">`;
+  return `<img class="pcardImg" src="${safeImgUrl(u)}" alt="Фото товара" loading="lazy" decoding="async" onerror="this.style.display='none'">`;
 }
 
 function safeText(s) {
@@ -1185,6 +1191,21 @@ function safeUrl(u) {
     return "";
   }
 }
+
+function safeImgUrl(u) {
+  const raw = String(u ?? "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw, window.location.href);
+    const p = url.protocol.toLowerCase();
+    // Images should not use tg: links; allow common safe schemes for <img src>
+    if (p === "http:" || p === "https:" || p === "data:" || p === "blob:") return url.href;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 
 
 // Render multiline text as readable blocks (blank lines -> separate blocks)
@@ -2200,7 +2221,7 @@ function renderReviews() {
 
               const photoHtml = r.photo_url
                 ? `<div class="reviewPhotoWrap">
-                     <img class="reviewPhoto" src="${safeUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                     <img class="reviewPhoto" src="${safeImgUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async" onerror="this.style.display='none'">
                    </div>`
                 : ``;
 
@@ -2357,7 +2378,7 @@ function renderLaminationExamples() {
         .map((ex) => {
           const img = ex.images?.[0] || "";
           const imgHTML = img
-            ? `<img class="exImg" src="${safeUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+            ? `<img class="exImg" src="${safeImgUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">`
             : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
 
           return `
@@ -2423,7 +2444,7 @@ function renderLaminationExampleDetail(exId) {
                 .map(
                   (u) => `
                 <div class="exBigBtn" style="cursor:default">
-                  <img class="exBigImg" src="${safeUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                  <img class="exBigImg" src="${safeImgUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">
                 </div>
               `
                 )
@@ -2717,7 +2738,7 @@ if (isPoster) {
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${safeUrl(img)}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px" onerror="this.style.display='none'">` : ""}
+        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px" onerror="this.style.display='none'">` : ""}
 
         ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -2837,7 +2858,7 @@ function renderFavorites() {
                   return `
                     <div class="item" data-open="${p.id}" data-idx="${idx}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}</div>
@@ -2994,7 +3015,7 @@ function renderCart() {
                   return `
                     <div class="item" data-idx="${idx}" data-open="${p.id}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
