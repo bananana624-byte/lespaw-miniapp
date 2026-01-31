@@ -1121,21 +1121,56 @@ function haptic(kind) {
   } catch {}
 }
 
-function normalizePhone(raw) {
-  let s = String(raw || "").trim();
-  if (!s) return "";
-  // Remove spaces, dashes, parentheses etc, keep leading +
-  s = s.replace(/[\s\-()]/g, "");
-  // If there are multiple +, keep only the first at start
-  s = s.replace(/(?!^)\+/g, "");
-  // If starts with 8 or 7 and has 11 digits, normalize to +7...
-  const digits = s.replace(/\D/g, "");
-  if (digits.length === 11 && digits[0] === "8") return "+7" + digits.slice(1);
-  if (digits.length === 11 && digits[0] === "7") return "+7" + digits.slice(1);
-  // If user typed without + but looks like a Russian number starting with 9 and 10 digits
-  if (!s.startsWith("+") && digits.length === 10 && digits[0] === "9") return "+7" + digits;
-  // Otherwise return trimmed (but collapse repeated spaces etc already removed)
-  return s;
+function formatPhoneLive(raw) {
+  const digits = String(raw || "").replace(/\D+/g, "");
+  if (!digits) return "";
+  // Preferred RU-ish groups:
+  // 11 digits -> 1-3-3-2-2  (8-952-512-62-98)
+  // 10 digits -> 3-3-2-2   (952-512-62-98)
+  const groups = (digits.length <= 10) ? [3,3,2,2] : [1,3,3,2,2];
+  let out = "";
+  let i = 0;
+  for (let gi = 0; gi < groups.length && i < digits.length; gi++) {
+    const take = Math.min(groups[gi], digits.length - i);
+    const part = digits.slice(i, i + take);
+    if (part) out += (out ? "-" : "") + part;
+    i += take;
+  }
+  // If there are still digits left (non-standard length), append grouped by 3
+  if (i < digits.length) {
+    const rest = digits.slice(i);
+    out += (out ? "-" : "") + rest.replace(/(\d{3})(?=\d)/g, "$1-");
+  }
+  return out;
+}
+
+// Preserve caret position while auto-formatting on input
+function applyPhoneMask(inputEl) {
+  try {
+    const v = inputEl.value || "";
+    const sel = inputEl.selectionStart || 0;
+
+    // How many digits were before the caret?
+    const before = v.slice(0, sel).replace(/\D/g, "").length;
+
+    const formatted = formatPhoneLive(v);
+    inputEl.value = formatted;
+
+    // Place caret after the same count of digits in the formatted string
+    if (typeof inputEl.setSelectionRange === "function") {
+      if (before <= 0) {
+        inputEl.setSelectionRange(0, 0);
+        return;
+      }
+      let pos = 0, seen = 0;
+      while (pos < formatted.length) {
+        if (/\d/.test(formatted[pos])) seen++;
+        pos++;
+        if (seen >= before) break;
+      }
+      inputEl.setSelectionRange(pos, pos);
+    }
+  } catch {}
 }
 
 function safeUrl(u) {
@@ -3349,7 +3384,7 @@ if (g.key === "box") {
   lines.push("");
   lines.push(`${H("Данные для доставки")}:`);
   lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
-  lines.push(`${LBL("Номер телефона")} ${formatPlainValue(normalizePhone(checkout.phone || ""))}`);
+  lines.push(`${LBL("Номер телефона")} ${formatPhoneForOrder(checkout.phone || "")}`);
   lines.push(`${LBL("Пункт выдачи")} ${pt}`);
   lines.push(`${LBL("Адрес пункта выдачи")} ${formatPlainValue(checkout.pickupAddress || "")}`);
 
@@ -3386,7 +3421,7 @@ function renderCheckout() {
       <div style="height:10px"></div>
 
       <div class="small"><b>Номер телефона</b></div>
-      <input class="searchInput" id="cPhone" placeholder="+7-___-___-__-__" value="${safeVal(checkout.phone)}">
+      <input class="searchInput" id="cPhone" placeholder="8-___-___-__-__" value="${safeVal(checkout.phone)}">
       <div style="height:10px"></div>
 
       <div class="small"><b>Пункт выдачи</b></div>
@@ -3465,15 +3500,24 @@ function renderCheckout() {
       comment: cComment.value || "",
     });
   }
-  [cFio, cPhone, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", () => { el.classList.remove("field-error"); syncCheckout(); }));
+  [cFio, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", () => { el.classList.remove("field-error"); syncCheckout(); }));
 
-  // Normalize phone on blur (does not interfere while typing)
+  // Live phone mask with dashes + sync
+  if (cPhone) {
+    cPhone.addEventListener("input", () => {
+      cPhone.classList.remove("field-error");
+      applyPhoneMask(cPhone);
+      syncCheckout();
+    });
+  }
+
+  // Ensure phone stays formatted on blur
   if (cPhone) {
     cPhone.addEventListener("blur", () => {
       try {
-        const n = normalizePhone(cPhone.value || "");
-        if (n && n !== cPhone.value) {
-          cPhone.value = n;
+        const f = formatPhoneLive(cPhone.value || "");
+        if (f !== (cPhone.value || "")) {
+          cPhone.value = f;
           syncCheckout();
         }
       } catch {}
