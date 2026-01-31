@@ -1142,13 +1142,15 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .newCarousel::-webkit-scrollbar{ display:none; }
 .newCarousel{
   display:flex;
-  gap:12px;
   overflow-x:auto;
-  -webkit-overflow-scrolling:touch;
   scroll-snap-type:x mandatory;
-  padding:0 2px;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior:smooth;
+  gap:12px;
+  padding:2px 2px 0;
   scrollbar-width:none;
 }
+
 
 .newPage{
   flex:0 0 100%;
