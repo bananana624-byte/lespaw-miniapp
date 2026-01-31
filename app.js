@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v160 (hotfix: syntax + csv bg update)
+// LesPaw Mini App — app.js v169 (hotfix: syntax + csv bg update)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -292,12 +292,26 @@ function openPage(renderFn) {
     console.error("openPage: renderFn is not a function", renderFn);
     return;
   }
+
+  // Защита от "гонок" перерисовки: каждый переход повышает epoch,
+  // старые async-обновления не смогут дорисовать не тот экран.
+  renderEpoch += 1;
+  const myEpoch = renderEpoch;
+
+  const wrapped = () => {
+    if (myEpoch !== renderEpoch) return;
+    renderFn();
+  };
+  wrapped._base = renderFn;
+
   if (currentRender) navStack.push(currentRender);
-  currentRender = renderFn;
+  currentRender = wrapped;
+
   syncNav();
-  try { renderFn(); } catch (err) {
+  try { wrapped(); } catch (err) {
     console.error(err);
     toast("Ошибка экрана", "warn");
+    renderEpoch += 1;
     currentRender = renderHome;
     navStack.length = 0;
     syncNav();
@@ -324,6 +338,7 @@ function goBack() {
 }
 
 function resetToHome() {
+  renderEpoch += 1;
   navStack.length = 0;
   currentRender = renderHome;
   if (globalSearch) globalSearch.value = "";
@@ -509,7 +524,7 @@ function onCsvBackgroundUpdate(cacheKey, freshData) {
     } else return;
 
     try {
-      if (typeof currentRender === "function" && currentRender !== renderHome) currentRender();
+      if (typeof currentRender === "function") { const base = currentRender._base || currentRender; if (base !== renderHome) currentRender(); }
     } catch {}
 
     if (!_csvBgToastShown) {
@@ -983,7 +998,6 @@ function addToCartById(id, opts){
 
   const p = getProductById(sid);
   const typeKey = normalizeTypeKey(p?.product_type);
-
   // options (with safe defaults)
   let film = String(opts?.film||"");
   let lamination = String(opts?.lamination||"");
@@ -1128,25 +1142,23 @@ function haptic(kind) {
 }
 
 function formatPhoneLive(raw) {
-  const digits = String(raw || "").replace(/\D+/g, "");
+  // Оставляем только цифры и ограничиваем до 11 (строго)
+  const digitsRaw = String(raw || "").replace(/\D+/g, "");
+  const digits = digitsRaw.slice(0, 11);
   if (!digits) return "";
-  // Preferred RU-ish groups:
-  // 11 digits -> 1-3-3-2-2  (8-952-512-62-98)
-  // 10 digits -> 3-3-2-2   (952-512-62-98)
-  const groups = (digits.length <= 10) ? [3,3,2,2] : [1,3,3,2,2];
+
+  // Формат: 1-3-3-2-2 (пример: 8-952-512-62-98 или 7-999-123-45-67)
+  const groups = [1, 3, 3, 2, 2];
   let out = "";
   let i = 0;
+
   for (let gi = 0; gi < groups.length && i < digits.length; gi++) {
     const take = Math.min(groups[gi], digits.length - i);
     const part = digits.slice(i, i + take);
     if (part) out += (out ? "-" : "") + part;
     i += take;
   }
-  // If there are still digits left (non-standard length), append grouped by 3
-  if (i < digits.length) {
-    const rest = digits.slice(i);
-    out += (out ? "-" : "") + rest.replace(/(\d{3})(?=\d)/g, "$1-");
-  }
+
   return out;
 }
 
@@ -2004,6 +2016,8 @@ function renderFandomPage(fandomId) {
   const other = all.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
+  const nothingFound = !fHits.length && !grouped.length;
+
   const sectionHtml = (title, items) => {
     const cards = items
       .map(
@@ -2527,6 +2541,19 @@ function renderSearch(q) {
   view.innerHTML = `
     <div class="card">
       <div class="h2">Поиск: “${h(q)}”</div>
+
+      ${nothingFound ? `
+        <div class="emptyState">
+          <div class="emptyTitle">Ничего не найдено</div>
+          <div class="emptyText small">Попробуй другое слово или проверь раскладку клавиатуры.</div>
+          <div class="emptyTips small">
+            <div class="emptyTip">• Можно искать по названию фандома или товара</div>
+            <div class="emptyTip">• Работают части слов (например: «арк», «кольц», «неж»)</div>
+            <div class="emptyTip">• Попробуй убрать лишние символы и эмодзи</div>
+          </div>
+        </div>
+        <div style="height:12px"></div>
+      ` : ``}
 
       <div class="small"><b>Фандомы</b></div>
       <div class="list">
@@ -3444,7 +3471,7 @@ function renderCheckout() {
 <div style="height:10px"></div>
 
       <div class="small"><b>Номер телефона</b></div>
-      <input class="searchInput" id="cPhone" placeholder="8-___-___-__-__" value="${safeVal(checkout.phone)}">
+      <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="8-___-___-__-__" value="${safeVal(checkout.phone)}">
       
       <div class="fieldHelp small" id="errPhone"></div>
 <div style="height:10px"></div>
@@ -3473,6 +3500,7 @@ function renderCheckout() {
         <div class="checkoutBlock" id="blockInfoGate">
           <div class="checkoutBlockTop">
             <div class="checkoutBlockTitle">Важная информация</div>
+            <div class="infoStatus ${infoViewedThisSession ? "is-done" : "is-todo"}">${infoViewedThisSession ? "прочитано ✓" : "не прочитано"}</div>
             <button class="btn btnGhost btnSmall" id="openInfoFromCheckout" type="button">Открыть</button>
           </div>
           <div class="checkoutBlockText small">
@@ -3623,9 +3651,12 @@ function renderCheckout() {
       ok = false;
     } else {
       const digits = (phone || "").replace(/\D/g, "");
-      if (digits.length < 10) {
+      if (digits.length !== 11) {
         cPhone?.classList.add("field-error");
-        if (errPhone) { errPhone.textContent = "Похоже, номер введён не полностью."; errPhone.classList.add("is-show"); }
+        if (errPhone) { 
+          errPhone.textContent = "Номер телефона должен содержать ровно 11 цифр.";
+          errPhone.classList.add("is-show");
+        }
         ok = false;
       }
     }
