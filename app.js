@@ -95,8 +95,6 @@ const LS_FAV = "lespaw_fav_v41";
 // Гейт важной информации (для оформления)
 const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
 // Плашка-онбординг на главной (можно скрыть)
-const LS_HOME_TIP_DISMISSED = "lespaw_home_tip_dismissed_v1";
-
 // Флаг: ознакомилась ли пользователька с "Важной информацией"
 let infoViewed = false;
 try {
@@ -1601,7 +1599,15 @@ function bindTap(el, handler) {
 
     try { e?.preventDefault?.(); } catch {}
     try { e?.stopPropagation?.(); } catch {}
-    try { handler(e); } catch (err) {
+    try {
+      const r = handler(e);
+      if (r && typeof r.then === "function") {
+        r.catch((err) => {
+          console.error(err);
+          toast("Ошибка действия", "warn");
+        });
+      }
+    } catch (err) {
       console.error(err);
       toast("Ошибка действия", "warn");
     }
@@ -1798,25 +1804,12 @@ async function init() {
 // HOME (плитки)
 // =====================
 function renderHome() {
-  let homeTipDismissed = false;
-  try { homeTipDismissed = (localStorage.getItem(LS_HOME_TIP_DISMISSED) === "1"); } catch {}
   view.innerHTML = `
-    ${!homeTipDismissed ? `
-      <div class="homeHint">
-        <div class="homeHintRow">
-          <div class="homeHintTitle">Как заказать</div>
-          <button class="homeHintClose" id="homeTipHide" type="button" aria-label="Скрыть">×</button>
-        </div>
-        <div class="homeHintText">
-          Выбери товары → заполни данные и поставь обязательные галочки → отправь готовый текст менеджерке без изменений.
-        </div>
-        <div class="homeHintActions">
-          <button class="btn btnGhost" id="homeHowInfo" type="button">Важная информация</button>
-          <button class="btn" id="homeTipHideDup" type="button">Скрыть</button>
-        </div>
-      </div>
-    ` : ``}
     <div class="tile" id="tCat">
+      <div class="tileTitle">Категории</div>
+      <div class="tileSub">Выбор фандома по типу</div>
+    </div>
+
       <div class="tileTitle">Категории</div>
       <div class="tileSub">Выбор фандома по типу</div>
     </div>
@@ -1962,21 +1955,6 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
       setActiveDot();
     }, { passive: true });
   }
-
-
-  
-  const homeHowInfo = document.getElementById("homeHowInfo");
-  if (homeHowInfo) bindTap(homeHowInfo, () => openPage(renderInfo));
-
-  const hideIds = ["homeTipHide", "homeTipHideDup", "homeHowHide"];
-  hideIds.forEach((hid) => {
-    const b = document.getElementById(hid);
-    if (!b) return;
-    bindTap(b, () => {
-      try { localStorage.setItem(LS_HOME_TIP_DISMISSED, "1"); } catch {}
-      haptic("select");
-      renderHome();
-    });
   });
 
 syncNav();
@@ -3250,7 +3228,15 @@ async function openCheckout() {
   // Если пользователька уже открывала «Важную информацию» ранее — считаем её прочитанной и в оформлении.
   // (Если хочет перечитать — кнопка «Открыть» рядом.)
   infoViewedThisSession = !!infoViewed;
-  await syncCheckoutFromCloud();
+
+  // CloudStorage может быть недоступен/падать. В таком случае не блокируем оформление:
+  // просто открываем экран оформления с локальными данными.
+  try {
+    await syncCheckoutFromCloud();
+  } catch (err) {
+    console.error(err);
+  }
+
   openPage(renderCheckout);
 }
 
