@@ -3439,11 +3439,15 @@ function renderCheckout() {
 
       <div class="small"><b>ФИО</b></div>
       <input class="searchInput" id="cFio" placeholder="Имя и фамилия" value="${safeVal(checkout.fio)}">
-      <div style="height:10px"></div>
+      
+      <div class="fieldHelp small" id="errFio"></div>
+<div style="height:10px"></div>
 
       <div class="small"><b>Номер телефона</b></div>
       <input class="searchInput" id="cPhone" placeholder="8-___-___-__-__" value="${safeVal(checkout.phone)}">
-      <div style="height:10px"></div>
+      
+      <div class="fieldHelp small" id="errPhone"></div>
+<div style="height:10px"></div>
 
       <div class="small"><b>Пункт выдачи</b></div>
       <div class="row" style="margin-top:8px">
@@ -3454,7 +3458,9 @@ function renderCheckout() {
 
       <div class="small"><b>Адрес пункта выдачи</b></div>
       <input class="searchInput" id="cPickupAddress" placeholder="Область, город, улица, дом" value="${safeVal(checkout.pickupAddress)}">
-      <div style="height:10px"></div>
+      
+      <div class="fieldHelp small" id="errPickup"></div>
+<div style="height:10px"></div>
 
       <div class="small"><b>Комментарий</b></div>
       <input class="searchInput" id="cComment" placeholder="необязательно" value="${safeVal(checkout.comment)}">
@@ -3512,6 +3518,10 @@ function renderCheckout() {
   const cPickupAddress = document.getElementById("cPickupAddress");
   const cComment = document.getElementById("cComment");
 
+  const errFio = document.getElementById("errFio");
+  const errPhone = document.getElementById("errPhone");
+  const errPickup = document.getElementById("errPickup");
+
   function syncCheckout() {
     saveCheckout({
       fio: cFio.value || "",
@@ -3521,12 +3531,19 @@ function renderCheckout() {
       comment: cComment.value || "",
     });
   }
-  [cFio, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", () => { el.classList.remove("field-error"); syncCheckout(); }));
+  [cFio, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", () => {
+    el.classList.remove("field-error");
+    // clear inline error text
+    if (el === cFio && errFio) { errFio.textContent = ""; errFio.classList.remove("is-show"); }
+    if (el === cPickupAddress && errPickup) { errPickup.textContent = ""; errPickup.classList.remove("is-show"); }
+    syncCheckout();
+  }));
 
   // Live phone mask with dashes + sync
   if (cPhone) {
     cPhone.addEventListener("input", () => {
       cPhone.classList.remove("field-error");
+      if (errPhone) { errPhone.textContent = ""; errPhone.classList.remove("is-show"); }
       applyPhoneMask(cPhone);
       syncCheckout();
     });
@@ -3585,6 +3602,7 @@ function renderCheckout() {
 
     // сброс подсветок
     [cFio, cPhone, cPickupAddress].forEach((el) => el?.classList.remove("field-error"));
+    [errFio, errPhone, errPickup].forEach((el) => { if (!el) return; el.textContent = ""; el.classList.remove("is-show"); });
     rowAgreeInfo?.classList.remove("is-error");
     rowConfirmItems?.classList.remove("is-error");
 
@@ -3594,18 +3612,28 @@ function renderCheckout() {
     const phone = (cPhone?.value || "").trim();
     const addr = (cPickupAddress?.value || "").trim();
 
-    if (!fio) { cFio?.classList.add("field-error"); ok = false; }
-    if (!phone) { 
-      cPhone?.classList.add("field-error"); 
-      ok = false; 
+    if (!fio) {
+      cFio?.classList.add("field-error");
+      if (errFio) { errFio.textContent = "Введите имя и фамилию."; errFio.classList.add("is-show"); }
+      ok = false;
+    }
+    if (!phone) {
+      cPhone?.classList.add("field-error");
+      if (errPhone) { errPhone.textContent = "Введите номер телефона."; errPhone.classList.add("is-show"); }
+      ok = false;
     } else {
       const digits = (phone || "").replace(/\D/g, "");
       if (digits.length < 10) {
         cPhone?.classList.add("field-error");
+        if (errPhone) { errPhone.textContent = "Похоже, номер введён не полностью."; errPhone.classList.add("is-show"); }
         ok = false;
       }
     }
-    if (!addr) { cPickupAddress?.classList.add("field-error"); ok = false; }
+    if (!addr) {
+      cPickupAddress?.classList.add("field-error");
+      if (errPickup) { errPickup.textContent = "Укажите адрес пункта выдачи."; errPickup.classList.add("is-show"); }
+      ok = false;
+    }
 
     // гейт: без открытия важной информации нельзя подтверждать
     if (!infoViewedThisSession) {
