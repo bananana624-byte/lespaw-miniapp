@@ -3528,6 +3528,11 @@ function renderCheckout() {
 
   const safeVal = (v) => String(v || "").replace(/"/g, "&quot;");
 
+  // Похожие товары в оформлении отключены (блок может быть включен позже осознанно).
+  // Оставляем пустые массивы, чтобы избежать ReferenceError.
+  const similarFandom = [];
+  const similarType = [];
+
   view.innerHTML = `
     <div class="card">
       <div class="h2">Оформление заказа</div>
