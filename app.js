@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "189";
+const APP_BUILD = "190";
 
 // =====================
 // CSV ссылки (твои)
@@ -1685,52 +1685,26 @@ function formatPhoneByCountry(raw, countryId) {
 // Preserve caret position while auto-formatting on input
 function applyPhoneMask(inputEl, countryId) {
   try {
-    const rule = getPhoneRule(countryId || inputEl?.dataset?.countryId || "ru");
-    const v = String(inputEl.value || "");
-    const sel = (typeof inputEl.selectionStart === "number") ? inputEl.selectionStart : v.length;
+    const cid = countryId || inputEl?.dataset?.countryId || "ru";
+    const rule = getPhoneRule(cid);
+    const prev = String(inputEl.value || "");
 
-    // Count how many digits were before caret (includes CC digits if user touched the prefix)
-    const digitsBefore = v.slice(0, sel).replace(/\D/g, "").length;
-
-    // Convert to formatted value
-    const formatted = formatPhoneByCountry(v, countryId || inputEl?.dataset?.countryId || "ru");
+    // Format value (will truncate to the country's required length)
+    const formatted = formatPhoneByCountry(prev, cid);
     inputEl.value = formatted;
 
     if (typeof inputEl.setSelectionRange !== "function") return;
 
-    // Lock caret after "+CC-" prefix and preserve *national* digit position
-    const ccLen = String(rule.ccDigits || "").length;
-    const nsnBefore = Math.max(0, digitsBefore - ccLen);
+    // Force caret to the end (append-only UX). This prevents Telegram WebView caret jumps
+    // and avoids digits being inserted into the country code area.
+    const endPos = formatted.length;
 
-    const prefixDashPos = formatted.indexOf("-");
-    const prefixEnd = (prefixDashPos >= 0) ? (prefixDashPos + 1) : formatted.length;
-
-    // Snap caret to at least end of prefix (prevents jumping into "+7")
-    let pos = prefixEnd;
-
-    if (nsnBefore > 0) {
-      let i = prefixEnd;
-      let seen = 0;
-      while (i < formatted.length) {
-        if (/\d/.test(formatted[i])) {
-          seen++;
-          if (seen >= nsnBefore) { i++; break; }
-        }
-        i++;
-      }
-      pos = i;
-    }
-
-    // Clamp
-    if (pos < prefixEnd) pos = prefixEnd;
-    if (pos > formatted.length) pos = formatted.length;
-
-    // Apply after current input cycle to reduce flicker in some WebViews
     requestAnimationFrame(() => {
-      try { inputEl.setSelectionRange(pos, pos); } catch {}
+      try { inputEl.setSelectionRange(endPos, endPos); } catch {}
     });
   } catch {}
 }
+
 
 function normalizePhoneDigitsForCountry(raw, countryId) {
   const rule = getPhoneRule(countryId);
@@ -4024,7 +3998,6 @@ function buildOrderText() {
     ozon: "Ozon",
     wildberries: "Wildberries",
   }[checkout.pickupType] || "Яндекс");
-
   const needsCountry = (checkout.pickupType === "ozon" || checkout.pickupType === "wildberries");
   const countryName = getCountryById(checkout.countryId || "ru").name;
 
@@ -4381,6 +4354,22 @@ function renderCheckout() {
     syncCheckout();
   }));
 
+  // Keep caret at the end while typing (Telegram WebView can jump the caret into +CC)
+  if (cPhone) {
+    const snapPhoneCaretToEnd = () => {
+      try {
+        const v = String(cPhone.value || "");
+        const end = v.length;
+        if (typeof cPhone.setSelectionRange === "function") cPhone.setSelectionRange(end, end);
+      } catch {}
+    };
+    cPhone.addEventListener("focus", () => {
+      // If user focuses an empty field and immediately types, we still format on first input.
+      snapPhoneCaretToEnd();
+    });
+    cPhone.addEventListener("click", () => snapPhoneCaretToEnd());
+  }
+
   // Live phone mask with dashes + sync
   if (cPhone) {
     cPhone.addEventListener("input", () => {
@@ -4559,5 +4548,7 @@ function renderCheckout() {
 
   syncNav();
   syncBottomSpace();
-}let _orderSubmitting = false;
+}
+
+let _orderSubmitting = false;
 
