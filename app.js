@@ -38,13 +38,6 @@ const MAIN_CHANNEL_URL = "https://t.me/LessWolf";
 const SUGGEST_URL = "https://t.me/LesPaw/280";
 
 // =====================
-// Важная информация — версия
-// =====================
-// ВАЖНО: при любых изменениях текста/смысла во вкладке «Важная информация»
-// обязательно обновляй IMPORTANT_INFO_VERSION — тогда «прочитано» сбросится у всех.
-const IMPORTANT_INFO_VERSION = "2026-01-31-1";
-
-// =====================
 // Telegram init
 // =====================
 const tg = window.Telegram?.WebApp;
@@ -998,6 +991,7 @@ function normalizeFavItem(raw){
     poster_paper: String(raw.poster_paper || raw.posterPaper || raw.paper || "")
   };
 }
+
 
 function isFavId(id){
   // Для мини-сердечек в сетке: считаем базовый вариант товара (без доп. опций)
@@ -2004,7 +1998,6 @@ function renderFandomList(type) {
     .filter((f) => truthy(f.is_active))
     .filter((f) => f.fandom_type === type)
     .sort((a, b) => (a.fandom_name || "").localeCompare(b.fandom_name || "", "ru"));
-
   const letters = list.filter((f) => !isDigitStart(f.fandom_name));
   const digits = list.filter((f) => isDigitStart(f.fandom_name));
 
@@ -2153,6 +2146,7 @@ function renderInfo() {
   infoViewed = true;
   infoViewedThisSession = true;
   try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
+  cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
   view.innerHTML = `
     <div class="card">
       <div class="h2">Важная информация</div>
@@ -2310,7 +2304,8 @@ function renderReviews() {
                     r.text
                       ? (() => {
                           const txt = safeText(r.text);
-                          const txtHtml = escapeHTML(txt).replace(/\n/g, "<br>");
+                          const txtHtml = escapeHTML(txt).replace(/
+/g, "<br>");
                           const showMore = txt.length > 180; // эвристика: если отзыв длинный — показываем подсказку
                           return `
                             <div class="reviewTextWrap">
@@ -3208,8 +3203,10 @@ const goCats = document.getElementById("goCatsFromEmptyCart");
 const LS_CHECKOUT = "lespaw_checkout_v2";
 
 
-// Версия "Важной информации" задаётся выше (IMPORTANT_INFO_VERSION).
-// При изменениях текста/условий во вкладке "Важная информация" обновляй эту версию.
+// Версия "Важной информации".
+// ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация", просто увеличьте версию ниже.
+// Тогда у всех клиенток статус "прочитано" автоматически сбросится.
+const IMPORTANT_INFO_VERSION = "2026-01-31-1";
 const CLOUD_CHECKOUT = "lespaw_checkout_cloud_v2";
 
 // Миграция со старых полей (чтобы пользовательки не потеряли введённые данные)
@@ -3580,7 +3577,7 @@ function renderCheckout() {
             <button class="btn btnGhost btnSmall" id="openInfoFromCheckout" type="button">Открыть</button>
           </div>
           <div class="checkoutBlockText small">
-            Перед оформлением заказа нужно перейти на вкладку «Важная информация» и ознакомиться с условиями.
+            Перед заказом открой «Важную информацию».
           </div>
 
           <div class="checkWrap">
@@ -3588,7 +3585,7 @@ function renderCheckout() {
               <input type="checkbox" id="agreeInfo" ${infoViewedThisSession ? "" : "disabled"}>
               <span>
                 Я ознакомилась с «Важной информацией».
-                <span class="checkHint">${infoViewedThisSession ? "можно поставить галочку" : "сначала открой вкладку"}</span>
+                ${infoViewedThisSession ? "" : `<div class="checkSub">Сначала нажми «Открыть».</div>`}
               </span>
             </label>
           </div>
@@ -3599,13 +3596,12 @@ function renderCheckout() {
           <div class="checkWrap">
             <label class="checkRow small" id="rowConfirmItems">
               <input type="checkbox" id="confirmItems">
-              <span>Я проверила позиции в заказе (количество, варианты плёнки/ламинации, фандомы) — всё верно.</span>
+              <span>Проверила заказ: количество и варианты — всё верно.</span>
             </label>
           </div>
         </div>
         <div class="checkoutNote">
-          После нажатия <b>«Оформить заказ»</b> откроется чат с менеджеркой с готовым текстом заказа.
-          Пожалуйста, отправь его <b>без изменений</b>.
+          Нажмёшь <b>«Оформить заказ»</b> — откроется чат с менеджеркой с готовым текстом. Отправь его <b>без изменений</b>.
         </div>
       </div>
 
