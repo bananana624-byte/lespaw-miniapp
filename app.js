@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v192 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v198 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "197";
+const APP_BUILD = "198";
 
 // =====================
 // CSV ссылки (твои)
@@ -715,7 +715,6 @@ function goBack() {
     console.error(err);
     resetToHome();
   }
-  scrollToTop();
   syncBottomSpace();
 }
 
@@ -875,6 +874,36 @@ function hashRows(rows) {
   return h >>> 0;
 }
 
+function hashRowsForCache(cacheKey, rows) {
+  try {
+    if (!Array.isArray(rows)) return 0;
+
+    // Light-weight hashing for large tables (products) to reduce CPU.
+    // Falls back to full hash if expected fields are not present.
+    if (cacheKey === LS_CSV_CACHE_PRODUCTS) {
+      const fields = ["id","sku","title","name","price","base_price","product_type","is_active","active","updated_at","updatedAt","updated","date"];
+      const sample = rows[0] || {};
+      const hasAny = fields.some((f) => Object.prototype.hasOwnProperty.call(sample, f));
+      if (hasAny) {
+        let h = 2166136261 >>> 0;
+        for (let r = 0; r < rows.length; r++) {
+          const row = rows[r] || {};
+          for (let i = 0; i < fields.length; i++) {
+            const k = fields[i];
+            if (!Object.prototype.hasOwnProperty.call(row, k)) continue;
+            h = fnv1aUpdate(h, k);
+            h = fnv1aUpdate(h, row[k]);
+          }
+          h = fnv1aUpdate(h, "\n");
+        }
+        h = fnv1aUpdate(h, rows.length);
+        return h >>> 0;
+      }
+    }
+  } catch {}
+  return hashRows(rows);
+}
+
 async function fetchCSVWithCache(url, cacheKey) {
   const cached = loadCsvCache(cacheKey);
 
@@ -886,7 +915,7 @@ async function fetchCSVWithCache(url, cacheKey) {
     fetchCSV(url)
       .then((fresh) => {
         try {
-          const same = (hashRows(fresh) === hashRows(cached.data));
+          const same = (hashRowsForCache(cacheKey, fresh) === hashRowsForCache(cacheKey, cached.data));
           saveCsvCache(cacheKey, fresh);
           if (!same) onCsvBackgroundUpdate(cacheKey, fresh);
         } catch {
@@ -912,11 +941,11 @@ let _csvBgToastShown = false;
 function onCsvBackgroundUpdate(cacheKey, freshData) {
   try {
     if (cacheKey === LS_CSV_CACHE_PRODUCTS) {
-      products = normalizeProducts(freshData || []);
+      products = (freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_REVIEWS) {
-      reviews = normalizeReviews(freshData || []);
+      reviews = (freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_FANDOMS) {
-      fandoms = normalizeFandoms(freshData || []);
+      fandoms = (freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_SETTINGS) {
       // settings хранится как объект key->value
       const next = {};
@@ -931,7 +960,8 @@ function onCsvBackgroundUpdate(cacheKey, freshData) {
     } else return;
 
     try {
-      if (typeof currentRender === "function" && currentRender !== renderHome) currentRender();
+      const inCheckoutFlow = (currentRender === renderCart || currentRender === renderCheckout);
+      if (!inCheckoutFlow && typeof currentRender === "function") currentRender();
     } catch {}
 
     if (!_csvBgToastShown) {
@@ -1598,6 +1628,14 @@ function shuffleArray(arr) {
 function h(s) {
   return escapeHTML(safeText(s));
 }
+
+function setAriaInvalid(inputEl, isInvalid) {
+  try {
+    if (!inputEl) return;
+    inputEl.setAttribute("aria-invalid", isInvalid ? "true" : "false");
+  } catch {}
+}
+
 
 // Безопасный URL для src/href (отбрасываем javascript:)
 
@@ -4235,7 +4273,7 @@ function renderCheckout() {
       <hr>
 
       <div class="small"><b>ФИО</b></div>
-      <input class="searchInput" id="cFio" placeholder="Имя и фамилия" value="${safeVal(checkout.fio)}">
+      <input class="searchInput" id="cFio" placeholder="Имя и фамилия" value="${safeVal(checkout.fio)}" aria-describedby="errFio" aria-invalid="false">
       
       <div class="fieldHelp small" id="errFio"></div>
 <div style="height:10px"></div>
@@ -4255,7 +4293,7 @@ function renderCheckout() {
       ` : ``}
 
       <div style="height:10px"></div>
-      <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="${phonePlaceholder}" value="${safeVal(checkout.phone)}">
+      <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="${phonePlaceholder}" value="${safeVal(checkout.phone)}" aria-describedby="errPhone" aria-invalid="false">
 
       <div class="fieldHelp small" id="errPhone"></div>
 <div style="height:10px"></div>
@@ -4270,7 +4308,7 @@ function renderCheckout() {
       <div style="height:10px"></div>
 
       <div class="small"><b>Адрес пункта выдачи</b></div>
-      <input class="searchInput" id="cPickupAddress" placeholder="Область, город, улица, дом" value="${safeVal(checkout.pickupAddress)}">
+      <input class="searchInput" id="cPickupAddress" placeholder="Область, город, улица, дом" value="${safeVal(checkout.pickupAddress)}" aria-describedby="errPickup" aria-invalid="false">
       
       <div class="fieldHelp small" id="errPickup"></div>
 <div style="height:10px"></div>
@@ -4409,7 +4447,9 @@ function renderCheckout() {
     el.classList.remove("field-error");
     // clear inline error text
     if (el === cFio && errFio) { errFio.textContent = ""; errFio.classList.remove("is-show"); }
+    if (el === cFio) setAriaInvalid(cFio, false);
     if (el === cPickupAddress && errPickup) { errPickup.textContent = ""; errPickup.classList.remove("is-show"); }
+    if (el === cPickupAddress) setAriaInvalid(cPickupAddress, false);
     syncCheckout();
   }));
 
@@ -4418,6 +4458,7 @@ function renderCheckout() {
     cPhone.addEventListener("input", () => {
       cPhone.classList.remove("field-error");
       if (errPhone) { errPhone.textContent = ""; errPhone.classList.remove("is-show"); }
+      setAriaInvalid(cPhone, false);
       applyPhoneMask(cPhone, (cPhone?.dataset?.countryId || "ru"));
       syncCheckout();
     });
@@ -4513,11 +4554,15 @@ function renderCheckout() {
     if (!fio) {
       cFio?.classList.add("field-error");
       if (errFio) { errFio.textContent = "Введите имя и фамилию."; errFio.classList.add("is-show"); }
+      setAriaInvalid(cFio, true);
       ok = false;
+    } else {
+      setAriaInvalid(cFio, false);
     }
     if (!phone) {
       cPhone?.classList.add("field-error");
       if (errPhone) { errPhone.textContent = "Введите номер телефона."; errPhone.classList.add("is-show"); }
+      setAriaInvalid(cPhone, true);
       ok = false;
     } else {
       const countryId = (checkout.countryId || "ru");
@@ -4526,18 +4571,23 @@ function renderCheckout() {
       if (!isPhoneE164Like(normalized)) {
         cPhone?.classList.add("field-error");
         if (errPhone) { errPhone.textContent = "Введите корректный номер телефона (желательно в формате +код страны …)."; errPhone.classList.add("is-show"); }
+        setAriaInvalid(cPhone, true);
         ok = false;
       } else {
         // Save normalized value (so manager gets a valid number)
         checkout.phone = normalized;
         saveCheckout(checkout);
-        try { if (cPhone && cPhone.value !== normalized) cPhone.value = normalized; } catch {}
+        setAriaInvalid(cPhone, false);
+        try { const fmt = formatPhoneByCountry(normalized, checkout.shipCountry || checkout.countryId); if (cPhone && cPhone.value !== fmt) cPhone.value = fmt; } catch {}
       }
     }
     if (!addr) {
       cPickupAddress?.classList.add("field-error");
       if (errPickup) { errPickup.textContent = "Укажите адрес пункта выдачи."; errPickup.classList.add("is-show"); }
+      setAriaInvalid(cPickupAddress, true);
       ok = false;
+    } else {
+      setAriaInvalid(cPickupAddress, false);
     }
 
     // гейт: без открытия важной информации нельзя подтверждать
