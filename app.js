@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v185 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v187 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "186";
+const APP_BUILD = "187";
 
 // =====================
 // CSV ссылки (твои)
@@ -686,7 +686,6 @@ function openPage(renderFn) {
   syncNav();
   try { renderFn();
     try { postRenderEnhance(); } catch {}
-    try { window.scrollTo(0, 0); } catch {}
   } catch (err) {
     console.error(err);
     toast("Ошибка экрана", "warn");
@@ -862,7 +861,10 @@ function hashRows(rows) {
   let h = 2166136261 >>> 0;
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r] || {};
-    for (const k in row) {
+    // stable key order to avoid false "changed" between parsers/engines
+    const keys = Object.keys(row).sort();
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
       h = fnv1aUpdate(h, k);
       h = fnv1aUpdate(h, row[k]);
     }
@@ -872,7 +874,6 @@ function hashRows(rows) {
   h = fnv1aUpdate(h, rows.length);
   return h >>> 0;
 }
-
 
 async function fetchCSVWithCache(url, cacheKey) {
   const cached = loadCsvCache(cacheKey);
@@ -1626,28 +1627,23 @@ function haptic(kind) {
 }
 
 function formatPhoneLive(raw) {
-  const digitsRaw = String(raw || "").replace(/\D+/g, "");
-  const digits = digitsRaw.slice(0, 11);
-  if (!digits) return "";
-  // Preferred RU-ish groups:
-  // 11 digits -> 1-3-3-2-2  (8-952-512-62-98)
-  // 10 digits -> 3-3-2-2   (952-512-62-98)
-  const groups = (digits.length <= 10) ? [3,3,2,2] : [1,3,3,2,2];
-  let out = "";
-  let i = 0;
-  for (let gi = 0; gi < groups.length && i < digits.length; gi++) {
-    const take = Math.min(groups[gi], digits.length - i);
-    const part = digits.slice(i, i + take);
-    if (part) out += (out ? "-" : "") + part;
-    i += take;
+  // Universal: allow + and digits, keep simple spacing for readability.
+  // We do NOT enforce per-country length here — validation happens on submit.
+  let s = String(raw || "").trim();
+  if (!s) return "";
+
+  // Allow only digits, spaces and a single leading +
+  s = s.replace(/[^0-9+\s().-]+/g, "");
+  s = s.replace(/\s+/g, " ").trim();
+
+  // Keep only one '+', and only at the start
+  if (s.includes("+")) {
+    s = "+" + s.replace(/\+/g, "").replace(/^\s+/, "");
   }
-  // If there are still digits left (non-standard length), append grouped by 3
-  if (i < digits.length) {
-    const rest = digits.slice(i);
-    out += (out ? "-" : "") + rest.replace(/(\d{3})(?=\d)/g, "$1-");
-  }
-  return out;
+
+  return s;
 }
+
 
 // Preserve caret position while auto-formatting on input
 function applyPhoneMask(inputEl) {
@@ -1676,6 +1672,80 @@ function applyPhoneMask(inputEl) {
       inputEl.setSelectionRange(pos, pos);
     }
   } catch {}
+}
+
+// ===== Shipping countries (only where Ozon / Wildberries are used in our flow) =====
+const SHIPPING_COUNTRIES = [
+  { id: "ru", name: "Россия",  code: "+7"   },
+  { id: "kz", name: "Казахстан", code: "+7" },
+  { id: "by", name: "Беларусь", code: "+375" },
+  { id: "am", name: "Армения",  code: "+374" },
+  { id: "kg", name: "Кыргызстан", code: "+996" },
+  { id: "uz", name: "Узбекистан", code: "+998" },
+];
+
+function getCountryById(id) {
+  return SHIPPING_COUNTRIES.find((c) => c.id === id) || SHIPPING_COUNTRIES[0];
+}
+
+function normalizePhoneE164(raw, countryId) {
+  const country = getCountryById(countryId);
+  let s = String(raw || "").trim();
+  if (!s) return "";
+
+  // Keep only digits and '+'
+  const hasPlus = s.trim().startsWith("+");
+  let digits = s.replace(/\D+/g, "");
+
+  if (hasPlus) {
+    // If user typed +... we trust they provided country code (we only normalize to "+digits")
+    return digits ? ("+" + digits) : "";
+  }
+
+  // No '+': assume it's a local/national number. Prefix by selected country code.
+  const codeDigits = String(country.code).replace(/\D+/g, "");
+
+  // Special handling for +7 (RU/KZ): people often type 8XXXXXXXXXX
+  if (codeDigits === "7") {
+    if (digits.length === 11 && digits.startsWith("8")) digits = "7" + digits.slice(1);
+    if (digits.length === 11 && digits.startsWith("7")) return "+7" + digits.slice(1);
+    if (digits.length === 10) return "+7" + digits;
+    // If user typed 7XXXXXXXXXX without + and 11 digits
+    if (digits.length === 11 && digits.startsWith("7")) return "+" + digits;
+    // fallback
+    return digits ? ("+7" + digits) : "";
+  }
+
+  // If user already typed country code digits without '+', accept it
+  if (digits.startsWith(codeDigits) && digits.length >= codeDigits.length + 6) {
+    return "+" + digits;
+  }
+
+  return digits ? ("+" + codeDigits + digits) : "";
+}
+
+function isPhoneE164Like(e164) {
+  const s = String(e164 || "").trim();
+  if (!s) return false;
+  if (!s.startsWith("+")) return false;
+  const digits = s.slice(1).replace(/\D+/g, "");
+  // E.164 max is 15 digits (excluding '+'). We'll require 10..15 digits for sanity.
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+function prettyPhone(e164) {
+  // Keep as "+XXXXXXXX..." but insert spaces for readability (light formatting).
+  const s = String(e164 || "").trim();
+  if (!s) return "";
+  if (!s.startsWith("+")) return s;
+  const d = s.slice(1).replace(/\D+/g, "");
+  if (!d) return "";
+  // group: country code (1-3) + rest in chunks of 3/2
+  // We'll do a very safe format: +CCC rest grouped by 3.
+  const cc = d.length <= 11 ? d.slice(0,1) : (d.length <= 12 ? d.slice(0,2) : d.slice(0,3));
+  const rest = d.slice(cc.length);
+  const restGrouped = rest.replace(/(\d{3})(?=\d)/g, "$1 ").trim();
+  return "+" + cc + (restGrouped ? (" " + restGrouped) : "");
 }
 
 function safeUrl(u) {
@@ -1928,7 +1998,6 @@ function defaultFullByType(p) {
       "📏 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Подбор изображений: рандомный",
     ].join("\n\n");
   }
-
   if (typeKey === "box") {
     const isEnvelope = nm.includes("конверт");
     if (isEnvelope) {
@@ -2998,6 +3067,7 @@ function renderLaminationExampleDetail(exId) {
     syncBottomSpace();
     return;
   }
+
   const imgs = Array.isArray(ex.images) ? ex.images.filter(Boolean) : [];
 
   view.innerHTML = `
@@ -3794,7 +3864,8 @@ const oldCheckout = loadJSON("lespaw_checkout_v1", null);
 let checkout = loadJSON(LS_CHECKOUT, {
   fio: oldCheckout?.name || "",
   phone: oldCheckout?.contact || "",
-  pickupType: "yandex", // yandex | 5post
+  countryId: "ru", // only used for Ozon/Wildberries; otherwise forced to Russia
+  pickupType: "yandex", // yandex | 5post | ozon | wildberries
   pickupAddress: (oldCheckout?.delivery || ""),
   comment: oldCheckout?.comment || "",
 });
@@ -3892,20 +3963,20 @@ function buildOrderText() {
   const formatPlainValue = (s) => String(s || "").trim();
 
   const formatPhoneForOrder = (s) => {
-    const d = String(s || "").replace(/\D+/g, "");
-    if (!d) return "";
-    // Prefer 1-3-3-2-2: 8-952-512-62-98 (works well for RU 11-digit numbers)
-    if (d.length === 11) {
-      return `${d[0]}-${d.slice(1,4)}-${d.slice(4,7)}-${d.slice(7,9)}-${d.slice(9,11)}`;
-    }
-    if (d.length === 10) {
-      return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6,8)}-${d.slice(8,10)}`;
-    }
-    // Fallback: group by 3s
-    return d.replace(/(\d{3})(?=\d)/g, "$1-");
+    const normalized = normalizePhoneE164(s, checkout.countryId || "ru");
+    return normalized ? prettyPhone(normalized) : "";
   };
 
-  const pt = checkout.pickupType === "5post" ? "5Post" : "Яндекс";
+  const pt = ({
+    yandex: "Яндекс",
+    "5post": "5Post",
+    ozon: "Ozon",
+    wildberries: "Wildberries",
+  }[checkout.pickupType] || "Яндекс");
+
+  const needsCountry = (checkout.pickupType === "ozon" || checkout.pickupType === "wildberries");
+  const countryName = getCountryById(checkout.countryId || "ru").name;
+
 
   // группируем товары по типам
   const groupsOrder = [
@@ -4055,8 +4126,9 @@ if (g.key === "box") {
   lines.push("");
   lines.push(`${H("Данные для доставки")}:`);
   lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
-  lines.push(`${LBL("Номер телефона")} ${formatPhoneForOrder(checkout.phone || "")}`);
+  lines.push(`${LBL("Телефон получателя")} ${formatPhoneForOrder(checkout.phone || "")}`);
   lines.push(`${LBL("Пункт выдачи")} ${pt}`);
+  if (needsCountry) lines.push(`${LBL("Страна доставки")} ${countryName}`);
   lines.push(`${LBL("Адрес пункта выдачи")} ${formatPlainValue(checkout.pickupAddress || "")}`);
 
   return lines.join("\n");
@@ -4081,6 +4153,15 @@ function renderCheckout() {
 
   const safeVal = (v) => String(v || "").replace(/"/g, "&quot;");
 
+  const pickupType = checkout.pickupType || "yandex";
+  const requiresCountry = (pickupType === "ozon" || pickupType === "wildberries");
+  // Country is only needed for Ozon/WB; for other methods we keep Russia.
+  if (!checkout.countryId) checkout.countryId = "ru";
+  if (!requiresCountry) checkout.countryId = "ru";
+  const selectedCountry = getCountryById(checkout.countryId);
+  const phonePlaceholder = `${selectedCountry.code} 999 123 45 67`;
+
+
   // Похожие товары в оформлении отключены (блок может быть включен позже осознанно).
   // Оставляем пустые массивы, чтобы избежать ReferenceError.
   const similarFandom = [];
@@ -4098,16 +4179,32 @@ function renderCheckout() {
       <div class="fieldHelp small" id="errFio"></div>
 <div style="height:10px"></div>
 
-      <div class="small"><b>Номер телефона</b></div>
-      <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="8-___-___-__-__" value="${safeVal(checkout.phone)}">
-      
+      <div class="small"><b>Телефон получателя (обязательно)</b></div>
+      <div class="small fieldHelp is-show" style="margin-top:6px; opacity:.88">
+        Номер должен быть тем, на который зарегистрирован аккаунт в выбранном ПВЗ.
+        ${requiresCountry ? "Для Ozon/Wildberries обязательно укажи страну доставки." : ""}
+      </div>
+
+      ${requiresCountry ? `
+        <div style="height:10px"></div>
+        <div class="small"><b>Страна доставки (обязательно)</b></div>
+        <select class="searchInput" id="cCountry">
+          ${SHIPPING_COUNTRIES.map((c) => `<option value="${c.id}" ${checkout.countryId === c.id ? "selected" : ""}>${c.name}</option>`).join("")}
+        </select>
+      ` : ``}
+
+      <div style="height:10px"></div>
+      <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="${phonePlaceholder}" value="${safeVal(checkout.phone)}">
+
       <div class="fieldHelp small" id="errPhone"></div>
 <div style="height:10px"></div>
 
       <div class="small"><b>Пункт выдачи</b></div>
-      <div class="row" style="margin-top:8px">
-        <button class="btn ${checkout.pickupType === "yandex" ? "is-active" : ""}" id="ptYandex" type="button">Яндекс</button>
-        <button class="btn ${checkout.pickupType === "5post" ? "is-active" : ""}" id="pt5Post" type="button">5Post</button>
+      <div class="row" style="margin-top:8px; flex-wrap:wrap">
+        <button class="btn ${pickupType === "yandex" ? "is-active" : ""}" id="ptYandex" type="button">Яндекс</button>
+        <button class="btn ${pickupType === "5post" ? "is-active" : ""}" id="pt5Post" type="button">5Post</button>
+        <button class="btn ${pickupType === "ozon" ? "is-active" : ""}" id="ptOzon" type="button">Ozon</button>
+        <button class="btn ${pickupType === "wildberries" ? "is-active" : ""}" id="ptWB" type="button">Wildberries</button>
       </div>
       <div style="height:10px"></div>
 
@@ -4198,6 +4295,7 @@ function renderCheckout() {
 
   const cFio = document.getElementById("cFio");
   const cPhone = document.getElementById("cPhone");
+  const cCountry = document.getElementById("cCountry");
   const cPickupAddress = document.getElementById("cPickupAddress");
   const cComment = document.getElementById("cComment");
 
@@ -4209,12 +4307,13 @@ function renderCheckout() {
     saveCheckout({
       fio: cFio.value || "",
       phone: cPhone.value || "",
-      pickupType: checkout.pickupType || "yandex",
+      countryId: (document.getElementById("cCountry") ? (document.getElementById("cCountry").value || "ru") : (checkout.countryId || "ru")),
+      pickupType: pickupType || "yandex",
       pickupAddress: cPickupAddress.value || "",
       comment: cComment.value || "",
     });
   }
-  [cFio, cPickupAddress, cComment].forEach((el) => el.addEventListener("input", () => {
+  [cFio, cPickupAddress, cComment, cCountry].filter(Boolean).forEach((el) => el.addEventListener("input", () => {
     el.classList.remove("field-error");
     // clear inline error text
     if (el === cFio && errFio) { errFio.textContent = ""; errFio.classList.remove("is-show"); }
@@ -4247,8 +4346,31 @@ function renderCheckout() {
 
   const ptYandex = document.getElementById("ptYandex");
   const pt5Post = document.getElementById("pt5Post");
-  bindTap(ptYandex, () => { checkout.pickupType = "yandex"; saveCheckout(checkout); renderCheckout(); });
-  bindTap(pt5Post, () => { checkout.pickupType = "5post"; saveCheckout(checkout); renderCheckout(); });
+  const ptOzon = document.getElementById("ptOzon");
+  const ptWB = document.getElementById("ptWB");
+
+  const setPickupType = (t) => {
+    checkout.pickupType = t;
+    // For Ozon/WB we keep (or ask) country; for others force Russia.
+    if (t !== "ozon" && t !== "wildberries") checkout.countryId = "ru";
+    if (!checkout.countryId) checkout.countryId = "ru";
+    saveCheckout(checkout);
+    renderCheckout();
+  };
+
+  bindTap(ptYandex, () => setPickupType("yandex"));
+  bindTap(pt5Post, () => setPickupType("5post"));
+  bindTap(ptOzon, () => setPickupType("ozon"));
+  bindTap(ptWB, () => setPickupType("wildberries"));
+
+  // Country selector (only visible for Ozon/WB)
+  if (cCountry) {
+    cCountry.addEventListener("change", () => {
+      checkout.countryId = cCountry.value || "ru";
+      saveCheckout(checkout);
+      renderCheckout(); // to update placeholder/hints
+    });
+  }
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   bindTap(openInfoFromCheckout, () => openPage(renderInfo));
@@ -4306,11 +4428,18 @@ function renderCheckout() {
       if (errPhone) { errPhone.textContent = "Введите номер телефона."; errPhone.classList.add("is-show"); }
       ok = false;
     } else {
-      const digits = (phone || "").replace(/\D/g, "");
-      if (digits.length !== 11) {
+      const countryId = (checkout.countryId || "ru");
+      const normalized = normalizePhoneE164(phone, countryId);
+
+      if (!isPhoneE164Like(normalized)) {
         cPhone?.classList.add("field-error");
-        if (errPhone) { errPhone.textContent = "Номер телефона должен содержать ровно 11 цифр."; errPhone.classList.add("is-show"); }
+        if (errPhone) { errPhone.textContent = "Введите корректный номер телефона (желательно в формате +код страны …)."; errPhone.classList.add("is-show"); }
         ok = false;
+      } else {
+        // Save normalized value (so manager gets a valid number)
+        checkout.phone = normalized;
+        saveCheckout(checkout);
+        try { if (cPhone && cPhone.value !== normalized) cPhone.value = normalized; } catch {}
       }
     }
     if (!addr) {
