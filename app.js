@@ -2313,8 +2313,7 @@ function renderReviews() {
                     r.text
                       ? (() => {
                           const txt = safeText(r.text);
-                          const txtHtml = escapeHTML(txt).replace(/
-/g, "<br>");
+                          const txtHtml = escapeHTML(txt).replace(/\n/g, "<br>");
                           const showMore = txt.length > 180; // эвристика: если отзыв длинный — показываем подсказку
                           return `
                             <div class="reviewTextWrap">
