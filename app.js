@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "196";
+const APP_BUILD = "197";
 
 // =====================
 // CSV ссылки (твои)
@@ -1684,51 +1684,23 @@ function formatPhoneByCountry(raw, countryId) {
 
 // Preserve caret position while auto-formatting on input
 function applyPhoneMask(inputEl, countryId) {
+  // Telegram WebView can behave badly with caret math in masked inputs.
+  // We use a stable "append-only" strategy: always keep caret at the end.
   try {
-    const rule = getPhoneRule(countryId || inputEl?.dataset?.countryId || "ru");
-    const v = String(inputEl.value || "");
-    const sel = (typeof inputEl.selectionStart === "number") ? inputEl.selectionStart : v.length;
+    if (!inputEl) return;
+    const cid = countryId || inputEl?.dataset?.countryId || "ru";
 
-    // Count how many digits were before caret (includes CC digits if user touched the prefix)
-    const digitsBefore = v.slice(0, sel).replace(/\D/g, "").length;
+    // Format based on current value and country rules (enforces max digits).
+    const formatted = formatPhoneByCountry(String(inputEl.value || ""), cid);
+    if (formatted !== String(inputEl.value || "")) inputEl.value = formatted;
 
-    // Convert to formatted value
-    const formatted = formatPhoneByCountry(v, countryId || inputEl?.dataset?.countryId || "ru");
-    inputEl.value = formatted;
-
-    if (typeof inputEl.setSelectionRange !== "function") return;
-
-    // Lock caret after "+CC-" prefix and preserve *national* digit position
-    const ccLen = String(rule.ccDigits || "").length;
-    const nsnBefore = Math.max(0, digitsBefore - ccLen);
-
-    const prefixDashPos = formatted.indexOf("-");
-    const prefixEnd = (prefixDashPos >= 0) ? (prefixDashPos + 1) : formatted.length;
-
-    // Snap caret to at least end of prefix (prevents jumping into "+7")
-    let pos = prefixEnd;
-
-    if (nsnBefore > 0) {
-      let i = prefixEnd;
-      let seen = 0;
-      while (i < formatted.length) {
-        if (/\d/.test(formatted[i])) {
-          seen++;
-          if (seen >= nsnBefore) { i++; break; }
-        }
-        i++;
-      }
-      pos = i;
+    // Force caret to end (prevents digits mixing into +CC prefix).
+    if (typeof inputEl.setSelectionRange === "function") {
+      const end = inputEl.value.length;
+      requestAnimationFrame(() => {
+        try { inputEl.setSelectionRange(end, end); } catch {}
+      });
     }
-
-    // Clamp
-    if (pos < prefixEnd) pos = prefixEnd;
-    if (pos > formatted.length) pos = formatted.length;
-
-    // Apply after current input cycle to reduce flicker in some WebViews
-    requestAnimationFrame(() => {
-      try { inputEl.setSelectionRange(pos, pos); } catch {}
-    });
   } catch {}
 }
 
@@ -4399,6 +4371,28 @@ function renderCheckout() {
     // format immediately (in case value was stored unformatted)
     try { cPhone.value = formatPhoneByCountry(cPhone.value || "", activeCountryIdForPhone); } catch {}
   }
+  if (cPhone) {
+    const forcePhoneCaretEnd = () => {
+      try {
+        if (typeof cPhone.setSelectionRange !== "function") return;
+        const end = (cPhone.value || "").length;
+        cPhone.setSelectionRange(end, end);
+      } catch {}
+    };
+    // Keep caret at end in Telegram WebView to avoid digits mixing into +CC prefix
+    ["focus", "click", "touchstart", "mouseup"].forEach((ev) => {
+      cPhone.addEventListener(ev, () => requestAnimationFrame(forcePhoneCaretEnd), { passive: true });
+    });
+    // Also on keydown, if user tries to move caret left/right, snap back
+    cPhone.addEventListener("keydown", (e) => {
+      const k = e.key;
+      if (k === "ArrowLeft" || k === "ArrowRight" || k === "Home") {
+        e.preventDefault();
+        requestAnimationFrame(forcePhoneCaretEnd);
+      }
+    });
+  }
+
 
 
   function syncCheckout() {
