@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v182 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v183 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -181,11 +181,72 @@ function cloudGet(key) {
     }
   });
 }
+// CloudStorage write queue (debounce + last-write-wins per key)
+// Telegram WebView sometimes delivers CloudStorage writes out of order on slow networks.
+// We keep only the latest value per key and flush in a small debounce window.
+const __cloudPending = new Map();   // key -> value (string)
+const __cloudTimers  = new Map();   // key -> timer
+const __cloudWaiters = new Map();   // key -> [resolve]
+const __cloudInFlight = new Set();  // key currently being written
+
+function __cloudScheduleFlush(key, delayMs = 380) {
+  try {
+    if (__cloudTimers.has(key)) return;
+    const t = setTimeout(() => __cloudFlushKey(key), delayMs);
+    __cloudTimers.set(key, t);
+  } catch {}
+}
+
+function __cloudFlushKey(key) {
+  try {
+    const t = __cloudTimers.get(key);
+    if (t) clearTimeout(t);
+  } catch {}
+  __cloudTimers.delete(key);
+
+  // If nothing pending or a write is already running — just schedule later.
+  if (!__cloudPending.has(key) || __cloudInFlight.has(key)) {
+    if (__cloudPending.has(key)) __cloudScheduleFlush(key, 200);
+    return;
+  }
+
+  const value = __cloudPending.get(key);
+  __cloudPending.delete(key);
+
+  const waiters = __cloudWaiters.get(key) || [];
+  __cloudWaiters.delete(key);
+
+  if (!cloudAvailable()) {
+    try { waiters.forEach((r) => r(false)); } catch {}
+    return;
+  }
+
+  __cloudInFlight.add(key);
+
+  try {
+    tg.CloudStorage.setItem(key, value, (err) => {
+      const ok = !err;
+      try { waiters.forEach((r) => r(ok)); } catch {}
+      __cloudInFlight.delete(key);
+
+      // If something new arrived while writing — flush again soon.
+      if (__cloudPending.has(key)) __cloudScheduleFlush(key, 120);
+    });
+  } catch {
+    try { waiters.forEach((r) => r(false)); } catch {}
+    __cloudInFlight.delete(key);
+  }
+}
+
 function cloudSet(key, value) {
   return new Promise((resolve) => {
     if (!cloudAvailable()) return resolve(false);
     try {
-      tg.CloudStorage.setItem(key, value, (err) => resolve(!err));
+      __cloudPending.set(key, value);
+      const arr = __cloudWaiters.get(key) || [];
+      arr.push(resolve);
+      __cloudWaiters.set(key, arr);
+      __cloudScheduleFlush(key);
     } catch {
       resolve(false);
     }
@@ -937,7 +998,6 @@ function normalizeReviews(rows) {
   arr.sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return arr;
 }
-
 // поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
@@ -2487,7 +2547,13 @@ function renderReviews() {
     const moreBtn =
       (mode === "all" ? reviewsVisibleCount < all.length : reviewsVisibleCount < all.filter((r) => (mode === "photos" ? !!r.photo_url : (Number(r.rating) || 0) >= 5)).length)
         ? `<button class="btn" id="revMore">Показать ещё</button>`
-        : ``;
+        : `
+          <div class="emptyState">
+            <div class="emptyTitle">${(Array.isArray(reviews) && reviews.length) ? "Ничего не найдено по фильтру" : "Отзывов пока нет"}</div>
+            <div class="emptyText small">${(Array.isArray(reviews) && reviews.length) ? "Попробуй другой фильтр или сбрось его." : "Если ты уже покупала — очень поможешь, если оставишь отзыв 💜"}</div>
+            ${mode !== "all" ? `<div style="height:12px"></div><button class="btn is-active" id="revReset" type="button">Сбросить фильтр</button>` : ``}
+          </div>
+        `;
 
     const hasCsv = !!String(CSV_REVIEWS_URL || "").trim();
 
@@ -2539,6 +2605,12 @@ function renderReviews() {
 
     document.getElementById("revMore")?.addEventListener("click", () => {
       reviewsVisibleCount += 8;
+      render();
+    });
+
+    document.getElementById("revReset")?.addEventListener("click", () => {
+      mode = "all";
+      reviewsVisibleCount = 8;
       render();
     });
 
@@ -2680,13 +2752,14 @@ function renderLaminationExampleDetail(exId) {
 // =====================
 function renderSearch(q) {
   const query = (q || "").toLowerCase().trim();
+  const shortQuery = query.length < 3;
 
-  const fHits = fandoms
+  const fHits = shortQuery ? [] : fandoms
     .filter((f) => truthy(f.is_active))
     .filter((f) => (f.fandom_name || "").toLowerCase().includes(query))
     .slice(0, 20);
 
-  const rawPHits = products
+  const rawPHits = shortQuery ? [] : products
     .filter((p) => {
       const typeName = (p.product_type || "").toLowerCase();
       const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
@@ -2742,6 +2815,18 @@ function renderSearch(q) {
   view.innerHTML = `
     <div class="card">
       <div class="h2">Поиск: “${h(q)}”</div>
+      ${shortQuery ? `
+        <div class="emptyState">
+          <div class="emptyTitle">Введи минимум 3 символа</div>
+          <div class="emptyText small">Так поиск будет точнее и не будет лагать на больших списках.</div>
+          <div class="chips" style="margin-top:12px">
+            <button class="chip" data-sq="наклейки" type="button">Наклейки</button>
+            <button class="chip" data-sq="значки" type="button">Значки</button>
+            <button class="chip" data-sq="постеры" type="button">Постеры</button>
+            <button class="chip" data-sq="боксы" type="button">Боксы</button>
+          </div>
+        </div>
+      ` : ``}
       ${(!fHits.length && !rawPHits.length) ? `
         <div class="emptyState">
           <div class="emptyTitle">Ничего не найдено</div>
@@ -2803,6 +2888,22 @@ function renderSearch(q) {
     });
   });
 
+  // быстрые чипсы поиска
+  view.querySelectorAll("[data-sq]").forEach((b) => {
+    bindTap(b, (e) => {
+      e.stopPropagation();
+      const q2 = String(b.dataset.sq || "");
+      if (!q2) return;
+      try { globalSearch.value = q2; } catch {}
+      try {
+        if (searchWrap) searchWrap.classList.add("hasText");
+      } catch {}
+      try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {
+        openPage(() => renderSearch(q2));
+      }
+    });
+  });
+
   // в корзину
   view.querySelectorAll("[data-add]").forEach((b) => {
     bindTap(b, (e) => {
@@ -2841,6 +2942,16 @@ function renderProduct(productId, prefill) {
     syncBottomSpace();
     return;
   }
+
+  // Analytics
+  try {
+    gaEvent("view_item", {
+      item_id: String(p.id || ""),
+      item_name: String(p.name || ""),
+      item_type: String(p.product_type || ""),
+      fandom_id: String(p.fandom_id || ""),
+    });
+  } catch {}
 
   const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
@@ -3939,10 +4050,24 @@ function renderCheckout() {
       // прокрутим к первому проблемному месту
       const firstErr = view.querySelector(".field-error, .checkRow.is-error");
       firstErr?.scrollIntoView({ behavior: "smooth", block: "center" });
+      try {
+        const focusEl = firstErr?.matches?.("input, textarea, select, button")
+          ? firstErr
+          : firstErr?.querySelector?.("input, textarea, select, button");
+        focusEl?.focus?.({ preventScroll: true });
+      } catch {}
       return;
     }
 
     const text = buildOrderText();
+    try {
+      gaEvent("generate_lead", {
+        value: Number(calcCartTotal() || 0),
+        currency: "RUB",
+        item_count: Number((cart || []).reduce((s, ci) => s + (Number(ci.qty) || 1), 0) || 0),
+      });
+      gaEvent("submit_order", { value: Number(calcCartTotal() || 0), currency: "RUB" });
+    } catch {}
     openTelegramText(MANAGER_USERNAME, text);
     toast("Открываю чат с менеджеркой…", "good");
   });
