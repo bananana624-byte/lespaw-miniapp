@@ -247,7 +247,6 @@ async function loadSyncedState() {
     if (cloudVer === IMPORTANT_INFO_VERSION) {
       infoViewed = true;
       try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
-  cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
       cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
     } else if (infoViewed) {
       // если локально уже актуальная версия, а в облаке не она — обновляем облако
@@ -275,6 +274,9 @@ function toast(msg, kind = "") {
   const el = document.createElement("div");
   el.className = `toast ${kind}`.trim();
   el.textContent = msg;
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
+  el.setAttribute("aria-atomic", "true");
   document.body.appendChild(el);
   __toastEl = el;
   setTimeout(() => {
@@ -1996,7 +1998,6 @@ function renderFandomList(type) {
     .filter((f) => truthy(f.is_active))
     .filter((f) => f.fandom_type === type)
     .sort((a, b) => (a.fandom_name || "").localeCompare(b.fandom_name || "", "ru"));
-
   const letters = list.filter((f) => !isDigitStart(f.fandom_name));
   const digits = list.filter((f) => isDigitStart(f.fandom_name));
 
@@ -2145,6 +2146,7 @@ function renderInfo() {
   infoViewed = true;
   infoViewedThisSession = true;
   try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
+  cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
   view.innerHTML = `
     <div class="card">
       <div class="h2">Важная информация</div>
@@ -2302,10 +2304,12 @@ function renderReviews() {
                     r.text
                       ? (() => {
                           const txt = safeText(r.text);
+                          const txtHtml = escapeHTML(txt).replace(/
+/g, "<br>");
                           const showMore = txt.length > 180; // эвристика: если отзыв длинный — показываем подсказку
                           return `
                             <div class="reviewTextWrap">
-                              <div class="reviewText" data-expand="${idx}">${txt}</div>
+                              <div class="reviewText" data-expand="${idx}">${txtHtml}</div>
                               ${showMore ? `<button class="reviewMore" type="button" data-more="${idx}">Показать полностью</button>` : ``}
                             </div>
                           `;
