@@ -1496,3 +1496,27 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
+
+
+/* =====================
+   Utilities (for CSP-safe markup; no inline styles)
+   ===================== */
+.isHidden{display:none !important;}
+.sp8{height:8px;}
+.sp10{height:10px;}
+.sp12{height:12px;}
+.sp14{height:14px;}
+.mt6{margin-top:6px;}
+.mt8{margin-top:8px;}
+.mt10{margin-top:10px;}
+.mt12{margin-top:12px;}
+.mt14{margin-top:14px;}
+.gap10{gap:10px;}
+.prewrap{white-space:pre-wrap;}
+.opacity85{opacity:.85;}
+.opacity88{opacity:.88;}
+.cursorDefault{cursor:default;}
+.aiCenter{align-items:center;}
+.flexWrap{flex-wrap:wrap;}
+.minw34{min-width:34px;}
+.taCenter{text-align:center;}
