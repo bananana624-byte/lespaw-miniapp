@@ -1448,3 +1448,51 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   line-height:1.35;
   outline:none;
 }
+
+/* =====================
+   Progressive images + skeleton shell
+   ===================== */
+.imgShell{
+  position:relative;
+  overflow:hidden;
+  border-radius:18px;
+  background: rgba(255,255,255,.06);
+  aspect-ratio: 1 / 1;
+}
+.imgShell::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  transform: translateX(-60%);
+  background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.16), rgba(255,255,255,.06));
+  animation: lespawShimmer 1.4s infinite;
+  opacity:.55;
+}
+.imgShell.is-loaded::before{ display:none; }
+.imgShell img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+  position:relative;
+  z-index:1;
+}
+@keyframes lespawShimmer{
+  0% { transform: translateX(-60%); }
+  100% { transform: translateX(60%); }
+}
+
+/* Badge pulse (например, после добавления в корзину) */
+.badge.is-pulse{
+  animation: lespawBadgePulse .65s ease-out;
+}
+@keyframes lespawBadgePulse{
+  0% { transform: scale(1); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
