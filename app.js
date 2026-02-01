@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "198";
+const APP_BUILD = "199";
 
 // =====================
 // CSV ссылки (твои)
@@ -229,15 +229,15 @@ function renderFatalError(title, err, extra) {
       <div class="card">
         <div class="h2">${escapeHTML(title || "Ошибка")}</div>
         <div class="small">${msg}</div>
-        ${stack ? `<div class="small" style="margin-top:10px; white-space:pre-wrap; opacity:.85">${stack}</div>` : ``}
+        ${stack ? `<div class="small mt10 prewrap opacity85">${stack}</div>` : ``}
         ${diag ? `
           <hr>
           <div class="small">Диагностика (видно только в debug)</div>
           <textarea class="diagBox" id="diagBox" readonly>${escapeHTML(diag)}</textarea>
-          <div style="height:10px"></div>
+          <div class="sp10"></div>
           <button class="btn" id="copyDiag" type="button">Скопировать диагностику</button>
         ` : ``}
-        <div style="height:10px"></div>
+        <div class="sp10"></div>
         <button class="btn" id="reloadApp" type="button">Перезапустить</button>
       </div>
     `;
@@ -743,6 +743,7 @@ let fandoms = [];
 let products = [];
 let reviews = [];
 let reviewsVisibleCount = 8;
+let lastReviewsMode = "all";
 let settings = {
   overlay_price_delta: 100,
   holo_base_price_delta: 100,
@@ -1551,16 +1552,16 @@ function updateBadges() {
 
   if (favCount) {
     if (favN > 0) {
-      favCount.style.display = "";
+      favCount.classList.remove("isHidden");
       favCount.textContent = String(favN);
-    } else favCount.style.display = "none";
+    } else favCount.classList.add("isHidden");
   }
 
   if (cartCount) {
     if (cartN > 0) {
-      cartCount.style.display = "";
+      cartCount.classList.remove("isHidden");
       cartCount.textContent = String(cartN);
-    } else cartCount.style.display = "none";
+    } else cartCount.classList.add("isHidden");
   }
 }
 
@@ -2142,13 +2143,74 @@ function openTelegramText(toUsername, text) {
   }
 }
 
-function openExternal(url) {
-  const u = String(url || "").trim();
-  if (!u) return;
-  // Telegram WebApp: openLink работает для любых ссылок
-  if (tg?.openLink) tg.openLink(u);
-  else if (tg?.openTelegramLink && u.startsWith("https://t.me/")) tg.openTelegramLink(u);
-  else window.open(u, "_blank", "noopener,noreferrer");
+function openExternal(url, opts = {}) {
+  const raw = String(url || "").trim();
+  if (!raw) return;
+
+  // Нормализуем и режем опасные протоколы
+  let parsed = null;
+  try { parsed = new URL(raw, window.location.href); } catch {}
+  const href = parsed ? parsed.href : raw;
+
+  // Разрешаем только http(s)
+  const proto = (parsed?.protocol || "").toLowerCase();
+  if (parsed && proto !== "http:" && proto !== "https:") {
+    toast("Ссылка выглядит небезопасной и не будет открыта", "warn");
+    return;
+  }
+
+  // Allow-list доменов (особенно важно для ссылок из CSV)
+  const host = (parsed?.hostname || "").toLowerCase();
+  const allowHosts = new Set([
+    "t.me",
+    "telegram.me",
+    "telegram.org",
+    "www.telegram.org",
+    "docs.google.com",
+    "spreadsheets.google.com",
+    "docs.googleusercontent.com",
+    "www.google-analytics.com",
+    "analytics.google.com",
+    "region1.google-analytics.com",
+    "www.googletagmanager.com",
+  ]);
+
+  // Поддержка поддоменов googleusercontent.com
+  const isAllowed = !host
+    ? true
+    : allowHosts.has(host) || host.endsWith(".googleusercontent.com");
+
+  const doOpen = () => {
+    try {
+      if (tg?.openLink) tg.openLink(href);
+      else if (tg?.openTelegramLink && href.startsWith("https://t.me/")) tg.openTelegramLink(href);
+      else window.open(href, "_blank", "noopener,noreferrer");
+    } catch {
+      try { window.open(href, "_blank", "noopener,noreferrer"); } catch {}
+    }
+  };
+
+  // Если домен неизвестен — аккуратно спрашиваем подтверждение
+  if (!isAllowed) {
+    const title = "Открыть внешнюю ссылку?";
+    const msg = host ? `Домен: ${host}` : "Ссылка выглядит нестандартно.";
+    if (tg?.showConfirm) {
+      try {
+        tg.showConfirm(`${title}\n${msg}`, (ok) => { if (ok) doOpen(); });
+        return;
+      } catch {}
+    }
+    try {
+      if (window.confirm(`${title}\n${msg}`)) doOpen();
+    } catch {
+      // если confirm заблокирован WebView — просто откроем, но предупредим
+      toast("Открываю внешнюю ссылку…", "");
+      doOpen();
+    }
+    return;
+  }
+
+  doOpen();
 }
 
 // =====================
@@ -2236,9 +2298,9 @@ function renderLoading() {
     <div class="card">
       <div class="h2">Загрузка каталога…</div>
       <div class="small">Секундочку ✨</div>
-      <div style="height:12px"></div>
+      <div class="sp12"></div>
       <div class="spinner" aria-hidden="true"></div>
-      <div style="height:10px"></div>
+      <div class="sp10"></div>
       <div class="small">Если интернет слабый — можно подождать или нажать «Повторить» на экране ошибки.</div>
     </div>
   `;
@@ -2401,7 +2463,7 @@ async function init() {
         <div class="small">${escapeHTML(String(e))}</div>
         <hr>
         <div class="small">Проверь интернет и публикацию таблиц/CSV-ссылки.</div>
-        <div style="height:10px"></div>
+        <div class="sp10"></div>
         <button class="btn" id="retryLoad">Повторить</button>
       </div>
     `;
@@ -2648,7 +2710,7 @@ function renderFandomList(type) {
 
       ${renderGrid(letters)}
 
-      ${digits.length ? `<hr><div class="small" style="margin-top:6px">0–9</div>${renderGrid(digits)}` : ``}
+      ${digits.length ? `<hr><div class="small mt6">0–9</div>${renderGrid(digits)}` : ``}
     </div>
   `;
 
@@ -2710,7 +2772,7 @@ function renderFandomPage(fandomId) {
     return `
       <div class="fGroup">
         <div class="h3">${title}</div>
-        <div class="grid2" style="margin-top:10px">${cards}</div>
+        <div class="grid2 mt10">${cards}</div>
       </div>
     `;
   };
@@ -2910,7 +2972,7 @@ function renderInfo() {
 
 function renderReviews() {
   // Фильтры на уровне экрана (не сохраняем в storage — просто UX)
-  let mode = "all"; // all | photos | 5
+  let mode = (lastReviewsMode || "all"); // all | photos | 5
 
   const render = () => {
     const all = Array.isArray(reviews) ? reviews : [];
@@ -2995,7 +3057,7 @@ function renderReviews() {
             })
             .join("")}
         </div>`
-      : `<div class="small" style="margin-top:6px">Пока нет отзывов для отображения в этом режиме.</div>`;
+      : `<div class="small mt6">Пока нет отзывов для отображения в этом режиме.</div>`;
 
     const moreBtn =
       (mode === "all" ? reviewsVisibleCount < all.length : reviewsVisibleCount < all.filter((r) => (mode === "photos" ? !!r.photo_url : (Number(r.rating) || 0) >= 5)).length)
@@ -3004,7 +3066,7 @@ function renderReviews() {
           <div class="emptyState">
             <div class="emptyTitle">${(Array.isArray(reviews) && reviews.length) ? "Ничего не найдено по фильтру" : "Отзывов пока нет"}</div>
             <div class="emptyText small">${(Array.isArray(reviews) && reviews.length) ? "Попробуй другой фильтр или сбрось его." : "Если ты уже покупала — очень поможешь, если оставишь отзыв 💜"}</div>
-            ${mode !== "all" ? `<div style="height:12px"></div><button class="btn is-active" id="revReset" type="button">Сбросить фильтр</button>` : ``}
+            ${mode !== "all" ? `<div class="sp12"></div><button class="btn is-active" id="revReset" type="button">Сбросить фильтр</button>` : ``}
           </div>
         `;
 
@@ -3028,12 +3090,12 @@ function renderReviews() {
         ${
           hasCsv
             ? ``
-            : `<div class="small" style="margin-top:10px">Подключи CSV-лист reviews — и отзывы будут отображаться прямо здесь.</div>`
+            : `<div class="small mt10">Подключи CSV-лист reviews — и отзывы будут отображаться прямо здесь.</div>`
         }
 
         ${listHtml}
 
-        ${moreBtn ? `<div class="row" style="margin-top:12px">${moreBtn}</div>` : ``}
+        ${moreBtn ? `<div class="row mt12">${moreBtn}</div>` : ``}
 
         <hr>
         <div class="row">
@@ -3047,6 +3109,7 @@ function renderReviews() {
     view.querySelectorAll("[data-mode]").forEach((b) => {
       bindTap(b, () => {
         mode = b.dataset.mode || "all";
+        lastReviewsMode = mode;
         reviewsVisibleCount = 8;
         render();
       });
@@ -3139,12 +3202,12 @@ function renderLaminationExamples() {
 
       <hr>
       <div class="h3">Плёнка</div>
-      <div class="small" style="margin-top:6px">Основа наклейки: задаёт блеск, текстуру и «характер» сразу.</div>
+      <div class="small mt6">Основа наклейки: задаёт блеск, текстуру и «характер» сразу.</div>
       ${renderGrid(films)}
 
       <hr>
       <div class="h3">Ламинация</div>
-      <div class="small" style="margin-top:6px">Прозрачное покрытие сверху — добавляет эффект и защищает поверхность.</div>
+      <div class="small mt6">Прозрачное покрытие сверху — добавляет эффект и защищает поверхность.</div>
       ${renderGrid(laminations)}
     </div>
   `;
@@ -3173,7 +3236,7 @@ function renderLaminationExampleDetail(exId) {
     <div class="card">
       <div class="h2">${h(ex.title)}</div>
       ${ex.subtitle ? `<div class="small">${h(ex.subtitle)}</div>` : ``}
-      ${ex.description ? `<div class="small" style="margin-top:8px">${h(ex.description)}</div>` : ``}
+      ${ex.description ? `<div class="small mt8">${h(ex.description)}</div>` : ``}
 
       <hr>
 
@@ -3183,7 +3246,7 @@ function renderLaminationExampleDetail(exId) {
               ${imgs
                 .map(
                   (u) => `
-                <div class="exBigBtn" style="cursor:default">
+                <div class="exBigBtn cursorDefault">
                   <img class="exBigImg" src="${safeImgUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" data-hide-onerror="1">
                 </div>
               `
@@ -3263,9 +3326,9 @@ function renderSearch(q) {
       .join("");
 
     return `
-      <div class="fGroup" style="margin-top:12px">
+      <div class="fGroup mt12">
         <div class="h3">${title}</div>
-        <div class="grid2" style="margin-top:10px">${cards}</div>
+        <div class="grid2 mt10">${cards}</div>
       </div>
     `;
   };
@@ -3277,7 +3340,7 @@ function renderSearch(q) {
         <div class="emptyState">
           <div class="emptyTitle">Введи минимум 3 символа</div>
           <div class="emptyText small">Так поиск будет точнее и не будет лагать на больших списках.</div>
-          <div class="chips" style="margin-top:12px">
+          <div class="chips mt12">
             <button class="chip" data-sq="наклейки" type="button">Наклейки</button>
             <button class="chip" data-sq="значки" type="button">Значки</button>
             <button class="chip" data-sq="постеры" type="button">Постеры</button>
@@ -3539,16 +3602,16 @@ if (isPoster) {
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" style="margin-top:12px" data-hide-onerror="1">` : ""}
+        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" class="mt12" data-hide-onerror="1">` : ""}
 
-        ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
+        ${getFullDesc(p) ? `<div class="descBlocks mt10">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
         ${
           isPoster
             ? `
-              <div style="height:10px"></div>
+              <div class="sp10"></div>
               ${renderOptionPanel("Варианты наборов", POSTER_PACKS, selectedPosterPack)}
-              <div style="height:10px"></div>
+              <div class="sp10"></div>
               ${renderOptionPanel("Бумага для печати", POSTER_PAPERS, selectedPosterPaper)}
             `
             : ""
@@ -3560,9 +3623,9 @@ if (isPoster) {
           isSticker
             ? `
               ${renderOptionPanel("Плёнка", FILM_OPTIONS, selectedFilm)}
-              <div style="height:10px"></div>
+              <div class="sp10"></div>
               ${renderOptionPanel("Ламинация", STICKER_LAM_OPTIONS, selectedStickerLam)}
-              <div style="height:10px"></div>
+              <div class="sp10"></div>
               <button class="btn btnGhost" id="btnExamples" type="button">Посмотреть примеры плёнки и ламинации</button>
             `
             : ""
@@ -3572,7 +3635,7 @@ if (isPoster) {
           isPin
             ? `
               ${renderOptionPanel("Ламинация", PIN_LAM_OPTIONS, selectedPinLam)}
-              <div style="height:10px"></div>
+              <div class="sp10"></div>
               <button class="btn btnGhost" id="btnExamples" type="button">Посмотреть примеры ламинации</button>
             `
             : ""
@@ -3580,7 +3643,7 @@ if (isPoster) {
 
         <hr>
 
-        <div class="row" style="gap:10px">
+        <div class="row gap10">
   <button class="btn btnIcon" id="btnFav" type="button" aria-label="В избранное" aria-pressed="${inFavNow ? "true" : "false"}">
     <span class="heartGlyph">${inFavNow ? "♥" : "♡"}</span>
   </button>
@@ -3672,7 +3735,7 @@ function renderFavorites() {
                           <div class="miniPrice">${money(unit)}</div>
                           ${optionPairsHTML(pairs)}
 
-                          <div class="row" style="margin-top:12px">
+                          <div class="row mt12">
                             <button class="btn" data-remove="${idx}" type="button">Убрать</button>
                             <button class="btn is-active" data-to-cart="${idx}" type="button">В корзину</button>
                           </div>
@@ -3685,8 +3748,8 @@ function renderFavorites() {
             : `
               <div class="emptyBox">
                 <div class="small">Избранное пока пустое ✨</div>
-                <div class="small" style="margin-top:6px">Выбери что-то, что тебе понравится — и нажми сердечко.</div>
-                <div style="height:10px"></div>
+                <div class="small mt6">Выбери что-то, что тебе понравится — и нажми сердечко.</div>
+                <div class="sp10"></div>
                 <button class="btn is-active" id="goCatsFromEmptyFav" type="button">Перейти в категории</button>
               </div>
             `
@@ -3831,9 +3894,9 @@ function renderCart() {
                         </div>
                       </div>
 
-                      <div class="row miniIndentRow" style="margin-top:12px; align-items:center">
+                      <div class="row miniIndentRow row miniIndentRow mt12 aiCenter">
                         <button class="btn" data-dec="${idx}">−</button>
-                        <div class="small" style="min-width:34px; text-align:center"><b>${Number(ci.qty) || 1}</b></div>
+                        <div class="small small minw34 taCenter"><b>${Number(ci.qty) || 1}</b></div>
                         <button class="btn" data-inc="${idx}">+</button>
                       </div>
                     </div>
@@ -3843,8 +3906,18 @@ function renderCart() {
             : `
               <div class="emptyBox">
                 <div class="small">Корзина пока пустая ✨</div>
-                <div style="height:10px"></div>
+                <div class="sp10"></div>
+
+                <div class="chips flexWrap">
+                  <button class="chip" data-etype="Наклейки" type="button">Наклейки</button>
+                  <button class="chip" data-etype="Значки" type="button">Значки</button>
+                  <button class="chip" data-etype="Постеры" type="button">Постеры</button>
+                  <button class="chip" data-etype="Боксы" type="button">Боксы</button>
+                </div>
+
+                <div class="sp10"></div>
                 <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в категории</button>
+                <button class="btn" id="focusSearchFromEmptyCart" type="button">Открыть поиск</button>
               </div>
             `
         }
@@ -3929,6 +4002,22 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
 
 const goCats = document.getElementById("goCatsFromEmptyCart");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
+  const focusSearch = document.getElementById("focusSearchFromEmptyCart");
+  if (focusSearch) bindTap(focusSearch, () => {
+    try { globalSearch?.focus?.(); } catch {}
+  });
+
+  // Быстрые чипсы по типам — просто подставляем в поиск (так не нужно плодить отдельные роуты)
+  try {
+    Array.from(view.querySelectorAll('[data-etype]')).forEach((btn) => {
+      bindTap(btn, () => {
+        const t = btn.getAttribute("data-etype") || "";
+        try { globalSearch.value = t; } catch {}
+        try { if (searchWrap) searchWrap.classList.add("hasText"); } catch {}
+        openPage(() => renderSearch(t));
+      });
+    });
+  } catch {}
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
@@ -4222,6 +4311,10 @@ if (g.key === "box") {
 
   lines.push("");
   lines.push(`${LBL("Итоговая сумма")} ${money(total)}`);
+  lines.push(`${formatPlainValue("Доставка рассчитывается менеджеркой индивидуально.")}`);
+  if ((checkout.comment || "").trim()) {
+    lines.push(`${LBL("Комментарий")} ${formatPlainValue(checkout.comment)}`);
+  }
   lines.push("");
   lines.push(`${H("Данные для доставки")}:`);
   lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
@@ -4276,42 +4369,42 @@ function renderCheckout() {
       <input class="searchInput" id="cFio" placeholder="Имя и фамилия" value="${safeVal(checkout.fio)}" aria-describedby="errFio" aria-invalid="false">
       
       <div class="fieldHelp small" id="errFio"></div>
-<div style="height:10px"></div>
+<div class="sp10"></div>
 
       <div class="small"><b>Телефон получателя (обязательно)</b></div>
-      <div class="small fieldHelp is-show" style="margin-top:6px; opacity:.88">
+      <div class="small fieldHelp is-show mt6 opacity88">
         Номер должен быть тем, на который зарегистрирован аккаунт.
         ${requiresCountry ? "Для Ozon/Wildberries обязательно укажи страну доставки." : ""}
       </div>
 
       ${requiresCountry ? `
-        <div style="height:10px"></div>
+        <div class="sp10"></div>
         <div class="small"><b>Страна доставки (обязательно)</b></div>
         <select class="searchInput" id="cCountry">
           ${SHIPPING_COUNTRIES.map((c) => `<option value="${c.id}" ${checkout.countryId === c.id ? "selected" : ""}>${c.name}</option>`).join("")}
         </select>
       ` : ``}
 
-      <div style="height:10px"></div>
+      <div class="sp10"></div>
       <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="${phonePlaceholder}" value="${safeVal(checkout.phone)}" aria-describedby="errPhone" aria-invalid="false">
 
       <div class="fieldHelp small" id="errPhone"></div>
-<div style="height:10px"></div>
+<div class="sp10"></div>
 
       <div class="small"><b>Пункт выдачи</b></div>
-      <div class="row" style="margin-top:8px; flex-wrap:wrap">
+      <div class="row mt8 flexWrap">
         <button class="btn ${pickupType === "yandex" ? "is-active" : ""}" id="ptYandex" type="button">Яндекс</button>
         <button class="btn ${pickupType === "5post" ? "is-active" : ""}" id="pt5Post" type="button">5Post</button>
         <button class="btn ${pickupType === "ozon" ? "is-active" : ""}" id="ptOzon" type="button">Ozon</button>
         <button class="btn ${pickupType === "wildberries" ? "is-active" : ""}" id="ptWB" type="button">Wildberries</button>
       </div>
-      <div style="height:10px"></div>
+      <div class="sp10"></div>
 
       <div class="small"><b>Адрес пункта выдачи</b></div>
       <input class="searchInput" id="cPickupAddress" placeholder="Область, город, улица, дом" value="${safeVal(checkout.pickupAddress)}" aria-describedby="errPickup" aria-invalid="false">
       
       <div class="fieldHelp small" id="errPickup"></div>
-<div style="height:10px"></div>
+<div class="sp10"></div>
 
       <div class="small"><b>Комментарий</b></div>
       <input class="searchInput" id="cComment" placeholder="необязательно" value="${safeVal(checkout.comment)}">
@@ -4355,7 +4448,7 @@ function renderCheckout() {
         </div>
       </div>
 
-      <div style="height:12px"></div>
+      <div class="sp12"></div>
 
       <div class="row">
         <button class="btn is-active" id="btnSend" type="button">Оформить заказ</button>
@@ -4365,8 +4458,8 @@ function renderCheckout() {
         <hr>
         <div class="h3">Похожие товары</div>
         ${similarFandom.length ? `
-          <div class="small" style="margin-top:10px"><b>Ещё из этого фандома</b></div>
-          <div class="grid2" style="margin-top:10px">
+          <div class="small mt10"><b>Ещё из этого фандома</b></div>
+          <div class="grid2 mt10">
             ${similarFandom.map((sp) => `
               <div class="pcard pcardSmall" data-id="${sp.id}">
                 ${cardThumbHTML(sp)}
@@ -4377,8 +4470,8 @@ function renderCheckout() {
           </div>
         ` : ``}
         ${similarType.length ? `
-          <div class="small" style="margin-top:14px"><b>Ещё такого типа</b></div>
-          <div class="grid2" style="margin-top:10px">
+          <div class="small mt14"><b>Ещё такого типа</b></div>
+          <div class="grid2 mt10">
             ${similarType.map((sp) => `
               <div class="pcard pcardSmall" data-id="${sp.id}">
                 ${cardThumbHTML(sp)}
