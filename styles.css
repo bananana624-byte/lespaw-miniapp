@@ -1046,6 +1046,14 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   font-weight:900;
   color:rgba(124,45,255,.95);
 }
+.checkSub{
+  display:block;
+  margin-top:4px;
+  opacity:.78;
+  font-weight:700;
+  color:rgba(255,255,255,.86);
+}
+
 /* Indent rows under thumb (Cart qty row) */
 .miniIndentRow{ margin-left: calc(56px + 12px); }
 
@@ -1311,3 +1319,14 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 
 /* ===== Smaller product cards for "similar" ===== */
 .pcardSmall .pcardTitle{ -webkit-line-clamp:2; line-clamp:2; }
+
+
+@media (max-width:420px){
+  .checkoutSectionTitle{font-size:15px;margin-bottom:8px}
+  .checkoutBlock{padding:10px 10px 8px 10px;border-radius:16px}
+  .checkoutBlockTitle{font-size:14px}
+  .checkoutBlockText{margin-top:6px;line-height:1.25}
+  .checkWrap{margin-top:8px;padding:8px;border-radius:12px}
+  .btnSmall{padding:9px 11px;border-radius:12px}
+  .checkoutNote{margin-top:10px;font-size:12px;line-height:1.25}
+}
