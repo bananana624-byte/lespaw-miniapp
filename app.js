@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v183 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v185 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = 184;
+const APP_BUILD = 185;
 
 // =====================
 // CSV ссылки (твои)
@@ -73,6 +73,60 @@ function gaEvent(name, params = {}) {
   } catch {}
 }
 
+
+function gaItemFromProduct(p, extra = {}) {
+  try {
+    return {
+      item_id: String(p?.id || ""),
+      item_name: String(p?.name || ""),
+      item_category: String(p?.product_type || ""),
+      fandom_id: String(p?.fandom_id || ""),
+      ...extra,
+    };
+  } catch {
+    return { ...extra };
+  }
+}
+
+function gaViewItemList(listName, items) {
+  try {
+    const safeItems = (items || []).slice(0, 20).map((p) => gaItemFromProduct(p));
+    gaEvent("view_item_list", {
+      item_list_name: String(listName || ""),
+      items: safeItems,
+      item_count: Number((items || []).length || 0),
+    });
+  } catch {}
+}
+
+function gaSelectItem(listName, p) {
+  try {
+    gaEvent("select_item", {
+      item_list_name: String(listName || ""),
+      items: [gaItemFromProduct(p)],
+    });
+  } catch {}
+}
+
+function gaAddToCart(p, ci, qtyDelta = 1) {
+  try {
+    const unit = p ? calcItemUnitPrice(p, ci) : 0;
+    gaEvent("add_to_cart", {
+      ...gaItemFromProduct(p),
+      quantity: Number(qtyDelta || 1),
+      price: Number(unit || 0),
+      value: Number(unit || 0) * Number(qtyDelta || 1),
+      currency: "RUB",
+      film: String(ci?.film || ""),
+      lamination: String(ci?.lamination || ""),
+      pin_lamination: String(ci?.pin_lamination || ""),
+      poster_pack: String(ci?.poster_pack || ""),
+      poster_paper: String(ci?.poster_paper || ""),
+    });
+  } catch {}
+}
+
+
 let __gaAppOpenFired = false;
 function gaAppOpen() {
   if (__gaAppOpenFired) return;
@@ -89,6 +143,94 @@ function debugEnabled() {
 }
 function dbg(...args) {
   try { if (debugEnabled()) console.log("[lespaw]", ...args); } catch {}
+// =====================
+// Global error guard (prevents silent blank screen in Telegram WebView)
+// =====================
+let _fatalShown = false;
+
+function buildDiagPayload(err, extra) {
+  try {
+    const payload = {
+      app_build: APP_BUILD,
+      at: new Date().toISOString(),
+      url: String(location.href || ""),
+      ua: String(navigator.userAgent || ""),
+      message: String(err?.message || err || ""),
+      stack: String(err?.stack || ""),
+      extra: extra ? String(extra) : "",
+    };
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(err || "");
+  }
+}
+
+function renderFatalError(title, err, extra) {
+  try {
+    if (_fatalShown) return;
+    _fatalShown = true;
+
+    const msg = escapeHTML(String(err?.message || err || ""));
+    const stack = debugEnabled() ? escapeHTML(String(err?.stack || "")) : "";
+    const diag = debugEnabled() ? buildDiagPayload(err, extra) : "";
+
+    view.innerHTML = `
+      <div class="card">
+        <div class="h2">${escapeHTML(title || "Ошибка")}</div>
+        <div class="small">${msg}</div>
+        ${stack ? `<div class="small" style="margin-top:10px; white-space:pre-wrap; opacity:.85">${stack}</div>` : ``}
+        ${diag ? `
+          <hr>
+          <div class="small">Диагностика (видно только в debug)</div>
+          <textarea class="diagBox" id="diagBox" readonly>${escapeHTML(diag)}</textarea>
+          <div style="height:10px"></div>
+          <button class="btn" id="copyDiag" type="button">Скопировать диагностику</button>
+        ` : ``}
+        <div style="height:10px"></div>
+        <button class="btn" id="reloadApp" type="button">Перезапустить</button>
+      </div>
+    `;
+    syncNav();
+    syncBottomSpace();
+
+    try {
+      const btnR = document.getElementById("reloadApp");
+      bindTap(btnR, () => { try { _fatalShown = false; location.reload(); } catch {} });
+    } catch {}
+
+    if (diag) {
+      try {
+        const btn = document.getElementById("copyDiag");
+        bindTap(btn, async () => {
+          try {
+            const text = String(document.getElementById("diagBox")?.value || diag);
+            if (navigator.clipboard?.writeText) {
+              await navigator.clipboard.writeText(text);
+            } else {
+              const ta = document.getElementById("diagBox");
+              ta?.focus();
+              ta?.select();
+              document.execCommand?.("copy");
+            }
+            toast("Диагностика скопирована", "good");
+          } catch {
+            toast("Не удалось скопировать — можно выделить вручную", "warn");
+          }
+        });
+      } catch {}
+    }
+  } catch {}
+}
+
+try {
+  window.addEventListener("error", (ev) => {
+    try { renderFatalError("Ошибка приложения", ev?.error || ev?.message || ev, "window.error"); } catch {}
+  });
+  window.addEventListener("unhandledrejection", (ev) => {
+    try { renderFatalError("Ошибка приложения", ev?.reason || ev, "unhandledrejection"); } catch {}
+  });
+} catch {}
+
 }
 
 // =====================
@@ -1254,10 +1396,10 @@ function addToCartById(id, opts){
   if (existing) {
     existing.qty = (Number(existing.qty)||0) + 1;
     setCart([...(cart||[])]);
-    gaEvent("add_to_cart", { item_id: sid, quantity: 1 });
+    gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
   } else {
     setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper }]);
-    gaEvent("add_to_cart", { item_id: sid, quantity: 1 });
+    gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
   }
 
   // tactile feedback
@@ -1314,7 +1456,7 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${safeImgUrl(u)}" alt="Фото товара" loading="lazy" decoding="async" onerror="this.style.display='none'">`;
+  return `<img class="pcardImg" src="${safeImgUrl(u)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" onerror="this.style.display='none'">`;
 }
 
 function safeText(s) {
@@ -2288,6 +2430,9 @@ function renderFandomPage(fandomId) {
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
+  // Analytics: list view
+  try { gaViewItemList(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, all); } catch {}
+
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
     { key: "pin", title: "Значки" },
@@ -2352,7 +2497,17 @@ function renderFandomPage(fandomId) {
     bindTap(el, (e) => {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-      openPage(() => renderProduct(el.dataset.id));
+      try {
+        const pid = String(el.dataset.id || "");
+        const p = getProductById(pid);
+        gaSelectItem(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, p);
+      } catch {}
+      try {
+      const pid = String(el.dataset.id || "");
+      const p = getProductById(pid);
+      gaSelectItem(`search:${query}`, p);
+    } catch {}
+    openPage(() => renderProduct(el.dataset.id));
     });
   });
 
@@ -2364,9 +2519,11 @@ function renderFandomPage(fandomId) {
       toggleFav(id);
       // обновим сердечки не перерисовывая весь экран
       view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
-        x.classList.toggle("is-active", isFavId(id));
+        const active = isFavId(id);
+        x.classList.toggle("is-active", active);
+        try { x.setAttribute("aria-pressed", active ? "true" : "false"); } catch {}
         const g = x.querySelector(".heartGlyph");
-        if (g) g.textContent = isFavId(id) ? "♥" : "♡";
+        if (g) g.textContent = active ? "♥" : "♡";
       });
     });
   });
@@ -2793,6 +2950,9 @@ function renderSearch(q) {
     })
     .slice(0, 120);
 
+  // Analytics: list view (search)
+  try { if (!shortQuery) gaViewItemList(`search:${query}`, rawPHits); } catch {}
+
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
     { key: "pin", title: "Значки" },
@@ -3113,7 +3273,7 @@ if (isPoster) {
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="Фото товара" loading="lazy" decoding="async" style="margin-top:12px" onerror="this.style.display='none'">` : ""}
+        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" style="margin-top:12px" onerror="this.style.display='none'">` : ""}
 
         ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -3155,7 +3315,7 @@ if (isPoster) {
         <hr>
 
         <div class="row" style="gap:10px">
-  <button class="btn btnIcon" id="btnFav" type="button" aria-label="В избранное">
+  <button class="btn btnIcon" id="btnFav" type="button" aria-label="В избранное" aria-pressed="${inFavNow ? "true" : "false"}">
     <span class="heartGlyph">${inFavNow ? "♥" : "♡"}</span>
   </button>
   <button class="btn is-active" id="btnCart" type="button">Добавить в корзину · ${money(priceNow)}</button>
@@ -3240,7 +3400,7 @@ function renderFavorites() {
                   return `
                     <div class="item" data-open="${p.id}" data-idx="${idx}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}</div>
@@ -3397,7 +3557,7 @@ function renderCart() {
                   return `
                     <div class="item" data-idx="${idx}" data-open="${p.id}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
@@ -3998,6 +4158,7 @@ function renderCheckout() {
 
   const rowAgreeInfo = document.getElementById("rowAgreeInfo");
   const rowConfirmItems = document.getElementById("rowConfirmItems");
+
   // визуальный статус для заблокированной галочки
   if (rowAgreeInfo && !infoViewedThisSession) rowAgreeInfo.classList.add("is-disabled");
 
@@ -4019,6 +4180,7 @@ function renderCheckout() {
   confirmItems?.addEventListener("change", () => rowConfirmItems?.classList.remove("is-error"));
 
   bindTap(btnSend, () => {
+    if (_orderSubmitting) return;
     syncCheckout();
 
     // сброс подсветок
@@ -4093,10 +4255,19 @@ function renderCheckout() {
       });
       gaEvent("submit_order", { value: Number(calcCartTotal() || 0), currency: "RUB" });
     } catch {}
+    try {
+      _orderSubmitting = true;
+      try { btnSend?.classList?.add("is-disabled"); btnSend?.setAttribute?.("disabled","disabled"); } catch {}
+      try { btnSend.textContent = "Открываю чат…"; } catch {}
+    } catch {}
+
     openTelegramText(MANAGER_USERNAME, text);
     toast("Открываю чат с менеджеркой…", "good");
+
+    try { setTimeout(() => { _orderSubmitting = false; try { btnSend?.classList?.remove("is-disabled"); btnSend?.removeAttribute?.("disabled"); } catch {} }, 1800); } catch {}
   });
 
   syncNav();
   syncBottomSpace();
-}
+}let _orderSubmitting = false;
+
