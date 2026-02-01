@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = 185;
+const APP_BUILD = "186";
 
 // =====================
 // CSV ссылки (твои)
@@ -65,6 +65,21 @@ try {
 // =====================
 // Analytics (GA4) — LesPaw
 // =====================
+const GA_MEASUREMENT_ID = "G-EHCT6BJYJQ";
+
+// Инициализация gtag без inline-скриптов (чтобы CSP могла быть без 'unsafe-inline')
+(function initGA4() {
+  try {
+    if (!GA_MEASUREMENT_ID) return;
+    window.dataLayer = window.dataLayer || [];
+    if (typeof window.gtag !== "function") {
+      window.gtag = function gtag(){ window.dataLayer.push(arguments); };
+    }
+    window.gtag("js", new Date());
+    window.gtag("config", GA_MEASUREMENT_ID);
+  } catch {}
+})();
+
 function gaEvent(name, params = {}) {
   try {
     if (typeof window.gtag === "function") {
@@ -104,6 +119,42 @@ function gaSelectItem(listName, p) {
     gaEvent("select_item", {
       item_list_name: String(listName || ""),
       items: [gaItemFromProduct(p)],
+    });
+  } catch {}
+}
+
+function gaViewItem(p, ci) {
+  try {
+    const unit = p ? calcItemUnitPrice(p, ci || {}) : 0;
+    gaEvent("view_item", {
+      currency: "RUB",
+      value: Number(unit || 0),
+      items: [gaItemFromProduct(p, { price: Number(unit || 0), quantity: 1 })],
+    });
+  } catch {}
+}
+
+function gaRemoveFromCart(p, ci, qtyDelta = 1) {
+  try {
+    const unit = p ? calcItemUnitPrice(p, ci || {}) : 0;
+    gaEvent("remove_from_cart", {
+      currency: "RUB",
+      value: Number((unit || 0) * (Number(qtyDelta || 1))),
+      items: [gaItemFromProduct(p, { price: Number(unit || 0), quantity: Number(qtyDelta || 1) })],
+    });
+  } catch {}
+}
+
+let _lastSearchEventQuery = "";
+function gaSearch(query, resultsCount) {
+  try {
+    const q = String(query || "").trim();
+    if (!q || q.length < 3) return;
+    if (q === _lastSearchEventQuery) return;
+    _lastSearchEventQuery = q;
+    gaEvent("search", {
+      search_term: q,
+      results_count: Number(resultsCount || 0),
     });
   } catch {}
 }
@@ -586,6 +637,39 @@ function syncBottomSpace() {
 }
 window.addEventListener("resize", syncBottomSpace);
 
+function postRenderEnhance() {
+  try {
+    const root = document;
+    // 1) Безопасные обработчики изображений (вместо inline onerror — совместимо с CSP без 'unsafe-inline')
+    root.querySelectorAll('img[data-hide-onerror="1"]').forEach((img) => {
+      if (img.__lespawImgBound) return;
+      img.__lespawImgBound = true;
+      img.addEventListener("error", () => {
+        try {
+          const shell = img.closest(".imgShell");
+          if (shell) shell.style.display = "none";
+          else img.style.display = "none";
+        } catch {}
+      });
+      img.addEventListener("load", () => {
+        try {
+          const shell = img.closest(".imgShell");
+          if (shell) { shell.classList.add("is-loaded"); shell.classList.remove("is-loading"); }
+          img.classList.add("is-loaded");
+        } catch {}
+      });
+      // если картинка уже в кеше и успела загрузиться до бинда
+      if (img.complete && img.naturalWidth > 0) {
+        try {
+          const shell = img.closest(".imgShell");
+          if (shell) { shell.classList.add("is-loaded"); shell.classList.remove("is-loading"); }
+          img.classList.add("is-loaded");
+        } catch {}
+      }
+    });
+  } catch {}
+}
+
 // =====================
 // Navigation stack
 // =====================
@@ -597,10 +681,13 @@ function openPage(renderFn) {
     console.error("openPage: renderFn is not a function", renderFn);
     return;
   }
-  if (currentRender) navStack.push(currentRender);
+  if (currentRender) navStack.push({ renderFn: currentRender, scrollY: (typeof window !== 'undefined' ? window.scrollY : 0) });
   currentRender = renderFn;
   syncNav();
-  try { renderFn(); } catch (err) {
+  try { renderFn();
+    try { postRenderEnhance(); } catch {}
+    try { window.scrollTo(0, 0); } catch {}
+  } catch (err) {
     console.error(err);
     toast("Ошибка экрана", "warn");
     currentRender = renderHome;
@@ -618,9 +705,14 @@ function goBack() {
     return;
   }
   const prev = navStack.pop();
-  currentRender = (typeof prev === "function") ? prev : renderHome;
+  const prevFn = (prev && typeof prev === "object" && typeof prev.renderFn === "function") ? prev.renderFn : ((typeof prev === "function") ? prev : renderHome);
+  const prevScroll = (prev && typeof prev === "object") ? (Number(prev.scrollY) || 0) : 0;
+  currentRender = prevFn;
   syncNav();
-  try { currentRender(); } catch (err) {
+  try { currentRender();
+    try { postRenderEnhance(); } catch {}
+    try { window.scrollTo(0, prevScroll); } catch {}
+  } catch (err) {
     console.error(err);
     resetToHome();
   }
@@ -634,6 +726,7 @@ function resetToHome() {
   if (globalSearch) globalSearch.value = "";
   syncNav();
   renderHome();
+  try { postRenderEnhance(); } catch {}
   scrollToTop();
   syncBottomSpace();
 }
@@ -1402,9 +1495,23 @@ function addToCartById(id, opts){
     gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
   }
 
+  // подсветим бейдж корзины
+  try { pulseBadge(cartCount); } catch {}
+
   // tactile feedback
   haptic("success");
 
+}
+
+function pulseBadge(el) {
+  try {
+    if (!el) return;
+    el.classList.remove("is-pulse");
+    // force reflow
+    void el.offsetWidth;
+    el.classList.add("is-pulse");
+    setTimeout(() => { try { el.classList.remove("is-pulse"); } catch {} }, 650);
+  } catch {}
 }
 
 function updateBadges() {
@@ -1456,7 +1563,7 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${safeImgUrl(u)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" onerror="this.style.display='none'">`;
+  return `<img class="pcardImg" src="${safeImgUrl(u)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">`;
 }
 
 function safeText(s) {
@@ -2502,12 +2609,7 @@ function renderFandomPage(fandomId) {
         const p = getProductById(pid);
         gaSelectItem(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, p);
       } catch {}
-      try {
-      const pid = String(el.dataset.id || "");
-      const p = getProductById(pid);
-      gaSelectItem(`search:${query}`, p);
-    } catch {}
-    openPage(() => renderProduct(el.dataset.id));
+openPage(() => renderProduct(el.dataset.id));
     });
   });
 
@@ -2678,7 +2780,7 @@ function renderReviews() {
 
               const photoHtml = r.photo_url
                 ? `<div class="reviewPhotoWrap">
-                     <img class="reviewPhoto" src="${safeImgUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                     <img class="reviewPhoto" src="${safeImgUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async" data-hide-onerror="1">
                    </div>`
                 : ``;
 
@@ -2848,7 +2950,7 @@ function renderLaminationExamples() {
         .map((ex) => {
           const img = ex.images?.[0] || "";
           const imgHTML = img
-            ? `<img class="exImg" src="${safeImgUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+            ? `<img class="exImg" src="${safeImgUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async" data-hide-onerror="1">`
             : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
 
           return `
@@ -2896,7 +2998,6 @@ function renderLaminationExampleDetail(exId) {
     syncBottomSpace();
     return;
   }
-
   const imgs = Array.isArray(ex.images) ? ex.images.filter(Boolean) : [];
 
   view.innerHTML = `
@@ -2914,7 +3015,7 @@ function renderLaminationExampleDetail(exId) {
                 .map(
                   (u) => `
                 <div class="exBigBtn" style="cursor:default">
-                  <img class="exBigImg" src="${safeImgUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                  <img class="exBigImg" src="${safeImgUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" data-hide-onerror="1">
                 </div>
               `
                 )
@@ -2934,7 +3035,8 @@ function renderLaminationExampleDetail(exId) {
 // Поиск (только сверху)
 // =====================
 function renderSearch(q) {
-  const query = (q || "").toLowerCase().trim();
+  const queryRaw = (q || "").trim();
+  const query = queryRaw.toLowerCase().trim();
   const shortQuery = query.length < 3;
 
   const fHits = shortQuery ? [] : fandoms
@@ -2952,6 +3054,7 @@ function renderSearch(q) {
 
   // Analytics: list view (search)
   try { if (!shortQuery) gaViewItemList(`search:${query}`, rawPHits); } catch {}
+  try { if (!shortQuery) gaSearch(queryRaw, (fHits.length + rawPHits.length)); } catch {}
 
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
@@ -3131,15 +3234,9 @@ function renderProduct(productId, prefill) {
 
   // Analytics
   try {
-    gaEvent("view_item", {
-      item_id: String(p.id || ""),
-      item_name: String(p.name || ""),
-      item_type: String(p.product_type || ""),
-      fandom_id: String(p.fandom_id || ""),
-    });
+    gaViewItem(p, prefill || {});
   } catch {}
-
-  const fandom = getFandomById(p.fandom_id);
+const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
   const overlayDelta = Number(settings.overlay_price_delta) || 100;
@@ -3273,7 +3370,7 @@ if (isPoster) {
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" style="margin-top:12px" onerror="this.style.display='none'">` : ""}
+        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" style="margin-top:12px" data-hide-onerror="1">` : ""}
 
         ${getFullDesc(p) ? `<div class="descBlocks" style="margin-top:10px">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -3400,7 +3497,7 @@ function renderFavorites() {
                   return `
                     <div class="item" data-open="${p.id}" data-idx="${idx}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}</div>
@@ -3557,7 +3654,7 @@ function renderCart() {
                   return `
                     <div class="item" data-idx="${idx}" data-open="${p.id}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" onerror="this.style.display='none'">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
@@ -3638,7 +3735,11 @@ function renderCart() {
         setCart(next);
       }
 
-      gaEvent("remove_from_cart", { item_id: String(removed?.id || ""), quantity: 1 });
+      try {
+        const rp = getProductById(String(removed?.id || ""));
+        gaRemoveFromCart(rp, removed || {}, 1);
+      } catch {}
+
       haptic("select");
       renderCart();
     });
