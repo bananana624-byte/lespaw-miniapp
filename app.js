@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = 182;
+const APP_BUILD = 184;
 
 // =====================
 // CSV ссылки (твои)
@@ -592,8 +592,23 @@ function parseCSV(text) {
   });
 }
 
-async function fetchCSV(url) {
-  const res = await fetch(url);
+async function fetchCSV(url, opts = {}) {
+  const timeoutMs = Number(opts.timeoutMs ?? 15000);
+  const controller = new AbortController();
+  const t = setTimeout(() => {
+    try { controller.abort(); } catch {}
+  }, timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(url, { signal: controller.signal, cache: "no-store" });
+  } catch (e) {
+    const msg = (e && (e.name === "AbortError")) ? `CSV fetch timeout (${timeoutMs}ms)` : (e?.message || String(e));
+    throw new Error(msg);
+  } finally {
+    try { clearTimeout(t); } catch {}
+  }
+
   if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`);
   return parseCSV(await res.text());
 }
@@ -684,8 +699,12 @@ function onCsvBackgroundUpdate(cacheKey, freshData) {
     } catch {}
 
     if (!_csvBgToastShown) {
-      _csvBgToastShown = true;
-      toast("Каталог обновлён ✨");
+      // Не отвлекаем во время корзины/оформления
+      const inCheckoutFlow = (currentRender === renderCart || currentRender === renderCheckout);
+      if (!inCheckoutFlow) {
+        _csvBgToastShown = true;
+        toast("Каталог обновлён ✨");
+      }
     }
   } catch {}
 }
@@ -998,6 +1017,7 @@ function normalizeReviews(rows) {
   arr.sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return arr;
 }
+
 // поддержка: запятая, ;, переносы строк
 function splitList(s) {
   return (s || "")
@@ -1859,7 +1879,13 @@ async function init() {
     };
     navBack?.addEventListener("pointerdown", earlyBlur, { passive: true });
     navBack?.addEventListener("touchstart", earlyBlur, { passive: true });
-  } catch {}
+    navHome?.addEventListener("pointerdown", earlyBlur, { passive: true });
+    navHome?.addEventListener("touchstart", earlyBlur, { passive: true });
+    navFav?.addEventListener("pointerdown", earlyBlur, { passive: true });
+    navFav?.addEventListener("touchstart", earlyBlur, { passive: true });
+    navCart?.addEventListener("pointerdown", earlyBlur, { passive: true });
+    navCart?.addEventListener("touchstart", earlyBlur, { passive: true });
+} catch {}
   try {
     bindTap(navBack, () => {
       // FIX: если фокус в глобальном поиске, Telegram WebView может трактовать "Назад"
@@ -3972,7 +3998,6 @@ function renderCheckout() {
 
   const rowAgreeInfo = document.getElementById("rowAgreeInfo");
   const rowConfirmItems = document.getElementById("rowConfirmItems");
-
   // визуальный статус для заблокированной галочки
   if (rowAgreeInfo && !infoViewedThisSession) rowAgreeInfo.classList.add("is-disabled");
 
