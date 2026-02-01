@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self' https://t.me https://telegram.org; script-src 'self' https://telegram.org https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://docs.google.com https://spreadsheets.google.com https://docs.googleusercontent.com https://*.googleusercontent.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://www.googletagmanager.com; frame-src https://t.me https://telegram.org" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self' https://t.me https://telegram.org; script-src 'self' https://telegram.org https://www.googletagmanager.com; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://docs.google.com https://spreadsheets.google.com https://docs.googleusercontent.com https://*.googleusercontent.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://www.googletagmanager.com; frame-src https://t.me https://telegram.org" />
 <meta name="theme-color" content="#3a007a" />
   <title>LesPaw • Фандомная Атрибутика</title>
 
@@ -11,7 +11,7 @@
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-EHCT6BJYJQ"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="styles.css?v=198" />
+  <link rel="stylesheet" href="styles.css?v=199" />
 </head>
 
 <body>
@@ -54,7 +54,7 @@
         <path d="M12 21s-7-4.6-9.5-8.9C.8 8.8 2.2 6 4.9 5.2c1.7-.5 3.5.1 4.7 1.4L12 9l2.4-2.4c1.2-1.3 3-1.9 4.7-1.4 2.7.8 4.1 3.6 2.4 6.9C19 16.4 12 21 12 21z"
               fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
       </svg>
-      <span class="badge" id="favCount" style="display:none">0</span>
+      <span class="badge isHidden" id="favCount">0</span>
     </button>
 
     <button class="navBtn" id="navCart" type="button" aria-label="Корзина" title="Корзина">
@@ -64,10 +64,10 @@
         <path d="M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
               fill="none" stroke="currentColor" stroke-width="2.6"/>
       </svg>
-      <span class="badge" id="cartCount" style="display:none">0</span>
+      <span class="badge isHidden" id="cartCount">0</span>
     </button>
   </nav>
 
-  <script src="app.js?v=198" defer></script>
+  <script src="app.js?v=199" defer></script>
 </body>
 </html>
