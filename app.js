@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "199";
+const APP_BUILD = "200";
 
 // =====================
 // CSV ссылки (твои)
@@ -3279,7 +3279,9 @@ function renderSearch(q) {
   const rawPHits = shortQuery ? [] : products
     .filter((p) => {
       const typeName = (p.product_type || "").toLowerCase();
-      const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName}`.toLowerCase();
+      const typeRu = String(typeLabel(p.product_type) || "").toLowerCase();
+      const typeRuDetailed = String(typeLabelDetailed(p.product_type) || "").toLowerCase();
+      const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName} ${typeRu} ${typeRuDetailed}`.toLowerCase();
       return hay.includes(query);
     })
     .slice(0, 120);
