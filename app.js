@@ -1357,7 +1357,7 @@ function normalizeTypeKey(t) {
   if (s === "poster" || s === "posters" || s.includes("постер")) return "poster";
 
   // boxes / envelopes
-  if (s === "box" || s === "boxes" || s.includes("бокс") || s.includes("конверт")) return "box";
+  if (s === "box" || s === "boxes" || s.includes("бокс") || s.includes("конверт") || s.includes("envelope")) return "box";
 
   return s;
 }
@@ -3269,22 +3269,34 @@ function renderLaminationExampleDetail(exId) {
 function renderSearch(q) {
   const queryRaw = (q || "").trim();
   const query = queryRaw.toLowerCase().trim();
-  const shortQuery = query.length < 3;
 
-  const fHits = shortQuery ? [] : fandoms
-    .filter((f) => truthy(f.is_active))
-    .filter((f) => (f.fandom_name || "").toLowerCase().includes(query))
-    .slice(0, 20);
+  // Treat "Значки/Боксы/Наклейки/Постеры" (любой язык/форма) as type-filter searches.
+  // Important: we only accept known type keys, otherwise it would hijack normal searches.
+  const qKey = normalizeTypeKey(query);
+  const isTypeQuery = qKey === "sticker" || qKey === "pin" || qKey === "poster" || qKey === "box";
 
-  const rawPHits = shortQuery ? [] : products
-    .filter((p) => {
-      const typeName = (p.product_type || "").toLowerCase();
-      const typeRu = String(typeLabel(p.product_type) || "").toLowerCase();
-      const typeRuDetailed = String(typeLabelDetailed(p.product_type) || "").toLowerCase();
-      const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName} ${typeRu} ${typeRuDetailed}`.toLowerCase();
-      return hay.includes(query);
-    })
-    .slice(0, 120);
+  const shortQuery = !isTypeQuery && query.length < 3;
+
+  const fHits =
+    shortQuery || isTypeQuery
+      ? []
+      : fandoms
+          .filter((f) => truthy(f.is_active))
+          .filter((f) => (f.fandom_name || "").toLowerCase().includes(query))
+          .slice(0, 20);
+
+  const rawPHits = shortQuery
+    ? []
+    : products
+        .filter((p) => {
+          if (isTypeQuery) return normalizeTypeKey(p.product_type) === qKey;
+
+          const typeName = String(p.product_type || "");
+          const typeRu = `${typeLabel(typeName)} ${typeLabelDetailed(typeName)}`;
+          const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName} ${typeRu}`.toLowerCase();
+          return hay.includes(query);
+        })
+        .slice(0, isTypeQuery ? 300 : 120);
 
   // Analytics: list view (search)
   try { if (!shortQuery) gaViewItemList(`search:${query}`, rawPHits); } catch {}
