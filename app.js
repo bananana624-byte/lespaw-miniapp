@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v188 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v189 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "188";
+const APP_BUILD = "189";
 
 // =====================
 // CSV ссылки (твои)
@@ -1685,29 +1685,50 @@ function formatPhoneByCountry(raw, countryId) {
 // Preserve caret position while auto-formatting on input
 function applyPhoneMask(inputEl, countryId) {
   try {
-    const v = inputEl.value || "";
-    const sel = inputEl.selectionStart || 0;
+    const rule = getPhoneRule(countryId || inputEl?.dataset?.countryId || "ru");
+    const v = String(inputEl.value || "");
+    const sel = (typeof inputEl.selectionStart === "number") ? inputEl.selectionStart : v.length;
 
-    // How many digits were before the caret?
-    const before = v.slice(0, sel).replace(/\D/g, "").length;
+    // Count how many digits were before caret (includes CC digits if user touched the prefix)
+    const digitsBefore = v.slice(0, sel).replace(/\D/g, "").length;
 
+    // Convert to formatted value
     const formatted = formatPhoneByCountry(v, countryId || inputEl?.dataset?.countryId || "ru");
     inputEl.value = formatted;
 
-    // Place caret after the same count of digits in the formatted string
-    if (typeof inputEl.setSelectionRange === "function") {
-      if (before <= 0) {
-        inputEl.setSelectionRange(0, 0);
-        return;
+    if (typeof inputEl.setSelectionRange !== "function") return;
+
+    // Lock caret after "+CC-" prefix and preserve *national* digit position
+    const ccLen = String(rule.ccDigits || "").length;
+    const nsnBefore = Math.max(0, digitsBefore - ccLen);
+
+    const prefixDashPos = formatted.indexOf("-");
+    const prefixEnd = (prefixDashPos >= 0) ? (prefixDashPos + 1) : formatted.length;
+
+    // Snap caret to at least end of prefix (prevents jumping into "+7")
+    let pos = prefixEnd;
+
+    if (nsnBefore > 0) {
+      let i = prefixEnd;
+      let seen = 0;
+      while (i < formatted.length) {
+        if (/\d/.test(formatted[i])) {
+          seen++;
+          if (seen >= nsnBefore) { i++; break; }
+        }
+        i++;
       }
-      let pos = 0, seen = 0;
-      while (pos < formatted.length) {
-        if (/\d/.test(formatted[pos])) seen++;
-        pos++;
-        if (seen >= before) break;
-      }
-      inputEl.setSelectionRange(pos, pos);
+      pos = i;
     }
+
+    // Clamp
+    if (pos < prefixEnd) pos = prefixEnd;
+    if (pos > formatted.length) pos = formatted.length;
+
+    // Apply after current input cycle to reduce flicker in some WebViews
+    requestAnimationFrame(() => {
+      try { inputEl.setSelectionRange(pos, pos); } catch {}
+    });
   } catch {}
 }
 
