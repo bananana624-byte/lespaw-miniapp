@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "193";
+const APP_BUILD = "194";
 
 // =====================
 // CSV ссылки (твои)
@@ -41,7 +41,7 @@ const CSV_REVIEWS_URL =
 // ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация",
 // просто увеличьте версию ниже. Тогда у всех клиенток статус "прочитано"
 // автоматически сбросится.
-const IMPORTANT_INFO_VERSION = "2026-02-01-2";
+const IMPORTANT_INFO_VERSION = "2026-02-01-3";
 
 // менеджерка (без @)
 const MANAGER_USERNAME = "LesPaw_manager";
@@ -2797,6 +2797,14 @@ function renderInfo() {
         </div>
 
         <div class="infoSection">
+          <div class="infoTitle">Оплата и валюта</div>
+          <ul class="infoList">
+            <li>Цены в приложении указаны <b>в российских рублях</b>.</li>
+            <li>Для заказов из других стран итоговая сумма к оплате рассчитывается менеджеркой индивидуально.</li>
+          </ul>
+        </div>
+
+        <div class="infoSection">
           <div class="infoTitle">Сроки изготовления и доставки</div>
           <ul class="infoList">
             <li>Сборка заказа: <b>4–7 дней</b> (зависит от объёма заказа и от загруженности).</li>
@@ -2990,7 +2998,6 @@ function renderReviews() {
         `;
 
     const hasCsv = !!String(CSV_REVIEWS_URL || "").trim();
-
     view.innerHTML = `
       <div class="card">
         <div class="h2">Отзывы</div>
@@ -3998,6 +4005,7 @@ async function syncCheckoutFromCloud() {
     const cloudData = cloudObj?.data || null;
     const cloudTs = Number(cloudObj?.updatedAt || cloudData?._updatedAt || 0) || 0;
     const localTs = Number(checkout?._updatedAt || 0) || 0;
+
     if (cloudData && cloudTs > localTs) {
       checkout = { ...(checkout || {}), ...(cloudData || {}), _updatedAt: cloudTs };
       saveJSON(LS_CHECKOUT, checkout);
