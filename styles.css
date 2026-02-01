@@ -13,8 +13,13 @@ body{
     radial-gradient(900px 700px at 50% 35%, rgba(125,60,255,.45), transparent 62%),
     radial-gradient(850px 650px at 50% 110%, rgba(190,120,255,.22), transparent 60%),
     linear-gradient(180deg, #3a007a 0%, #170047 55%, #070018 100%);
-  background-attachment: fixed;
+  background-attachment: scroll;
 }
+
+@media (min-width: 900px){
+  body{ background-attachment: fixed; }
+}
+
 
 /* top */
 .top{ padding:14px 16px 8px; }
@@ -720,6 +725,7 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   font-size:13px;
 }
 .toast.good{ box-shadow: 0 18px 44px rgba(0,0,0,.35), 0 0 26px rgba(114,255,182,.25); }
+.toast.ok{ box-shadow: 0 18px 44px rgba(0,0,0,.35), 0 0 26px rgba(114,255,182,.25); }
 .toast.warn{ box-shadow: 0 18px 44px rgba(0,0,0,.35), 0 0 26px rgba(255,92,122,.25); }
 
 /* inputs inside white cards (checkout) */
@@ -1403,3 +1409,16 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   letter-spacing: .2px;
 }
 .undoBtn:active { transform: translateY(1px); }
+
+
+/* Focus-visible (keyboard / accessibility) */
+.btn:focus-visible,
+.iconBtn:focus-visible,
+.navBtn:focus-visible,
+.chip:focus-visible,
+.searchInput:focus-visible,
+.searchClear:focus-visible,
+.undoBtn:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(190,120,255,.45), 0 0 22px rgba(190,120,255,.25);
+}
