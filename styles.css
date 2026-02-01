@@ -1,4 +1,13 @@
-/* LESPAW STYLE v100 — FIX LAYOUT + THUMBS */
+/* LESPAW STYLE v185 — prod-safe UX/analytics */
+
+:root{
+  --lp-text: #fff;
+  --lp-glow-1: rgba(190,120,255,.45);
+  --lp-glow-2: rgba(190,120,255,.35);
+  --lp-border-glow: rgba(190,120,255,.55);
+  --lp-diag-bg: rgba(0,0,0,.35);
+  --lp-diag-border: rgba(190,120,255,.28);
+}
 
 *{ box-sizing:border-box; }
 html,body{ height:100%; overflow-x:hidden; }
@@ -989,7 +998,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   transform:scale(.985);
   filter:brightness(1.03);
 }
-
 /* Checkout must-read banner */
 .mustRead{
   margin-top:10px;
@@ -1346,11 +1354,11 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .searchClear:focus-visible,
 .searchInput:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(190,120,255,.45), 0 0 22px rgba(190,120,255,.35);
+  box-shadow: 0 0 0 3px var(--lp-glow-1), 0 0 22px var(--lp-glow-2);
 }
 
 .searchInput:focus-visible {
-  border-color: rgba(190,120,255,.55);
+  border-color: var(--lp-border-glow);
 }
 
 @keyframes lpSpin {
@@ -1421,4 +1429,22 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .undoBtn:focus-visible{
   outline: none;
   box-shadow: 0 0 0 2px rgba(190,120,255,.45), 0 0 22px rgba(190,120,255,.25);
+}
+
+
+
+/* Debug diag box (safe, only visible in debug mode) */
+.diagBox{
+  width:100%;
+  min-height:160px;
+  resize:vertical;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--lp-diag-border);
+  background: var(--lp-diag-bg);
+  color: var(--lp-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size:12px;
+  line-height:1.35;
+  outline:none;
 }
