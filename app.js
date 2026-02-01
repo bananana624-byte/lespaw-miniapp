@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "192";
+const APP_BUILD = "193";
 
 // =====================
 // CSV ссылки (твои)
@@ -2869,13 +2869,11 @@ function renderInfo() {
             <li>Если ты ищешь товары с фандомом, которого нет в ассортименте, мы можем сделать их <b>под заказ</b>.</li>
             <li>По любым вопросам можно написать менеджерке.</li>
           </ul>
+          <button class="btn btnInline" id="btnManager">Написать менеджерке</button>
+
         </div>
       </div>
 
-      <hr>
-      <div class="row">
-        <button class="btn" id="btnManager">Написать менеджерке</button>
-      </div>
       <div class="row">
         <button class="btn" id="btnMain">Наш основной канал</button>
         <button class="btn" id="btnSuggest">Предложить фандом</button>
@@ -4000,7 +3998,6 @@ async function syncCheckoutFromCloud() {
     const cloudData = cloudObj?.data || null;
     const cloudTs = Number(cloudObj?.updatedAt || cloudData?._updatedAt || 0) || 0;
     const localTs = Number(checkout?._updatedAt || 0) || 0;
-
     if (cloudData && cloudTs > localTs) {
       checkout = { ...(checkout || {}), ...(cloudData || {}), _updatedAt: cloudTs };
       saveJSON(LS_CHECKOUT, checkout);
