@@ -29,6 +29,15 @@ const CSV_SETTINGS_URL =
 const CSV_REVIEWS_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ_WJrd_-W-ZSVqZqUs8YhumHkSjfHrt4xBV3nZEcUTRVyPeF15taLFiaw1gzJcK7m33sLjmkhP-Zk/pub?gid=1255489745&single=true&output=csv";
 
+
+// =====================
+// Важная информация — версия
+// =====================
+// ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация",
+// просто увеличьте версию ниже. Тогда у всех клиенток статус "прочитано"
+// автоматически сбросится.
+const IMPORTANT_INFO_VERSION = "2026-01-31-1";
+
 // менеджерка (без @)
 const MANAGER_USERNAME = "LesPaw_manager";
 
@@ -1989,7 +1998,6 @@ function renderFandomTypes() {
   syncNav();
   syncBottomSpace();
 }
-
 // =====================
 // Список фандомов (алфавит + цифры в конце)
 // =====================
@@ -1998,6 +2006,7 @@ function renderFandomList(type) {
     .filter((f) => truthy(f.is_active))
     .filter((f) => f.fandom_type === type)
     .sort((a, b) => (a.fandom_name || "").localeCompare(b.fandom_name || "", "ru"));
+
   const letters = list.filter((f) => !isDigitStart(f.fandom_name));
   const digits = list.filter((f) => isDigitStart(f.fandom_name));
 
@@ -3206,7 +3215,6 @@ const LS_CHECKOUT = "lespaw_checkout_v2";
 // Версия "Важной информации".
 // ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация", просто увеличьте версию ниже.
 // Тогда у всех клиенток статус "прочитано" автоматически сбросится.
-const IMPORTANT_INFO_VERSION = "2026-01-31-1";
 const CLOUD_CHECKOUT = "lespaw_checkout_cloud_v2";
 
 // Миграция со старых полей (чтобы пользовательки не потеряли введённые данные)
