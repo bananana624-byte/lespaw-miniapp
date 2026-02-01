@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v191 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v192 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "191";
+const APP_BUILD = "192";
 
 // =====================
 // CSV ссылки (твои)
@@ -2873,6 +2873,9 @@ function renderInfo() {
       </div>
 
       <hr>
+      <div class="row">
+        <button class="btn" id="btnManager">Написать менеджерке</button>
+      </div>
       <div class="row">
         <button class="btn" id="btnMain">Наш основной канал</button>
         <button class="btn" id="btnSuggest">Предложить фандом</button>
