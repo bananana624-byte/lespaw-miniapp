@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v187 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v188 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "187";
+const APP_BUILD = "188";
 
 // =====================
 // CSV ссылки (твои)
@@ -1626,27 +1626,64 @@ function haptic(kind) {
   } catch {}
 }
 
-function formatPhoneLive(raw) {
-  // Universal: allow + and digits, keep simple spacing for readability.
-  // We do NOT enforce per-country length here — validation happens on submit.
+
+function getPhoneRule(countryId) {
+  const id = String(countryId || "ru");
+  const RULES = {
+    ru: { cc: "+7",   ccDigits: "7",   nsn: 10, groups: [3, 3, 2, 2], example: "+7-999-123-45-67" },
+    kz: { cc: "+7",   ccDigits: "7",   nsn: 10, groups: [3, 3, 2, 2], example: "+7-777-123-45-67" },
+    by: { cc: "+375", ccDigits: "375", nsn: 9,  groups: [2, 3, 2, 2], example: "+375-29-123-45-67" },
+    am: { cc: "+374", ccDigits: "374", nsn: 8,  groups: [2, 3, 3],    example: "+374-77-123-456" },
+    kg: { cc: "+996", ccDigits: "996", nsn: 9,  groups: [3, 3, 3],    example: "+996-700-123-456" },
+    uz: { cc: "+998", ccDigits: "998", nsn: 9,  groups: [2, 3, 2, 2], example: "+998-90-123-45-67" },
+  };
+  return RULES[id] || RULES.ru;
+}
+
+function getPhonePlaceholder(countryId) {
+  return getPhoneRule(countryId).example;
+}
+
+function digitsOnly(s) {
+  return String(s || "").replace(/\D+/g, "");
+}
+
+function formatPhoneByCountry(raw, countryId) {
+  const rule = getPhoneRule(countryId);
   let s = String(raw || "").trim();
   if (!s) return "";
 
-  // Allow only digits, spaces and a single leading +
-  s = s.replace(/[^0-9+\s().-]+/g, "");
-  s = s.replace(/\s+/g, " ").trim();
+  const hasPlus = s.startsWith("+");
+  let d = digitsOnly(s);
 
-  // Keep only one '+', and only at the start
-  if (s.includes("+")) {
-    s = "+" + s.replace(/\+/g, "").replace(/^\s+/, "");
+  // Special: RU/KZ users often start with 8XXXXXXXXXX
+  if (rule.ccDigits === "7" && d.length >= 1 && d[0] === "8") {
+    // if user entered a full national number (11 digits) starting with 8 -> replace with 7
+    if (d.length >= 11) d = "7" + d.slice(1);
   }
 
-  return s;
+  // Strip country code if present; we always enforce selected country
+  if (d.startsWith(rule.ccDigits)) d = d.slice(rule.ccDigits.length);
+
+  // Keep only required digits for the national number
+  d = d.slice(0, rule.nsn);
+
+  // Build groups with dashes
+  const parts = [];
+  let idx = 0;
+  for (const g of rule.groups) {
+    if (idx >= d.length) break;
+    parts.push(d.slice(idx, idx + g));
+    idx += g;
+  }
+  // If any leftover digits (shouldn't, because we truncated), append
+  if (idx < d.length) parts.push(d.slice(idx));
+
+  return rule.cc + (parts.length ? ("-" + parts.join("-")) : "");
 }
 
-
 // Preserve caret position while auto-formatting on input
-function applyPhoneMask(inputEl) {
+function applyPhoneMask(inputEl, countryId) {
   try {
     const v = inputEl.value || "";
     const sel = inputEl.selectionStart || 0;
@@ -1654,7 +1691,7 @@ function applyPhoneMask(inputEl) {
     // How many digits were before the caret?
     const before = v.slice(0, sel).replace(/\D/g, "").length;
 
-    const formatted = formatPhoneLive(v);
+    const formatted = formatPhoneByCountry(v, countryId || inputEl?.dataset?.countryId || "ru");
     inputEl.value = formatted;
 
     // Place caret after the same count of digits in the formatted string
@@ -1674,6 +1711,29 @@ function applyPhoneMask(inputEl) {
   } catch {}
 }
 
+function normalizePhoneDigitsForCountry(raw, countryId) {
+  const rule = getPhoneRule(countryId);
+  let s = String(raw || "").trim();
+  if (!s) return "";
+
+  const hasPlus = s.startsWith("+");
+  let d = digitsOnly(s);
+
+  // RU/KZ: 8XXXXXXXXXX -> 7XXXXXXXXXX
+  if (rule.ccDigits === "7") {
+    if (!hasPlus && d.length === 11 && d.startsWith("8")) d = "7" + d.slice(1);
+  }
+
+  // Enforce selected country code
+  if (d.startsWith(rule.ccDigits)) d = d.slice(rule.ccDigits.length);
+
+  // Exact required length for national part
+  d = d.slice(0, rule.nsn);
+
+  if (d.length !== rule.nsn) return "";
+
+  return "+" + rule.ccDigits + d;
+}
 // ===== Shipping countries (only where Ozon / Wildberries are used in our flow) =====
 const SHIPPING_COUNTRIES = [
   { id: "ru", name: "Россия",  code: "+7"   },
@@ -1689,39 +1749,8 @@ function getCountryById(id) {
 }
 
 function normalizePhoneE164(raw, countryId) {
-  const country = getCountryById(countryId);
-  let s = String(raw || "").trim();
-  if (!s) return "";
-
-  // Keep only digits and '+'
-  const hasPlus = s.trim().startsWith("+");
-  let digits = s.replace(/\D+/g, "");
-
-  if (hasPlus) {
-    // If user typed +... we trust they provided country code (we only normalize to "+digits")
-    return digits ? ("+" + digits) : "";
-  }
-
-  // No '+': assume it's a local/national number. Prefix by selected country code.
-  const codeDigits = String(country.code).replace(/\D+/g, "");
-
-  // Special handling for +7 (RU/KZ): people often type 8XXXXXXXXXX
-  if (codeDigits === "7") {
-    if (digits.length === 11 && digits.startsWith("8")) digits = "7" + digits.slice(1);
-    if (digits.length === 11 && digits.startsWith("7")) return "+7" + digits.slice(1);
-    if (digits.length === 10) return "+7" + digits;
-    // If user typed 7XXXXXXXXXX without + and 11 digits
-    if (digits.length === 11 && digits.startsWith("7")) return "+" + digits;
-    // fallback
-    return digits ? ("+7" + digits) : "";
-  }
-
-  // If user already typed country code digits without '+', accept it
-  if (digits.startsWith(codeDigits) && digits.length >= codeDigits.length + 6) {
-    return "+" + digits;
-  }
-
-  return digits ? ("+" + codeDigits + digits) : "";
+  // STRICT: returns '+CC' + national digits (digits only), or empty string.
+  return normalizePhoneDigitsForCountry(raw, countryId);
 }
 
 function isPhoneE164Like(e164) {
@@ -1998,6 +2027,7 @@ function defaultFullByType(p) {
       "📏 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Подбор изображений: рандомный",
     ].join("\n\n");
   }
+
   if (typeKey === "box") {
     const isEnvelope = nm.includes("конверт");
     if (isEnvelope) {
@@ -4159,7 +4189,7 @@ function renderCheckout() {
   if (!checkout.countryId) checkout.countryId = "ru";
   if (!requiresCountry) checkout.countryId = "ru";
   const selectedCountry = getCountryById(checkout.countryId);
-  const phonePlaceholder = `${selectedCountry.code} 999 123 45 67`;
+  const phonePlaceholder = getPhonePlaceholder(selectedCountry.id);
 
 
   // Похожие товары в оформлении отключены (блок может быть включен позже осознанно).
@@ -4181,7 +4211,7 @@ function renderCheckout() {
 
       <div class="small"><b>Телефон получателя (обязательно)</b></div>
       <div class="small fieldHelp is-show" style="margin-top:6px; opacity:.88">
-        Номер должен быть тем, на который зарегистрирован аккаунт в выбранном ПВЗ.
+        Номер должен быть тем, на который зарегистрирован аккаунт.
         ${requiresCountry ? "Для Ozon/Wildberries обязательно укажи страну доставки." : ""}
       </div>
 
@@ -4303,6 +4333,15 @@ function renderCheckout() {
   const errPhone = document.getElementById("errPhone");
   const errPickup = document.getElementById("errPickup");
 
+  // phone mask context (RU by default; for Ozon/WB uses selected country)
+  const activeCountryIdForPhone = (checkout.pickupType === "ozon" || checkout.pickupType === "wildberries") ? (checkout.countryId || "ru") : "ru";
+  if (cPhone) {
+    cPhone.dataset.countryId = activeCountryIdForPhone;
+    // format immediately (in case value was stored unformatted)
+    try { cPhone.value = formatPhoneByCountry(cPhone.value || "", activeCountryIdForPhone); } catch {}
+  }
+
+
   function syncCheckout() {
     saveCheckout({
       fio: cFio.value || "",
@@ -4326,7 +4365,7 @@ function renderCheckout() {
     cPhone.addEventListener("input", () => {
       cPhone.classList.remove("field-error");
       if (errPhone) { errPhone.textContent = ""; errPhone.classList.remove("is-show"); }
-      applyPhoneMask(cPhone);
+      applyPhoneMask(cPhone, (cPhone?.dataset?.countryId || "ru"));
       syncCheckout();
     });
   }
@@ -4335,7 +4374,7 @@ function renderCheckout() {
   if (cPhone) {
     cPhone.addEventListener("blur", () => {
       try {
-        const f = formatPhoneLive(cPhone.value || "");
+        const f = formatPhoneByCountry(cPhone.value || "", (cPhone?.dataset?.countryId || "ru"));
         if (f !== (cPhone.value || "")) {
           cPhone.value = f;
           syncCheckout();
