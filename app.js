@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v170 (hotfix: syntax + csv bg update)
+// LesPaw Mini App — app.js v182 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -10,6 +10,11 @@
 // - После добавления товара корзина НЕ открывается
 // - На оформлении обязательная галочка (если нет — уведомление)
 // - Отправка заказа менеджерке через Telegram link с предзаполненным текстом
+
+// =====================
+// Build
+// =====================
+const APP_BUILD = 182;
 
 // =====================
 // CSV ссылки (твои)
@@ -73,6 +78,17 @@ function gaAppOpen() {
   if (__gaAppOpenFired) return;
   __gaAppOpenFired = true;
   gaEvent("app_open");
+}
+
+// =====================
+// Debug (safe for prod; enabled only if localStorage lespaw_debug === "1")
+// =====================
+const LS_DEBUG = "lespaw_debug";
+function debugEnabled() {
+  try { return String(localStorage.getItem(LS_DEBUG) || "") === "1"; } catch { return false; }
+}
+function dbg(...args) {
+  try { if (debugEnabled()) console.log("[lespaw]", ...args); } catch {}
 }
 
 // =====================
@@ -207,6 +223,24 @@ async function loadSyncedState() {
       ? (localFavN.items && localFavN.items.length ? pickNewer(cloudFavN, localFavN) : cloudFavN)
       : localFavN;
 
+  // Debug: show where state came from (local vs cloud)
+  try {
+    const cartSrc = (cloudCartN.items && cloudCartN.items.length)
+      ? ((localCartN.items && localCartN.items.length)
+          ? ((Number(cloudCartN.updatedAt || 0) >= Number(localCartN.updatedAt || 0)) ? "cloud" : "local")
+          : "cloud")
+      : "local";
+
+    const favSrc = (cloudFavN.items && cloudFavN.items.length)
+      ? ((localFavN.items && localFavN.items.length)
+          ? ((Number(cloudFavN.updatedAt || 0) >= Number(localFavN.updatedAt || 0)) ? "cloud" : "local")
+          : "cloud")
+      : "local";
+
+    dbg("sync cart:", cartSrc, "cloudTs=", Number(cloudCartN.updatedAt || 0), "localTs=", Number(localCartN.updatedAt || 0), "items=", Number((chosenCartN.items || []).length || 0));
+    dbg("sync fav:", favSrc, "cloudTs=", Number(cloudFavN.updatedAt || 0), "localTs=", Number(localFavN.updatedAt || 0), "items=", Number((chosenFavN.items || []).length || 0));
+  } catch {}
+
   cart = Array.isArray(chosenCartN.items) ? chosenCartN.items : [];
   fav = Array.isArray(chosenFavN.items) ? chosenFavN.items : [];
 
@@ -293,6 +327,38 @@ function toast(msg, kind = "") {
     el.remove();
   }, 2200);
 }
+
+// =====================
+// Undo bar (for destructive actions like delete from cart)
+// =====================
+let __undoEl = null;
+let __undoTimer = null;
+function hideUndoBar() {
+  try { if (__undoTimer) clearTimeout(__undoTimer); } catch {}
+  __undoTimer = null;
+  try { __undoEl?.remove?.(); } catch {}
+  __undoEl = null;
+}
+function showUndoBar(text, onUndo) {
+  try { hideUndoBar(); } catch {}
+  const el = document.createElement("div");
+  el.className = "undoBar";
+  el.innerHTML = `
+    <div class="undoText">${escapeHTML(String(text || ""))}</div>
+    <button class="undoBtn" type="button" aria-label="Отменить действие">Отменить</button>
+  `;
+  document.body.appendChild(el);
+  __undoEl = el;
+  const btn = el.querySelector(".undoBtn");
+  if (btn) {
+    bindTap(btn, () => {
+      try { onUndo && onUndo(); } catch {}
+      hideUndoBar();
+    });
+  }
+  __undoTimer = setTimeout(() => hideUndoBar(), 4200);
+}
+
 
 
 // =====================
@@ -499,9 +565,12 @@ function hashRows(rows) {
 
 async function fetchCSVWithCache(url, cacheKey) {
   const cached = loadCsvCache(cacheKey);
-  // Если кеш свежий — используем сразу и параллельно обновляем в фоне
-  if (cached && Date.now() - (cached.ts || 0) < CSV_CACHE_TTL_MS) {
-    // фон-обновление (не блокируем UI)
+
+  // If we have ANY cache (fresh or stale) — show it immediately, and refresh in background.
+  if (cached && Array.isArray(cached.data)) {
+    const isFresh = (Date.now() - (cached.ts || 0) < CSV_CACHE_TTL_MS);
+
+    // background refresh (never blocks UI)
     fetchCSV(url)
       .then((fresh) => {
         try {
@@ -512,10 +581,15 @@ async function fetchCSVWithCache(url, cacheKey) {
           saveCsvCache(cacheKey, fresh);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        // If cache was stale and refresh failed — gently inform once (keeps app usable).
+        try { if (!isFresh) onCsvBackgroundError(cacheKey, err); } catch {}
+      });
+
     return cached.data;
   }
-  // иначе грузим как обычно
+
+  // No cache at all: fetch normally (may throw -> init will show retry screen)
   const fresh = await fetchCSV(url);
   saveCsvCache(cacheKey, fresh);
   return fresh;
@@ -554,6 +628,18 @@ function onCsvBackgroundUpdate(cacheKey, freshData) {
     }
   } catch {}
 }
+
+let _csvBgErrorToastShown = false;
+function onCsvBackgroundError(cacheKey, err) {
+  try {
+    if (_csvBgErrorToastShown) return;
+    _csvBgErrorToastShown = true;
+    console.warn(err);
+    toast("Не удалось обновить каталог — показана сохранённая версия", "warn");
+    dbg("csv refresh failed", { cacheKey, err: String(err || "") });
+  } catch {}
+}
+
 
 
 
@@ -604,6 +690,43 @@ const PIN_LAM_LABELS = {
   stars_big: "Большие звёзды",
   holo_overlay: "Голографическая ламинация",
 };
+
+function getOptionDefs(overlayDelta, holoDelta) {
+  const od = Number(overlayDelta) || 0;
+  const hd = Number(holoDelta) || 0;
+
+  const FILM_OPTIONS = [
+    ["film_glossy", FILM_LABELS.film_glossy, 0],
+    ["film_holo", FILM_LABELS.film_holo, hd],
+  ];
+
+  const STICKER_LAM_OPTIONS = [
+    ["none", STICKER_LAM_LABELS.none, 0],
+    ["sugar", STICKER_LAM_LABELS.sugar, od],
+    ["stars", STICKER_LAM_LABELS.stars, od],
+    ["snowflakes_small", STICKER_LAM_LABELS.snowflakes_small, od],
+    ["stars_big", STICKER_LAM_LABELS.stars_big, od],
+    ["holo_overlay", STICKER_LAM_LABELS.holo_overlay, od],
+  ];
+
+  const PIN_LAM_OPTIONS = [
+    ["pin_base", PIN_LAM_LABELS.pin_base, 0],
+    ["sugar", PIN_LAM_LABELS.sugar, od],
+    ["stars", PIN_LAM_LABELS.stars, od],
+    ["snowflakes_small", PIN_LAM_LABELS.snowflakes_small, od],
+    ["stars_big", PIN_LAM_LABELS.stars_big, od],
+    ["holo_overlay", PIN_LAM_LABELS.holo_overlay, od],
+  ];
+
+  return {
+    FILM_OPTIONS,
+    STICKER_LAM_OPTIONS,
+    PIN_LAM_OPTIONS,
+    filmLabelByKey: Object.fromEntries(FILM_OPTIONS.map((x) => [x[0], x[1]])),
+    stickerLamLabelByKey: Object.fromEntries(STICKER_LAM_OPTIONS.map((x) => [x[0], x[1]])),
+    pinLamLabelByKey: Object.fromEntries(PIN_LAM_OPTIONS.map((x) => [x[0], x[1]])),
+  };
+}
 
 // Posters: packs + paper (interactive options)
 const POSTER_PACKS = [
@@ -1648,6 +1771,22 @@ let renderEpoch = 0;
 // =====================
 // Init
 // =====================
+
+function renderLoading() {
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Загрузка каталога…</div>
+      <div class="small">Секундочку ✨</div>
+      <div style="height:12px"></div>
+      <div class="spinner" aria-hidden="true"></div>
+      <div style="height:10px"></div>
+      <div class="small">Если интернет слабый — можно подождать или нажать «Повторить» на экране ошибки.</div>
+    </div>
+  `;
+  syncNav();
+  syncBottomSpace();
+}
+
 async function init() {
   const myEpoch = ++renderEpoch;
 
@@ -1740,7 +1879,10 @@ async function init() {
 
     await loadSyncedState();
     updateBadges();
-    resetToHome(); // уже можно открыть меню
+
+    const hadCatalogFromCache = (Array.isArray(fandoms) && fandoms.length) || (Array.isArray(products) && products.length);
+    if (!hadCatalogFromCache) renderLoading();
+    else resetToHome(); // уже можно открыть меню
 
     gaAppOpen();
 
@@ -1773,6 +1915,14 @@ async function init() {
     });
 
     reviews = normalizeReviews(rFresh || []);
+
+    const shouldKickHomeAfterLoad = (!currentRender || currentRender === renderHome);
+    if (shouldKickHomeAfterLoad) {
+      try {
+        const q = String(globalSearch?.value || "").trim();
+        if (!q) resetToHome();
+      } catch {}
+    }
 
     // Если пользователька уже в каталоге/поиске — перерисуем текущий экран с обновлёнными данными
     try {
@@ -1998,6 +2148,7 @@ function renderFandomTypes() {
   syncNav();
   syncBottomSpace();
 }
+
 // =====================
 // Список фандомов (алфавит + цифры в конце)
 // =====================
@@ -2732,28 +2883,7 @@ if (isPoster) {
 }
 
 
-  const FILM_OPTIONS = [
-    ["film_glossy", "Стандартная глянцевая плёнка", 0],
-    ["film_holo", "Голографическая плёнка", holoDelta],
-  ];
-
-  const STICKER_LAM_OPTIONS = [
-    ["none", "Без ламинации", 0],
-    ["sugar", "Сахар", overlayDelta],
-    ["stars", "Звёздочки", overlayDelta],
-    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
-    ["stars_big", "Большие звёзды", overlayDelta],
-    ["holo_overlay", "Голографическая ламинация", overlayDelta],
-  ];
-
-  const PIN_LAM_OPTIONS = [
-    ["pin_base", "Глянцевая ламинация (базовая)", 0],
-    ["sugar", "Сахар", overlayDelta],
-    ["stars", "Звёздочки", overlayDelta],
-    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
-    ["stars_big", "Большие звёзды", overlayDelta],
-    ["holo_overlay", "Голографическая ламинация", overlayDelta],
-  ];
+  const { FILM_OPTIONS, STICKER_LAM_OPTIONS, PIN_LAM_OPTIONS } = getOptionDefs(overlayDelta, holoDelta);
 
   function calcPrice() {
     let price = Number(p.price) || 0;
@@ -2812,7 +2942,26 @@ if (isPoster) {
     `;
   }
 
-  function render() {
+  function pulsePriceUI() {
+    try {
+      const priceEl = document.getElementById("prodPriceVal");
+      const btnEl = document.getElementById("btnCart");
+      if (priceEl) {
+        priceEl.classList.remove("pricePulse");
+        void priceEl.offsetWidth;
+        priceEl.classList.add("pricePulse");
+        setTimeout(() => { try { priceEl.classList.remove("pricePulse"); } catch {} }, 340);
+      }
+      if (btnEl) {
+        btnEl.classList.remove("pricePulseBtn");
+        void btnEl.offsetWidth;
+        btnEl.classList.add("pricePulseBtn");
+        setTimeout(() => { try { btnEl.classList.remove("pricePulseBtn"); } catch {} }, 340);
+      }
+    } catch {}
+  }
+
+  function render(pulse = false) {
     const inFavNow = isFav(p.id, currentOpts());
     const priceNow = calcPrice();
 
@@ -2881,6 +3030,11 @@ if (isPoster) {
     const btnCart = document.getElementById("btnCart");
     const btnExamples = document.getElementById("btnExamples");
 
+    if (pulse) {
+      haptic("select");
+      pulsePriceUI();
+    }
+
     if (btnFav) {
       bindTap(btnFav, () => {
         toggleFav(p.id, currentOpts());
@@ -2901,13 +3055,15 @@ if (isPoster) {
       const title = panel.querySelector(".optTitle")?.textContent?.trim() || "";
       panel.querySelectorAll("[data-opt]").forEach((b) => {
         bindTap(b, () => {
+          const before = calcPrice();
           const key = b.dataset.opt;
           if (isSticker && title === "Плёнка") selectedFilm = key;
           else if (isSticker && title === "Ламинация") selectedStickerLam = key;
           else if (isPin && title === "Ламинация") selectedPinLam = key;
           else if (isPoster && title === "Варианты наборов") selectedPosterPack = key;
           else if (isPoster && title === "Бумага для печати") selectedPosterPaper = key;
-          render();
+          const after = calcPrice();
+          render(after !== before);
         });
       });
     });
@@ -3163,11 +3319,29 @@ function renderCart() {
     bindTap(b, () => {
       const i = Number(b.dataset.dec);
       const next = [...cart];
-      const q = (Number(next[i].qty) || 1) - 1;
-      if (q <= 0) next.splice(i, 1);
-      else next[i].qty = q;
-      setCart(next);
-      gaEvent("remove_from_cart", { item_id: String(next[i]?.id || ""), quantity: 1 });
+      const removed = next[i] ? { ...next[i] } : null;
+
+      const q = (Number(next[i]?.qty) || 1) - 1;
+      if (q <= 0) {
+        next.splice(i, 1);
+        setCart(next);
+
+        if (removed) {
+          showUndoBar("Позиция удалена из корзины", () => {
+            const restored = [...cart];
+            const idx = Math.min(Math.max(i, 0), restored.length);
+            restored.splice(idx, 0, removed);
+            setCart(restored);
+            toast("Возвращено в корзину", "good");
+            renderCart();
+          });
+        }
+      } else {
+        next[i].qty = q;
+        setCart(next);
+      }
+
+      gaEvent("remove_from_cart", { item_id: String(removed?.id || ""), quantity: 1 });
       haptic("select");
       renderCart();
     });
@@ -3309,33 +3483,8 @@ function buildOrderText() {
   // Опции ровно как в приложении (лейблы на русском)
   const overlayDelta = Number(settings.overlay_price_delta) || 0;
   const holoDelta = Number(settings.holo_base_price_delta) || 0;
+  const { filmLabelByKey, stickerLamLabelByKey, pinLamLabelByKey } = getOptionDefs(overlayDelta, holoDelta);
 
-  const FILM_OPTIONS = [
-    ["film_glossy", "Стандартная глянцевая плёнка", 0],
-    ["film_holo", "Голографическая плёнка", holoDelta],
-  ];
-
-  const STICKER_LAM_OPTIONS = [
-    ["none", "Без ламинации", 0],
-    ["sugar", "Сахар", overlayDelta],
-    ["stars", "Звёздочки", overlayDelta],
-    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
-    ["stars_big", "Большие звёзды", overlayDelta],
-    ["holo_overlay", "Голографическая ламинация", overlayDelta],
-  ];
-
-  const PIN_LAM_OPTIONS = [
-    ["pin_base", "Глянцевая ламинация (базовая)", 0],
-    ["sugar", "Сахар", overlayDelta],
-    ["stars", "Звёздочки", overlayDelta],
-    ["snowflakes_small", "Маленькие снежинки", overlayDelta],
-    ["stars_big", "Большие звёзды", overlayDelta],
-    ["holo_overlay", "Голографическая ламинация", overlayDelta],
-  ];
-
-  const filmLabelByKey = Object.fromEntries(FILM_OPTIONS.map((x) => [x[0], x[1]]));
-  const stickerLamLabelByKey = Object.fromEntries(STICKER_LAM_OPTIONS.map((x) => [x[0], x[1]]));
-  const pinLamLabelByKey = Object.fromEntries(PIN_LAM_OPTIONS.map((x) => [x[0], x[1]]));
 
   // Выделение "жирным" (симуляция): капс + двоеточие
   const H = (s) => String(s || "").toUpperCase(); // заголовок/лейбл
