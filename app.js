@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v189 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v191 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "190";
+const APP_BUILD = "191";
 
 // =====================
 // CSV ссылки (твои)
@@ -41,7 +41,7 @@ const CSV_REVIEWS_URL =
 // ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация",
 // просто увеличьте версию ниже. Тогда у всех клиенток статус "прочитано"
 // автоматически сбросится.
-const IMPORTANT_INFO_VERSION = "2026-01-31-1";
+const IMPORTANT_INFO_VERSION = "2026-02-01-2";
 
 // менеджерка (без @)
 const MANAGER_USERNAME = "LesPaw_manager";
@@ -1685,26 +1685,52 @@ function formatPhoneByCountry(raw, countryId) {
 // Preserve caret position while auto-formatting on input
 function applyPhoneMask(inputEl, countryId) {
   try {
-    const cid = countryId || inputEl?.dataset?.countryId || "ru";
-    const rule = getPhoneRule(cid);
-    const prev = String(inputEl.value || "");
+    const rule = getPhoneRule(countryId || inputEl?.dataset?.countryId || "ru");
+    const v = String(inputEl.value || "");
+    const sel = (typeof inputEl.selectionStart === "number") ? inputEl.selectionStart : v.length;
 
-    // Format value (will truncate to the country's required length)
-    const formatted = formatPhoneByCountry(prev, cid);
+    // Count how many digits were before caret (includes CC digits if user touched the prefix)
+    const digitsBefore = v.slice(0, sel).replace(/\D/g, "").length;
+
+    // Convert to formatted value
+    const formatted = formatPhoneByCountry(v, countryId || inputEl?.dataset?.countryId || "ru");
     inputEl.value = formatted;
 
     if (typeof inputEl.setSelectionRange !== "function") return;
 
-    // Force caret to the end (append-only UX). This prevents Telegram WebView caret jumps
-    // and avoids digits being inserted into the country code area.
-    const endPos = formatted.length;
+    // Lock caret after "+CC-" prefix and preserve *national* digit position
+    const ccLen = String(rule.ccDigits || "").length;
+    const nsnBefore = Math.max(0, digitsBefore - ccLen);
 
+    const prefixDashPos = formatted.indexOf("-");
+    const prefixEnd = (prefixDashPos >= 0) ? (prefixDashPos + 1) : formatted.length;
+
+    // Snap caret to at least end of prefix (prevents jumping into "+7")
+    let pos = prefixEnd;
+
+    if (nsnBefore > 0) {
+      let i = prefixEnd;
+      let seen = 0;
+      while (i < formatted.length) {
+        if (/\d/.test(formatted[i])) {
+          seen++;
+          if (seen >= nsnBefore) { i++; break; }
+        }
+        i++;
+      }
+      pos = i;
+    }
+
+    // Clamp
+    if (pos < prefixEnd) pos = prefixEnd;
+    if (pos > formatted.length) pos = formatted.length;
+
+    // Apply after current input cycle to reduce flicker in some WebViews
     requestAnimationFrame(() => {
-      try { inputEl.setSelectionRange(endPos, endPos); } catch {}
+      try { inputEl.setSelectionRange(pos, pos); } catch {}
     });
   } catch {}
 }
-
 
 function normalizePhoneDigitsForCountry(raw, countryId) {
   const rule = getPhoneRule(countryId);
@@ -2749,7 +2775,7 @@ function renderInfo() {
   view.innerHTML = `
     <div class="card">
       <div class="h2">Важная информация</div>
-      <div class="small infoLead">Пожалуйста, ознакомься перед оформлением заказа.</div>
+      <div class="small infoLead">Пожалуйста, ознакомься с этой информацией перед оформлением заказа.</div>
 
       <div class="infoStack">
         <div class="infoSection">
@@ -2764,37 +2790,67 @@ function renderInfo() {
           <div class="infoTitle">Оплата и оформление заказа</div>
           <ul class="infoList">
             <li>После оформления заказа ты отправляешь заявку менеджерке.</li>
-            <li>Менеджерка проверяет состав заказа, выбранные варианты покрытия и доставку.</li>
-            <li>После проверки ты получаешь сообщение с <b>итоговой суммой оплаты заказа, включая доставку</b>.</li>
+            <li>Менеджерка проверяет состав заказа, варианты покрытия и доставку.</li>
+            <li>После проверки ты получаешь сообщение с <b>итоговой суммой оплаты, включая доставку</b>.</li>
             <li><b>Оплата производится только после этого сообщения.</b></li>
           </ul>
-          <div class="infoNote">Такой порядок помогает избежать ошибок и сделать всё максимально прозрачно.</div>
         </div>
 
         <div class="infoSection">
           <div class="infoTitle">Сроки изготовления и доставки</div>
           <ul class="infoList">
-            <li>Сборка заказа: <b>4–5 дней</b>.</li>
-            <li>Доставка: <b>5–15 дней</b>.</li>
+            <li>Сборка заказа: <b>4–7 дней</b> (зависит от объёма заказа и от загруженности).</li>
+            <li>Доставка: <b>от 7 дней</b> (зависит от расстояния между городами; более точный срок можно уточнить у менеджерки).</li>
           </ul>
           <div class="infoNote">Сроки могут немного меняться в периоды повышенной нагрузки.</div>
         </div>
 
         <div class="infoSection">
-          <div class="infoTitle">Доставка</div>
+          <div class="infoTitle">Доставка и пункты выдачи</div>
+          <div class="infoNote">Мы отправляем заказы через выбранный при оформлении пункт выдачи.</div>
           <ul class="infoList">
-            <li>Яндекс Доставка.</li>
-            <li>Пункты выдачи: <b>Яндекс ПВЗ / 5post</b>.</li>
-            <li>Срок хранения в пункте выдачи — <b>6 дней</b>.</li>
+            <li>Пункты выдачи: <b>Яндекс / 5Post / Ozon / Wildberries</b></li>
+            <li>Срок хранения заказа в пункте выдачи — <b>6 дней</b> (может зависеть от выбранного сервиса).</li>
           </ul>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Ozon и Wildberries</div>
+          <ul class="infoList">
+            <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>страну доставки</b>.</li>
+            <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>номер телефона</b>, на который зарегистрирован аккаунт получателя.</li>
+            <li>Этот номер используется для оформления и получения заказа.</li>
+          </ul>
+          <div class="infoNote">Если номер телефона не соответствует аккаунту получателя в выбранном ПВЗ, получение заказа может быть невозможно.</div>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Номер телефона</div>
+          <ul class="infoList">
+            <li>Номер телефона <b>обязателен</b>.</li>
+            <li>Указывается в <b>международном формате</b> с кодом страны.</li>
+            <li>Для Ozon/Wildberries номер должен совпадать с номером аккаунта получателя.</li>
+          </ul>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Страны доставки (Ozon / Wildberries)</div>
+          <ul class="infoList">
+            <li>Россия</li>
+            <li>Казахстан</li>
+            <li>Беларусь</li>
+            <li>Армения</li>
+            <li>Кыргызстан</li>
+            <li>Узбекистан</li>
+          </ul>
+          <div class="infoNote">Выбор страны доставки обязателен.</div>
         </div>
 
         <div class="infoSection">
           <div class="infoTitle">Возврат и обмен</div>
           <ul class="infoList">
-            <li>Все изделия изготавливаются <b>под заказ</b>, поэтому стандартный возврат не предусмотрен.</li>
-            <li>Мы внимательно следим за качеством каждого заказа.</li>
-            <li>Если вдруг что-то окажется не так — мы обязательно обсудим детали с тобой и постараемся найти подходящее решение в твоей ситуации.</li>
+            <li>Все изделия изготавливаются <b>под заказ</b>, стандартный возврат не предусмотрен.</li>
+            <li>Если возникнут вопросы по качеству — мы обязательно обсудим ситуацию и постараемся найти решение.</li>
           </ul>
         </div>
 
@@ -2802,19 +2858,17 @@ function renderInfo() {
           <div class="infoTitle">Печать и внешний вид изделий</div>
           <ul class="infoList">
             <li>Печать выполняется <b>струйным способом</b>.</li>
-            <li>Цвета на экране и вживую могут немного отличаться — это нормально.</li>
-            <li>При длительном прямом воздействии света (солнечного или искусственного) струйная печать со временем может <b>терять насыщенность</b>.</li>
+            <li>Цвета на экране и вживую могут немного отличаться.</li>
+            <li>При длительном воздействии света печать со временем может терять насыщенность — это не считается браком.</li>
           </ul>
-          <div class="infoNote">Это естественный и неизбежный процесс, характерный для любой струйной печати, и он не считается браком. Чтобы сохранить цвета дольше, не рекомендуется постоянно держать изделия под прямым светом.</div>
         </div>
 
         <div class="infoSection">
           <div class="infoTitle">Индивидуальные заказы и вопросы</div>
-          <div class="infoNote">
-            Хочешь товары с фандомом, которого нет у нас в ассортименте? Мы можем сделать их <b>под заказ</b>.
-            А ещё по любым вопросам (варианты плёнки/ламинации, сроки, доставка) можно написать менеджерке:
-          </div>
-          <button class="infoLinkBtn" id="btnManager" type="button">@${MANAGER_USERNAME}</button>
+          <ul class="infoList">
+            <li>Если ты ищешь товары с фандомом, которого нет в ассортименте, мы можем сделать их <b>под заказ</b>.</li>
+            <li>По любым вопросам можно написать менеджерке.</li>
+          </ul>
         </div>
       </div>
 
@@ -3998,6 +4052,7 @@ function buildOrderText() {
     ozon: "Ozon",
     wildberries: "Wildberries",
   }[checkout.pickupType] || "Яндекс");
+
   const needsCountry = (checkout.pickupType === "ozon" || checkout.pickupType === "wildberries");
   const countryName = getCountryById(checkout.countryId || "ru").name;
 
@@ -4354,22 +4409,6 @@ function renderCheckout() {
     syncCheckout();
   }));
 
-  // Keep caret at the end while typing (Telegram WebView can jump the caret into +CC)
-  if (cPhone) {
-    const snapPhoneCaretToEnd = () => {
-      try {
-        const v = String(cPhone.value || "");
-        const end = v.length;
-        if (typeof cPhone.setSelectionRange === "function") cPhone.setSelectionRange(end, end);
-      } catch {}
-    };
-    cPhone.addEventListener("focus", () => {
-      // If user focuses an empty field and immediately types, we still format on first input.
-      snapPhoneCaretToEnd();
-    });
-    cPhone.addEventListener("click", () => snapPhoneCaretToEnd());
-  }
-
   // Live phone mask with dashes + sync
   if (cPhone) {
     cPhone.addEventListener("input", () => {
@@ -4548,7 +4587,5 @@ function renderCheckout() {
 
   syncNav();
   syncBottomSpace();
-}
-
-let _orderSubmitting = false;
+}let _orderSubmitting = false;
 
