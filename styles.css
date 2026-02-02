@@ -1520,3 +1520,32 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .flexWrap{flex-wrap:wrap;}
 .minw34{min-width:34px;}
 .taCenter{text-align:center;}
+
+
+
+/* v201 additions — paging + micro feedback */
+.groupMoreWrap{
+  margin-top: 10px;
+  display:flex;
+  justify-content:center;
+}
+.groupMore{
+  width: 100%;
+  max-width: 420px;
+}
+.iconBtn.is-added{
+  box-shadow: 0 0 0 1px rgba(190,120,255,.45), 0 0 14px rgba(190,120,255,.35);
+}
+.formErrorSummary{
+  margin: 10px 0 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 90, 160, .12);
+  border: 1px solid rgba(255, 90, 160, .28);
+}
+.formErrorSummary.isHidden{ display:none; }
+
+/* safer wrapping for long tokens in titles */
+.pcardTitle, .fandomTitle{
+  overflow-wrap:anywhere;
+}
