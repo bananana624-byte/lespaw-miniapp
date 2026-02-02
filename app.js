@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "202";
+const APP_BUILD = "203";
 
 // =====================
 // Paging (to prevent lags on big lists)
@@ -1550,58 +1550,69 @@ function toggleFav(id, opts){
 }
 
 function addToCartById(id, opts){
-  const sid = String(id||"").trim();
-  if (!sid) return;
+  try {
+    const sid = String(id||"").trim();
+    if (!sid) return;
 
-  const p = getProductById(sid);
-  const typeKey = normalizeTypeKey(p?.product_type);
+    // defensive: corrupted state must not break add-to-cart
+    const curCart = Array.isArray(cart) ? cart : [];
 
-  // options (with safe defaults)
-  let film = String(opts?.film||"");
-  let lamination = String(opts?.lamination||"");
-  let pin_lamination = String(opts?.pin_lamination||"");
-  let poster_pack = String(opts?.poster_pack||"");
-  let poster_paper = String(opts?.poster_paper||"");
+    const p = getProductById(sid);
+    const typeKey = normalizeTypeKey(p?.product_type);
 
-  if (typeKey === "sticker") {
-    if (!film) film = "film_glossy";
-    if (!lamination) lamination = "none";
+    // options (with safe defaults)
+    let film = String(opts?.film||"");
+    let lamination = String(opts?.lamination||"");
+    let pin_lamination = String(opts?.pin_lamination||"");
+    let poster_pack = String(opts?.poster_pack||"");
+    let poster_paper = String(opts?.poster_paper||"");
+
+    if (typeKey === "sticker") {
+      if (!film) film = "film_glossy";
+      if (!lamination) lamination = "none";
+    }
+    if (typeKey === "pin") {
+      if (!pin_lamination) pin_lamination = "pin_base";
+    }
+    if (typeKey === "poster") {
+      if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+      if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
+    }
+
+    const match = (ci) =>
+      String(ci?.id || "") === sid &&
+      String(ci?.film||"") === film &&
+      String(ci?.lamination||"") === lamination &&
+      String(ci?.pin_lamination||"") === pin_lamination &&
+      String(ci?.poster_pack||"") === poster_pack &&
+      String(ci?.poster_paper||"") === poster_paper;
+
+    const existing = curCart.find(match);
+    if (existing) {
+      existing.qty = (Number(existing.qty)||0) + 1;
+      setCart([ ...curCart ]);
+      gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
+    } else {
+      setCart([ ...curCart, { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper } ]);
+      gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
+    }
+
+    // подсветим бейдж корзины
+    try { pulseBadge(cartCount); } catch {}
+
+    // tactile feedback
+    haptic("success");
+  } catch (err) {
+    console.error(err);
+    // Do not fail silently: keep UX consistent
+    try {
+      const msg = (window.__lespaw_debug ? (err?.message || String(err)) : "Не удалось добавить в корзину");
+      toast(msg, "warn");
+    } catch {}
   }
-  if (typeKey === "pin") {
-    if (!pin_lamination) pin_lamination = "pin_base";
-  }
-  if (typeKey === "poster") {
-    if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
-    if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
-  }
-
-  const match = (ci) =>
-    String(ci.id) === sid &&
-    String(ci.film||"") === film &&
-    String(ci.lamination||"") === lamination &&
-    String(ci.pin_lamination||"") === pin_lamination &&
-    String(ci.poster_pack||"") === poster_pack &&
-    String(ci.poster_paper||"") === poster_paper;
-
-  const existing = (cart||[]).find(match);
-  if (existing) {
-    existing.qty = (Number(existing.qty)||0) + 1;
-    setCart([...(cart||[])]);
-    gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
-  } else {
-    setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper }]);
-    gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
-  }
-
-  // подсветим бейдж корзины
-  try { pulseBadge(cartCount); } catch {}
-
-  // tactile feedback
-  haptic("success");
-
 }
 
-// Backward-compatible alias (some handlers call addToCart)
+// Backward-compatible alias (some handlers call addToCart) (some handlers call addToCart)
 function addToCart(id, opts){
   return addToCartById(id, opts);
 }
@@ -2987,7 +2998,6 @@ function renderFandomPage(fandomId) {
     { key: "box", title: "Боксы / конверты" },
   ];
   const knownKeys = new Set(groupsOrder.map((g) => g.key));
-
   const grouped = groupsOrder
     .map((g) => ({ ...g, items: all.filter((p) => normalizeTypeKey(p.product_type) === g.key) }))
     .filter((g) => g.items.length > 0);
@@ -2998,6 +3008,7 @@ function renderFandomPage(fandomId) {
   const ctxKey = `fandom:${String(fandomId || "")}`;
   view.dataset.page = "fandom";
   view.dataset.fandomId = String(fandomId || "");
+
   view.innerHTML = `
     <div class="card">
       <div class="h2">${f?.fandom_name || "Фандом"}</div>
@@ -3986,7 +3997,6 @@ if (g.key === "box") {
   // название товара без фандома
   lines.push(`• ${p.name} (${qty}шт — ${money(unitPrice * qty)})`);
 }
-
       if (g.key === "sticker") {
         const filmKey = pickStickerFilm(ci);
         const lamKey = pickStickerLam(ci);
