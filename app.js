@@ -14,28 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "205";
-
-// =====================
-// Paging (to prevent lags on big lists)
-// =====================
-const PRODUCTS_PAGE_SIZE = 20;
-// ctxKey -> { groupKey: visibleCount }
-const _productGroupVisible = Object.create(null);
-function getGroupVisible(ctxKey, groupKey){
-  const ctx = _productGroupVisible[ctxKey] || (_productGroupVisible[ctxKey] = Object.create(null));
-  const v = Number(ctx[groupKey] || 0);
-  return v > 0 ? v : PRODUCTS_PAGE_SIZE;
-}
-function bumpGroupVisible(ctxKey, groupKey, delta = PRODUCTS_PAGE_SIZE){
-  const ctx = _productGroupVisible[ctxKey] || (_productGroupVisible[ctxKey] = Object.create(null));
-  const cur = getGroupVisible(ctxKey, groupKey);
-  ctx[groupKey] = Math.max(PRODUCTS_PAGE_SIZE, cur + Number(delta || 0));
-}
-function resetGroupVisible(ctxKey){
-  try { delete _productGroupVisible[ctxKey]; } catch {}
-}
-
+const APP_BUILD = "200";
 
 // =====================
 // CSV ссылки (твои)
@@ -659,7 +638,6 @@ function syncBottomSpace() {
 window.addEventListener("resize", syncBottomSpace);
 
 function postRenderEnhance() {
-  try { ensureViewDelegation(); } catch {}
   try {
     const root = document;
     // 1) Безопасные обработчики изображений (вместо inline onerror — совместимо с CSP без 'unsafe-inline')
@@ -964,7 +942,7 @@ let _csvBgToastShown = false;
 function onCsvBackgroundUpdate(cacheKey, freshData) {
   try {
     if (cacheKey === LS_CSV_CACHE_PRODUCTS) {
-      products = (freshData || []).map(normalizeProduct);
+      products = (freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_REVIEWS) {
       reviews = (freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_FANDOMS) {
@@ -1228,50 +1206,6 @@ function truthy(v) {
 }
 function money(n) {
   return `${Number(n) || 0} ₽`;
-}
-
-
-// =====================
-// Normalization helpers
-// =====================
-function toNumberPrice(v){
-  const s = String(v ?? "").trim();
-  if (!s) return 0;
-  const m = s.match(/(\d[\d\s]*([\.,]\d+)?)/);
-  if (!m) return 0;
-  const numStr = m[1].replace(/\s+/g, "").replace(",", ".");
-  const n = Number(numStr);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function normalizeProduct(row){
-  const p = { ...(row || {}) };
-  p.id = String(p.id || p.product_id || p.productId || p.productID || p.sku || "").trim();
-  p.fandom_id = String(p.fandom_id || p.fandomId || p.fandomID || p.fandom || "").trim();
-  p.name = String(p.name || p.product_name || p.title || "").trim();
-  p.product_type = String(p.product_type || p.type || p.productType || "").trim();
-  p.is_active = String(p.is_active ?? p.active ?? p.enabled ?? "").trim();
-  p.price_raw = String(p.price ?? p.product_price ?? p.cost ?? "").trim();
-  p.price = toNumberPrice(p.price_raw);
-
-  const imgKeys = ["image_url","image","img","photo_url","photo","image_1","image_2","image_3","images","image_urls"];
-  const imgs = [];
-  imgKeys.forEach((k) => {
-    const val = (p[k] ?? "");
-    if (!val) return;
-    const s = String(val).trim();
-    if (!s) return;
-    s.split(/\s*[\n,]+\s*/g).forEach((u) => { if (u && String(u).trim()) imgs.push(String(u).trim()); });
-  });
-  if (Array.isArray(p.images)) {
-    p.images.forEach((u) => { if (u && String(u).trim()) imgs.push(String(u).trim()); });
-  }
-  p._images_norm = imgs.filter((u, i, a) => a.indexOf(u) === i);
-
-  p.description_short = String(p.description_short || p.short || p.desc_short || "").trim();
-  p.description_full = String(p.description_full || p.description || p.desc || "").trim();
-  p.tags = String(p.tags || p.keywords || "").trim();
-  return p;
 }
 
 function moneyDisplay(v) {
@@ -1550,71 +1484,55 @@ function toggleFav(id, opts){
 }
 
 function addToCartById(id, opts){
-  try {
-    const sid = String(id||"").trim();
-    if (!sid) return;
+  const sid = String(id||"").trim();
+  if (!sid) return;
 
-    // defensive: corrupted state must not break add-to-cart
-    const curCart = Array.isArray(cart) ? cart : [];
+  const p = getProductById(sid);
+  const typeKey = normalizeTypeKey(p?.product_type);
 
-    const p = getProductById(sid);
-    const typeKey = normalizeTypeKey(p?.product_type);
+  // options (with safe defaults)
+  let film = String(opts?.film||"");
+  let lamination = String(opts?.lamination||"");
+  let pin_lamination = String(opts?.pin_lamination||"");
+  let poster_pack = String(opts?.poster_pack||"");
+  let poster_paper = String(opts?.poster_paper||"");
 
-    // options (with safe defaults)
-    let film = String(opts?.film||"");
-    let lamination = String(opts?.lamination||"");
-    let pin_lamination = String(opts?.pin_lamination||"");
-    let poster_pack = String(opts?.poster_pack||"");
-    let poster_paper = String(opts?.poster_paper||"");
-
-    if (typeKey === "sticker") {
-      if (!film) film = "film_glossy";
-      if (!lamination) lamination = "none";
-    }
-    if (typeKey === "pin") {
-      if (!pin_lamination) pin_lamination = "pin_base";
-    }
-    if (typeKey === "poster") {
-      if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
-      if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
-    }
-
-    const match = (ci) =>
-      String(ci?.id || "") === sid &&
-      String(ci?.film||"") === film &&
-      String(ci?.lamination||"") === lamination &&
-      String(ci?.pin_lamination||"") === pin_lamination &&
-      String(ci?.poster_pack||"") === poster_pack &&
-      String(ci?.poster_paper||"") === poster_paper;
-
-    const existing = curCart.find(match);
-    if (existing) {
-      existing.qty = (Number(existing.qty)||0) + 1;
-      setCart([ ...curCart ]);
-      gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
-    } else {
-      setCart([ ...curCart, { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper } ]);
-      gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
-    }
-
-    // подсветим бейдж корзины
-    try { pulseBadge(cartCount); } catch {}
-
-    // tactile feedback
-    haptic("success");
-  } catch (err) {
-    console.error(err);
-    // Do not fail silently: keep UX consistent
-    try {
-      const msg = (window.__lespaw_debug ? (err?.message || String(err)) : "Не удалось добавить в корзину");
-      toast(msg, "warn");
-    } catch {}
+  if (typeKey === "sticker") {
+    if (!film) film = "film_glossy";
+    if (!lamination) lamination = "none";
   }
-}
+  if (typeKey === "pin") {
+    if (!pin_lamination) pin_lamination = "pin_base";
+  }
+  if (typeKey === "poster") {
+    if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+    if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
+  }
 
-// Backward-compatible alias (some handlers call addToCart) (some handlers call addToCart)
-function addToCart(id, opts){
-  return addToCartById(id, opts);
+  const match = (ci) =>
+    String(ci.id) === sid &&
+    String(ci.film||"") === film &&
+    String(ci.lamination||"") === lamination &&
+    String(ci.pin_lamination||"") === pin_lamination &&
+    String(ci.poster_pack||"") === poster_pack &&
+    String(ci.poster_paper||"") === poster_paper;
+
+  const existing = (cart||[]).find(match);
+  if (existing) {
+    existing.qty = (Number(existing.qty)||0) + 1;
+    setCart([...(cart||[])]);
+    gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
+  } else {
+    setCart([...(cart||[]), { id: sid, qty: 1, film, lamination, pin_lamination, poster_pack, poster_paper }]);
+    gaAddToCart(p, { film, lamination, pin_lamination, poster_pack, poster_paper }, 1);
+  }
+
+  // подсветим бейдж корзины
+  try { pulseBadge(cartCount); } catch {}
+
+  // tactile feedback
+  haptic("success");
+
 }
 
 function pulseBadge(el) {
@@ -1670,8 +1588,6 @@ function imagesField(p) {
 }
 
 function firstImageUrl(p) {
-  try { if (p && Array.isArray(p._images_norm) && p._images_norm.length) return String(p._images_norm[0]||"").trim(); } catch {}
-
   const imgs = splitList(imagesField(p));
   return imgs[0] || "";
 }
@@ -2257,11 +2173,6 @@ function openExternal(url, opts = {}) {
     "analytics.google.com",
     "region1.google-analytics.com",
     "www.googletagmanager.com",
-    "raw.githubusercontent.com",
-    "github.com",
-    "www.github.com",
-    "gist.github.com",
-    "telegra.ph",
   ]);
 
   // Поддержка поддоменов googleusercontent.com
@@ -2318,54 +2229,32 @@ function bindTap(el, handler) {
   let touchMoved = false;
 
   const fire = (e, src) => {
-  const now = Date.now();
+    const now = Date.now();
 
-  const isNativeTarget = () => {
+    // Suppress delayed ghost clicks after a touch/pointer action.
+    if (src === "click" && now - window.__LP_LAST_TAP_TS < 700) {
+      try { e?.preventDefault?.(); } catch {}
+      try { e?.stopPropagation?.(); } catch {}
+      return;
+    }
+
+    // Deduplicate very close events (same element).
+    // (We use the same global stamp to also dedupe pointerup+touchend on hybrid devices.)
+    if (now - window.__LP_LAST_TAP_TS < 140 && window.__LP_LAST_TAP_SRC !== "click") {
+      try { e?.preventDefault?.(); } catch {}
+      try { e?.stopPropagation?.(); } catch {}
+      return;
+    }
+
+    // Record real taps (not delayed clicks).
+    if (src !== "click") {
+      window.__LP_LAST_TAP_TS = now;
+      window.__LP_LAST_TAP_SRC = src;
+    }
+
+    try { e?.preventDefault?.(); } catch {}
+    try { e?.stopPropagation?.(); } catch {}
     try {
-      const t = e?.target;
-      if (!t) return false;
-      const tag = (t.tagName || "").toUpperCase();
-      // Inputs/selects/textarea should keep native behavior
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-      // Checkbox/radio labels or their containers
-      if (t.closest?.(".checkRow")) return true;
-      const lbl = t.closest?.("label");
-      if (lbl && lbl.querySelector?.('input[type="checkbox"],input[type="radio"]')) return true;
-    } catch {}
-    return false;
-  };
-
-  // Suppress delayed ghost clicks after a touch/pointer action.
-  // IMPORTANT: do NOT suppress native-control clicks (checkbox/radio/etc), otherwise they won't toggle.
-  if (src === "click" && now - window.__LP_LAST_TAP_TS < 700 && !isNativeTarget()) {
-    try { e?.preventDefault?.(); } catch {}
-    try { e?.stopPropagation?.(); } catch {}
-    return;
-  }
-
-  // Deduplicate very close events (same element).
-  // (We use the same global stamp to also dedupe pointerup+touchend on hybrid devices.)
-  // IMPORTANT: allow native controls to receive their click even after touch/pointer.
-  if (now - window.__LP_LAST_TAP_TS < 140 && window.__LP_LAST_TAP_SRC !== "click" && !isNativeTarget()) {
-    try { e?.preventDefault?.(); } catch {}
-    try { e?.stopPropagation?.(); } catch {}
-    return;
-  }
-
-  // Record real taps (not delayed clicks).
-  if (src !== "click") {
-    window.__LP_LAST_TAP_TS = now;
-    window.__LP_LAST_TAP_SRC = src;
-  }
-
-  const allowNative = isNativeTarget();
-
-  if (!allowNative) {
-    try { e?.preventDefault?.(); } catch {}
-    try { e?.stopPropagation?.(); } catch {}
-  }
-
-try {
       const r = handler(e);
       if (r && typeof r.then === "function") {
         r.catch((err) => {
@@ -2394,115 +2283,6 @@ try {
   el.addEventListener("click", (e) => fire(e, "click"), { passive: false });
 }
 
-// =====================
-// View event delegation (faster renders, fewer listeners)
-// =====================
-let _viewDelegationReady = false;
-function ensureViewDelegation(){
-  if (_viewDelegationReady) return;
-  _viewDelegationReady = true;
-
-  bindTap(view, (e) => {
-    const t = e?.target;
-    if (!t) return;
-
-    const more = t.closest?.("[data-more-group]");
-    if (more) {
-      try { e?.stopPropagation?.(); } catch {}
-      const groupKey = String(more.dataset.moreGroup || "");
-      const ctxKey = String(more.dataset.ctx || "");
-      if (!groupKey || !ctxKey) return;
-
-      bumpGroupVisible(ctxKey, groupKey, PRODUCTS_PAGE_SIZE);
-
-      const page = String(view.dataset.page || "");
-      if (page === "fandom") {
-        const fandomId = String(view.dataset.fandomId || "");
-        if (fandomId) updateFandomGroupSection(fandomId, ctxKey, groupKey);
-      } else {
-        // search: simple rerender keeps grouping correct
-        const q = String(view.dataset.searchQ || "");
-        if (q) renderSearch(q, { keepPaging: true });
-      }
-      return;
-    }
-
-    const favBtn = t.closest?.("[data-fav]");
-    if (favBtn) {
-      try { e?.stopPropagation?.(); } catch {}
-      const id = String(favBtn.dataset.fav || "");
-      if (!id) return;
-      toggleFav(id);
-
-      view.querySelectorAll?.(`[data-fav="${id}"]`)?.forEach?.((x) => {
-        const active = isFavId(id);
-        x.classList.toggle("is-active", active);
-        const g = x.querySelector?.(".heartGlyph");
-        if (g) g.textContent = active ? "♥" : "♡";
-        try { x.setAttribute?.("aria-pressed", active ? "true" : "false"); } catch {}
-      });
-      return;
-    }
-
-    const addBtn = t.closest?.("[data-add]");
-    if (addBtn) {
-      try { e?.stopPropagation?.(); } catch {}
-      const id = String(addBtn.dataset.add || "");
-      if (!id) return;
-      addToCart(id);
-
-      try {
-        addBtn.classList.add("is-added");
-        const g = addBtn.querySelector?.(".plusGlyph");
-        if (g) g.textContent = "✓";
-        setTimeout(() => {
-          try {
-            addBtn.classList.remove("is-added");
-            if (g) g.textContent = "＋";
-          } catch {}
-        }, 900);
-      } catch {}
-      return;
-    }
-
-    const fid = t.closest?.("[data-fid]");
-    if (fid) {
-      const id = String(fid.dataset.fid || "");
-      if (id) openPage(() => renderFandomPage(id));
-      return;
-    }
-
-    const sq = t.closest?.("[data-sq]");
-    if (sq) {
-      try { e?.stopPropagation?.(); } catch {}
-      const q2 = String(sq.dataset.sq || "");
-      if (!q2) return;
-      try { globalSearch.value = q2; } catch {}
-      try { if (searchWrap) searchWrap.classList.add("hasText"); } catch {}
-      try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {}
-      return;
-    }
-
-    const card = t.closest?.(".pcard[data-id]");
-    if (card) {
-      if (t.closest?.("button")) return;
-      const pid = String(card.dataset.id || "");
-      if (!pid) return;
-      try {
-        const page = String(view.dataset.page || "");
-        if (page === "fandom") {
-          const fandomId = String(view.dataset.fandomId || "");
-          const f = getFandomById(fandomId);
-          const p = getProductById(pid);
-          gaSelectItem(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, p);
-        }
-      } catch {}
-      openPage(() => renderProduct(pid));
-      return;
-    }
-  });
-}
-
 //
 // =====================
 // Render epoch (protect against async race)
@@ -2514,8 +2294,6 @@ let renderEpoch = 0;
 // =====================
 
 function renderLoading() {
-  view.dataset.page = "search";
-  view.dataset.searchQ = String(q || "");
   view.innerHTML = `
     <div class="card">
       <div class="h2">Загрузка каталога…</div>
@@ -2647,7 +2425,7 @@ async function init() {
     if (myEpoch !== renderEpoch) return;
 
     fandoms = fFresh || [];
-    products = (pFresh || []).map(normalizeProduct);
+    products = pFresh || [];
 
     // Пересобираем settings из свежих
     settings = {
@@ -2865,94 +2643,6 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
 syncNav();
   syncBottomSpace();
 }
-// =====================
-// Важная информация (экран)
-// =====================
-function markImportantInfoViewed() {
-  // Помечаем как прочитанное в этой сессии и сохраняем версию (локально + в облако).
-  try { infoViewed = true; } catch {}
-  try { infoViewedThisSession = true; } catch {}
-  try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
-  try { cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {}); } catch {}
-}
-
-function renderInfo() {
-  // Открытие экрана считается "прочитано" (это и есть гейт в оформлении).
-  markImportantInfoViewed();
-
-  // Для стабильности и удобства back-навигации
-  try { view.dataset.page = "info"; } catch {}
-
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Важная информация</div>
-      <div class="small">Оплата, сроки, доставка и нюансы заказа.</div>
-
-      <div class="divider"></div>
-
-      <div class="infoBlock">
-        <div class="infoTitle">Оплата</div>
-        <ul class="infoList">
-          <li>Оплата и способ оплаты подтверждаются менеджеркой после согласования заказа.</li>
-          <li>Цены в приложении указаны в рублях. Для заказов из других стран итог и способ оплаты согласуются индивидуально.</li>
-        </ul>
-      </div>
-
-      <div class="infoBlock">
-        <div class="infoTitle">Сроки</div>
-        <ul class="infoList">
-          <li>Срок изготовления зависит от нагрузки и выбранных вариантов (плёнка/ламин.).</li>
-          <li>Если что-то срочно — напиши менеджерке, она подскажет ближайшие сроки.</li>
-        </ul>
-      </div>
-
-      <div class="infoBlock">
-        <div class="infoTitle">Доставка</div>
-        <ul class="infoList">
-          <li>Доставка рассчитывается менеджеркой индивидуально и не входит в итог в приложении.</li>
-          <li>Доступные варианты зависят от страны и выбранного пункта выдачи.</li>
-        </ul>
-      </div>
-
-      <div class="infoBlock">
-        <div class="infoTitle">Ozon / Wildberries</div>
-        <ul class="infoList">
-          <li>Для Ozon/WB обязательны: <b>страна доставки</b> и <b>аккаунтный номер телефона</b> в международном формате.</li>
-          <li>Страны: Россия, Казахстан, Беларусь, Армения, Кыргызстан, Узбекистан.</li>
-        </ul>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="small">
-        Если остались вопросы — смело пиши менеджерке, всё уточним ✨
-      </div>
-    </div>
-  `;
-
-  // Ничего не биндим через bindTap здесь: на этом экране нативных контролов нет,
-  // а back/домой/корзина/избранное живут в нижнем навбаре.
-}
-
-// =====================
-// Отзывы (минимальный экран-заглушка + ссылка в TG)
-// =====================
-function renderReviews() {
-  try { view.dataset.page = "reviews"; } catch {}
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Отзывы</div>
-      <div class="small">Отзывы от наших покупательниц — в Telegram.</div>
-      <div class="divider"></div>
-      <button class="btn btnPrimary" id="openReviewsTg" type="button">Открыть отзывы в Telegram</button>
-    </div>
-  `;
-
-  const b = document.getElementById("openReviewsTg");
-  bindTap(b, () => openExternal(REVIEWS_URL));
-}
-
-
 
 // =====================
 // Категории -> типы фандомов
@@ -3033,65 +2723,6 @@ function renderFandomList(type) {
 }
 
 // =====================
-// Product group rendering with paging
-// =====================
-function renderProductCardsGrid(items, ctxKey, groupKey){
-  const visible = getGroupVisible(ctxKey, groupKey);
-  const slice = (items || []).slice(0, visible);
-
-  const cards = slice.map((p) => `
-          <div class="pcard" data-id="${p.id}">
-            ${cardThumbHTML(p)}
-            <div class="pcardTitle">${h(p.name)}</div>
-            ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
-            <div class="pcardPrice">${moneyDisplay(p.price)}</div>
-            <div class="pcardActions">
-              <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное" aria-pressed="${isFavId(p.id) ? "true" : "false"}">
-                <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
-              </button>
-              <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
-                <span class="plusGlyph">＋</span>
-              </button>
-            </div>
-          </div>
-        `).join("");
-
-  const moreNeeded = (items || []).length > visible;
-  const moreBtn = moreNeeded
-    ? `<div class="groupMoreWrap"><button class="btn groupMore" type="button" data-more-group="${groupKey}" data-ctx="${escapeHTML(ctxKey)}">Показать ещё</button></div>`
-    : ``;
-
-  return `<div class="grid2 mt10">${cards}</div>${moreBtn}`;
-}
-
-function renderProductGroupSection(title, items, ctxKey, groupKey){
-  return `
-      <div class="fGroup" data-group="${groupKey}">
-        <div class="h3">${title}</div>
-        ${renderProductCardsGrid(items, ctxKey, groupKey)}
-      </div>
-    `;
-}
-
-function updateFandomGroupSection(fandomId, ctxKey, groupKey){
-  const all = products.filter((p) => p.fandom_id === fandomId);
-  const known = new Set(["sticker","pin","poster","box"]);
-  const titleMap = { sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы / конверты", other: "Другое" };
-
-  let items = [];
-  if (groupKey === "other") items = all.filter((p) => !known.has(normalizeTypeKey(p.product_type)));
-  else items = all.filter((p) => normalizeTypeKey(p.product_type) === groupKey);
-
-  const sect = view.querySelector?.(`.fGroup[data-group="${CSS.escape(groupKey)}"]`);
-  if (!sect) { try { renderFandomPage(fandomId); } catch {} return; }
-  sect.innerHTML = `
-        <div class="h3">${titleMap[groupKey] || "Товары"}</div>
-        ${renderProductCardsGrid(items, ctxKey, groupKey)}
-  `;
-  try { syncBottomSpace(); } catch {}
-}
-
-// =====================
 // Страница фандома -> товары сеткой 2x (с фото)
 // =====================
 function renderFandomPage(fandomId) {
@@ -3116,9 +2747,35 @@ function renderFandomPage(fandomId) {
   const other = all.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
-  const ctxKey = `fandom:${String(fandomId || "")}`;
-  view.dataset.page = "fandom";
-  view.dataset.fandomId = String(fandomId || "");
+  const sectionHtml = (title, items) => {
+    const cards = items
+      .map(
+        (p) => `
+          <div class="pcard" data-id="${p.id}">
+            ${cardThumbHTML(p)}
+            <div class="pcardTitle">${h(p.name)}</div>
+            ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+            <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+            <div class="pcardActions">
+              <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+                <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+              </button>
+              <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
+                <span class="plusGlyph">＋</span>
+              </button>
+            </div>
+          </div>
+        `
+      )
+      .join("");
+
+    return `
+      <div class="fGroup">
+        <div class="h3">${title}</div>
+        <div class="grid2 mt10">${cards}</div>
+      </div>
+    `;
+  };
 
   view.innerHTML = `
     <div class="card">
@@ -3127,15 +2784,479 @@ function renderFandomPage(fandomId) {
       ${
         grouped.length
           ? grouped
-              .map((g, i) => renderProductGroupSection(g.title, g.items, ctxKey, g.key) + (i < grouped.length - 1 ? "<hr>" : ""))
+              .map((g, i) => sectionHtml(g.title, g.items) + (i < grouped.length - 1 ? "<hr>" : ""))
               .join("")
           : `<div class="small">Пока нет товаров.</div>`
       }
     </div>
   `;
 
-    // (delegation handles pcard open / fav / add / show more)
+  // открыть карточку по тапу на карточку
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e?.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      try {
+        const pid = String(el.dataset.id || "");
+        const p = getProductById(pid);
+        gaSelectItem(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, p);
+      } catch {}
+openPage(() => renderProduct(el.dataset.id));
+    });
+  });
 
+  // мини-действия
+  view.querySelectorAll("[data-fav]").forEach((b) => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
+      const id = String(b.dataset.fav || "");
+      toggleFav(id);
+      // обновим сердечки не перерисовывая весь экран
+      view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
+        const active = isFavId(id);
+        x.classList.toggle("is-active", active);
+        try { x.setAttribute("aria-pressed", active ? "true" : "false"); } catch {}
+        const g = x.querySelector(".heartGlyph");
+        if (g) g.textContent = active ? "♥" : "♡";
+      });
+    });
+  });
+
+  view.querySelectorAll("[data-add]").forEach((b) => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
+      const id = String(b.dataset.add || "");
+      addToCartById(id);
+      toast("Добавлено в корзину", "good");
+    });
+  });
+
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Инфо / отзывы / примеры
+// =====================
+function renderInfo() {
+  // фиксируем факт ознакомления: пользователька открыла вкладку
+  infoViewed = true;
+  infoViewedThisSession = true;
+  try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
+  cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Важная информация</div>
+      <div class="small infoLead">Пожалуйста, ознакомься с этой информацией перед оформлением заказа.</div>
+
+      <div class="infoStack">
+        <div class="infoSection">
+          <div class="infoTitle">Наклейки</div>
+          <ul class="infoList">
+            <li>Наклейки <b>не вырезаны по контуру</b>.</li>
+            <li>Требуется самостоятельная вырезка.</li>
+          </ul>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Оплата и оформление заказа</div>
+          <ul class="infoList">
+            <li>После оформления заказа ты отправляешь заявку менеджерке.</li>
+            <li>Менеджерка проверяет состав заказа, варианты покрытия и доставку.</li>
+            <li>После проверки ты получаешь сообщение с <b>итоговой суммой оплаты, включая доставку</b>.</li>
+            <li><b>Оплата производится только после этого сообщения.</b></li>
+          </ul>
+        
+        <div class="infoSection">
+          <div class="infoTitle">Оплата и валюта</div>
+          <ul class="infoList">
+            <li>Цены в приложении указаны <b>в российских рублях</b>.</li>
+            <li>Для заказов из других стран итоговая сумма к оплате рассчитывается менеджеркой индивидуально.</li>
+            <li><b>Для заказов из других стран способ оплаты согласуется с менеджеркой индивидуально.</b></li>
+          </ul>
+        </div>
+</div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Сроки изготовления и доставки</div>
+          <ul class="infoList">
+            <li>Сборка заказа: <b>4–7 дней</b> (зависит от объёма заказа и от загруженности).</li>
+            <li>Доставка: <b>от 7 дней</b> (зависит от расстояния между городами; более точный срок можно уточнить у менеджерки).</li>
+          </ul>
+          <div class="infoNote">Сроки могут немного меняться в периоды повышенной нагрузки.</div>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Доставка и пункты выдачи</div>
+          <div class="infoNote">Мы отправляем заказы через выбранный при оформлении пункт выдачи.</div>
+          <ul class="infoList">
+            <li>Пункты выдачи: <b>Яндекс / 5Post / Ozon / Wildberries</b></li>
+            <li>Срок хранения заказа в пункте выдачи — <b>6 дней</b> (может зависеть от выбранного сервиса).</li>
+          </ul>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Ozon и Wildberries</div>
+          <ul class="infoList">
+            <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>страну доставки</b>.</li>
+            <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>номер телефона</b>, на который зарегистрирован аккаунт получателя.</li>
+            <li>Этот номер используется для оформления и получения заказа.</li>
+          </ul>
+          <div class="infoNote">Если номер телефона не соответствует аккаунту получателя в выбранном ПВЗ, получение заказа может быть невозможно.</div>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Номер телефона</div>
+          <ul class="infoList">
+            <li>Номер телефона <b>обязателен</b>.</li>
+            <li>Указывается в <b>международном формате</b> с кодом страны.</li>
+            <li>Для Ozon/Wildberries номер должен совпадать с номером аккаунта получателя.</li>
+          </ul>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Страны доставки (Ozon / Wildberries)</div>
+          <ul class="infoList">
+            <li>Россия</li>
+            <li>Казахстан</li>
+            <li>Беларусь</li>
+            <li>Армения</li>
+            <li>Кыргызстан</li>
+            <li>Узбекистан</li>
+          </ul>
+          <div class="infoNote">Выбор страны доставки обязателен.</div>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Возврат и обмен</div>
+          <ul class="infoList">
+            <li>Все изделия изготавливаются <b>под заказ</b>, стандартный возврат не предусмотрен.</li>
+            <li>Если возникнут вопросы по качеству — мы обязательно обсудим ситуацию и постараемся найти решение.</li>
+          </ul>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Печать и внешний вид изделий</div>
+          <ul class="infoList">
+            <li>Печать выполняется <b>струйным способом</b>.</li>
+            <li>Цвета на экране и вживую могут немного отличаться.</li>
+            <li>При длительном воздействии света печать со временем может терять насыщенность — это не считается браком.</li>
+          </ul>
+        </div>
+
+        <div class="infoSection">
+          <div class="infoTitle">Индивидуальные заказы и вопросы</div>
+          <ul class="infoList">
+            <li>Если ты ищешь товары с фандомом, которого нет в ассортименте, мы можем сделать их <b>под заказ</b>.</li>
+            <li>По любым вопросам можно написать менеджерке.</li>
+          </ul>
+          <button class="btn btnInline" id="btnManager">Написать менеджерке</button>
+
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="btnMain">Наш основной канал</button>
+        <button class="btn" id="btnSuggest">Предложить фандом</button>
+      </div>
+    </div>
+  `;
+
+  bindTap(document.getElementById("btnMain"), () => tg?.openTelegramLink(MAIN_CHANNEL_URL));
+  bindTap(document.getElementById("btnSuggest"), () => tg?.openTelegramLink(SUGGEST_URL));
+  bindTap(document.getElementById("btnManager"), () => tg?.openTelegramLink(`https://t.me/${MANAGER_USERNAME}`));
+
+  syncNav();
+  syncBottomSpace();
+}
+
+function renderReviews() {
+  // Фильтры на уровне экрана (не сохраняем в storage — просто UX)
+  let mode = (lastReviewsMode || "all"); // all | photos | 5
+
+  const render = () => {
+    const all = Array.isArray(reviews) ? reviews : [];
+    const filtered = all
+      .filter((r) => {
+        if (mode === "photos") return !!r.photo_url;
+        if (mode === "5") return (Number(r.rating) || 0) >= 5;
+        return true;
+      })
+      .slice(0, reviewsVisibleCount);
+
+    const totalCount = all.length;
+    const avg = totalCount
+      ? Math.round((all.reduce((s, r) => s + (Number(r.rating) || 0), 0) / totalCount) * 10) / 10
+      : 0;
+
+    const chips = `
+      <div class="chips">
+        <button class="chip ${mode === "all" ? "is-active" : ""}" data-mode="all">Все</button>
+        <button class="chip ${mode === "photos" ? "is-active" : ""}" data-mode="photos">С фото</button>
+        <button class="chip ${mode === "5" ? "is-active" : ""}" data-mode="5">5★</button>
+      </div>
+    `;
+
+    const listHtml = filtered.length
+      ? `<div class="reviewList">
+          ${filtered
+            .map((r, idx) => {
+              const dateText = formatReviewDate(r.date);
+              const stars = r.rating
+                ? `<div class="stars" aria-label="Оценка ${r.rating} из 5">
+                    ${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}
+                  </div>`
+                : ``;
+
+              const photoHtml = r.photo_url
+                ? `<div class="reviewPhotoWrap">
+                     <img class="reviewPhoto" src="${safeImgUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async" data-hide-onerror="1">
+                   </div>`
+                : ``;
+
+              const sourceBtn = r.source_url
+                ? `<button class="btn btnMini" data-source="${encodeURIComponent(r.source_url)}">К оригиналу</button>`
+                : ``;
+
+              const author = safeText(r.author) || "Покупательница";
+              const initial = (author.slice(0, 1).toUpperCase() || "★");
+
+              return `
+                <div class="reviewCard">
+                  <div class="reviewTop">
+                    <div class="reviewAvatar" aria-hidden="true">${escapeHTML(initial)}</div>
+                    <div class="reviewHead">
+                      <div class="reviewAuthor">${escapeHTML(author)}</div>
+                      <div class="reviewMeta">
+                        ${dateText ? `<span class="reviewDate">${dateText}</span>` : ``}
+                        ${stars}
+                      </div>
+                    </div>
+                  </div>
+                  ${photoHtml}
+
+                  ${
+                    r.text
+                      ? (() => {
+                          const txt = safeText(r.text);
+                          const txtHtml = escapeHTML(txt).replace(/\n/g, "<br>");
+                          const showMore = txt.length > 180; // эвристика: если отзыв длинный — показываем подсказку
+                          return `
+                            <div class="reviewTextWrap">
+                              <div class="reviewText" data-expand="${idx}">${txtHtml}</div>
+                              ${showMore ? `<button class="reviewMore" type="button" data-more="${idx}">Показать полностью</button>` : ``}
+                            </div>
+                          `;
+                        })()
+                      : ``
+                  }
+
+                  ${sourceBtn ? `<div class="reviewActions">${sourceBtn}</div>` : ``}
+                </div>
+              `;
+            })
+            .join("")}
+        </div>`
+      : `<div class="small mt6">Пока нет отзывов для отображения в этом режиме.</div>`;
+
+    const moreBtn =
+      (mode === "all" ? reviewsVisibleCount < all.length : reviewsVisibleCount < all.filter((r) => (mode === "photos" ? !!r.photo_url : (Number(r.rating) || 0) >= 5)).length)
+        ? `<button class="btn" id="revMore">Показать ещё</button>`
+        : `
+          <div class="emptyState">
+            <div class="emptyTitle">${(Array.isArray(reviews) && reviews.length) ? "Ничего не найдено по фильтру" : "Отзывов пока нет"}</div>
+            <div class="emptyText small">${(Array.isArray(reviews) && reviews.length) ? "Попробуй другой фильтр или сбрось его." : "Если ты уже покупала — очень поможешь, если оставишь отзыв 💜"}</div>
+            ${mode !== "all" ? `<div class="sp12"></div><button class="btn is-active" id="revReset" type="button">Сбросить фильтр</button>` : ``}
+          </div>
+        `;
+
+    const hasCsv = !!String(CSV_REVIEWS_URL || "").trim();
+
+    view.innerHTML = `
+      <div class="card">
+        <div class="h2">Отзывы</div>
+        <div class="revHero">
+          <div class="revStat">
+            <div class="revStatBig">${avg || 0}</div>
+            <div class="revStatSmall">средняя оценка</div>
+          </div>
+          <div class="revStat">
+            <div class="revStatBig">${totalCount}</div>
+            <div class="revStatSmall">отзывов</div>
+          </div>
+        </div>
+
+        ${chips}
+        ${
+          hasCsv
+            ? ``
+            : `<div class="small mt10">Подключи CSV-лист reviews — и отзывы будут отображаться прямо здесь.</div>`
+        }
+
+        ${listHtml}
+
+        ${moreBtn ? `<div class="row mt12">${moreBtn}</div>` : ``}
+
+        <hr>
+        <div class="row">
+          <button class="btn" id="openReviews">Открыть все отзывы в Telegram</button>
+          <button class="btn" id="leaveReview">Оставить отзыв</button>
+        </div>
+      </div>
+    `;
+
+    // chips
+    view.querySelectorAll("[data-mode]").forEach((b) => {
+      bindTap(b, () => {
+        mode = b.dataset.mode || "all";
+        lastReviewsMode = mode;
+        reviewsVisibleCount = 8;
+        render();
+      });
+    });
+
+    // open all / leave
+    document.getElementById("openReviews")?.addEventListener("click", () => tg?.openTelegramLink(REVIEWS_URL));
+    document.getElementById("leaveReview")?.addEventListener("click", () => tg?.openTelegramLink(REVIEWS_URL));
+
+    document.getElementById("revMore")?.addEventListener("click", () => {
+      reviewsVisibleCount += 8;
+      render();
+    });
+
+    document.getElementById("revReset")?.addEventListener("click", () => {
+      mode = "all";
+      reviewsVisibleCount = 8;
+      render();
+    });
+
+    // open source
+    view.querySelectorAll("[data-source]").forEach((el) => {
+      bindTap(el, () => {
+        const url = decodeURIComponent(el.dataset.source || "");
+        openExternal(url);
+      });
+    });
+
+    function toggleReview(idx) {
+      const i = String(idx);
+      const textEl = view.querySelector(`.reviewText[data-expand="${i}"]`);
+      if (!textEl) return;
+      const isOpen = textEl.classList.toggle("is-open");
+      const btn = view.querySelector(`.reviewMore[data-more="${i}"]`);
+      if (btn) btn.textContent = isOpen ? "Свернуть" : "Показать полностью";
+    }
+
+    // expand text on tap (folded by CSS)
+    view.querySelectorAll("[data-expand]").forEach((el) => {
+      bindTap(el, () => toggleReview(el.dataset.expand));
+    });
+
+    // explicit "show full" button
+    view.querySelectorAll("[data-more]").forEach((el) => {
+      bindTap(el, () => toggleReview(el.dataset.more));
+    });
+  };
+
+  // Если отзывы ещё не успели подгрузиться, всё равно покажем UI и дадим кнопки.
+  render();
+  syncNav();
+  syncBottomSpace();
+}
+
+// =====================
+// Примеры ламинации / пленки (внутри приложения)
+// =====================
+function openExamples() {
+  openPage(renderLaminationExamples);
+}
+
+function renderLaminationExamples() {
+  const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
+  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
+
+  const renderGrid = (items) => `
+    <div class="grid2 exGrid">
+      ${items
+        .map((ex) => {
+          const img = ex.images?.[0] || "";
+          const imgHTML = img
+            ? `<img class="exImg" src="${safeImgUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async" data-hide-onerror="1">`
+            : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
+
+          return `
+            <div class="exCard" data-exid="${ex.id}">
+              ${imgHTML}
+              <div class="exTitle">${h(ex.title)}</div>
+              ${ex.subtitle ? `<div class="exMeta">${h(ex.subtitle)}</div>` : ``}
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Примеры ламинации и плёнки</div>
+
+      <hr>
+      <div class="h3">Плёнка</div>
+      <div class="small mt6">Основа наклейки: задаёт блеск, текстуру и «характер» сразу.</div>
+      ${renderGrid(films)}
+
+      <hr>
+      <div class="h3">Ламинация</div>
+      <div class="small mt6">Прозрачное покрытие сверху — добавляет эффект и защищает поверхность.</div>
+      ${renderGrid(laminations)}
+    </div>
+  `;
+
+  view.querySelectorAll("[data-exid]").forEach((el) => {
+    bindTap(el, () => openPage(() => renderLaminationExampleDetail(el.dataset.exid)));
+  });
+
+  syncNav();
+  syncBottomSpace();
+}
+
+
+function renderLaminationExampleDetail(exId) {
+  const ex = LAMINATION_EXAMPLES.find((x) => x.id === exId);
+  if (!ex) {
+    view.innerHTML = `<div class="card"><div class="h2">Пример не найден</div></div>`;
+    syncNav();
+    syncBottomSpace();
+    return;
+  }
+
+  const imgs = Array.isArray(ex.images) ? ex.images.filter(Boolean) : [];
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">${h(ex.title)}</div>
+      ${ex.subtitle ? `<div class="small">${h(ex.subtitle)}</div>` : ``}
+      ${ex.description ? `<div class="small mt8">${h(ex.description)}</div>` : ``}
+
+      <hr>
+
+      ${
+        imgs.length
+          ? `<div class="exBig">
+              ${imgs
+                .map(
+                  (u) => `
+                <div class="exBigBtn cursorDefault">
+                  <img class="exBigImg" src="${safeImgUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" data-hide-onerror="1">
+                </div>
+              `
+                )
+                .join("")}
+            </div>`
+          : `<div class="small">Фото для этого примера пока не добавлено.</div>`
+      }
+    </div>
+  `;
 
   syncNav();
   syncBottomSpace();
@@ -3145,7 +3266,7 @@ function renderFandomPage(fandomId) {
 // =====================
 // Поиск (только сверху)
 // =====================
-function renderSearch(q, opts) {
+function renderSearch(q) {
   const queryRaw = (q || "").trim();
   const query = queryRaw.toLowerCase().trim();
 
@@ -3155,19 +3276,6 @@ function renderSearch(q, opts) {
   const isTypeQuery = qKey === "sticker" || qKey === "pin" || qKey === "poster" || qKey === "box";
 
   const shortQuery = !isTypeQuery && query.length < 3;
-
-  const ctxKey = `search:${query}`;
-  const keepPaging = !!(opts && opts.keepPaging);
-  // Save current search state for paging /"show more"
-  try { view.dataset.page = "search"; view.dataset.searchQ = queryRaw; } catch {}
-  if (!keepPaging) { try { resetGroupVisible(ctxKey); } catch {} }
-
-  // Reset paging when query changes (but keep when pressing "show more")
-  try {
-    const prev = String(view.dataset.searchCtx || "");
-    if (prev && prev !== ctxKey) resetGroupVisible(prev);
-    view.dataset.searchCtx = ctxKey;
-  } catch {}
 
   const fHits =
     shortQuery || isTypeQuery
@@ -3188,7 +3296,7 @@ function renderSearch(q, opts) {
           const hay = `${p.name || ""} ${p.description_short || ""} ${p.tags || ""} ${typeName} ${typeRu}`.toLowerCase();
           return hay.includes(query);
         })
-        .slice(0, isTypeQuery ? 2000 : 200);
+        .slice(0, isTypeQuery ? 300 : 120);
 
   // Analytics: list view (search)
   try { if (!shortQuery) gaViewItemList(`search:${query}`, rawPHits); } catch {}
@@ -3284,14 +3392,74 @@ function renderSearch(q, opts) {
       <div class="small"><b>Товары</b></div>
       ${
         grouped.length
-          ? grouped.map((g) => renderProductGroupSection(g.title, g.items, ctxKey, g.key)).join("")
+          ? grouped.map((g) => sectionHtml(g.title, g.items)).join("")
           : `<div class="small">Ничего не найдено</div>`
       }
     </div>
   `;
 
-    // (delegation handles search taps / pcard / fav / add / chips)
+  view.querySelectorAll("[data-fid]").forEach((el) => (bindTap(el, () => openPage(() => renderFandomPage(el.dataset.fid)))));
 
+  // открыть карточку товара по тапу на карточку
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      openPage(() => renderProduct(el.dataset.id));
+    });
+  });
+
+  // сердечки
+  view.querySelectorAll("[data-fav]").forEach((b) => {
+    bindTap(b, (e) => {
+      e.stopPropagation();
+      const id = String(b.dataset.fav || "");
+      toggleFav(id);
+      view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
+        x.classList.toggle("is-active", isFavId(id));
+        const g = x.querySelector(".heartGlyph");
+        if (g) g.textContent = isFavId(id) ? "♥" : "♡";
+      });
+    });
+  });
+
+  // быстрые чипсы поиска
+  view.querySelectorAll("[data-sq]").forEach((b) => {
+    bindTap(b, (e) => {
+      e.stopPropagation();
+      const q2 = String(b.dataset.sq || "");
+      if (!q2) return;
+      try { globalSearch.value = q2; } catch {}
+      try {
+        if (searchWrap) searchWrap.classList.add("hasText");
+      } catch {}
+      try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {
+        openPage(() => renderSearch(q2));
+      }
+    });
+  });
+
+  // в корзину
+  view.querySelectorAll("[data-add]").forEach((b) => {
+    bindTap(b, (e) => {
+      e.stopPropagation();
+      const id = String(b.dataset.add || "");
+      addToCartById(id);
+      toast("Добавлено в корзину", "good");
+    });
+  });
+
+  
+  // открыть похожие товары
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      const id = String(el.dataset.id || "");
+      if (!id) return;
+      openPage(() => renderProduct(id));
+    });
+  });
 
 syncNav();
   syncBottomSpace();
@@ -4545,8 +4713,6 @@ function renderCheckout() {
 
     if (!ok) {
       toast("Проверь обязательные поля и галочки 💜", "warn");
-      try { const sum = view.querySelector("#formErrorSummary"); if (sum) { sum.textContent = "Есть ошибки в форме — проверь выделенные поля и обязательные галочки."; sum.classList.remove("isHidden"); } } catch {}
-      try { gaEvent("checkout_validation_error", { step: "checkout" }); } catch {}
       // прокрутим к первому проблемному месту
       const firstErr = view.querySelector(".field-error, .checkRow.is-error");
       firstErr?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -4559,8 +4725,6 @@ function renderCheckout() {
       return;
     }
 
-    try { const sum = view.querySelector("#formErrorSummary"); if (sum) { sum.textContent = ""; sum.classList.add("isHidden"); } } catch {}
-
     const text = buildOrderText();
     try {
       gaEvent("generate_lead", {
@@ -4568,13 +4732,7 @@ function renderCheckout() {
         currency: "RUB",
         item_count: Number((cart || []).reduce((s, ci) => s + (Number(ci.qty) || 1), 0) || 0),
       });
-      gaEvent("submit_order", {
-        value: Number(calcCartTotal() || 0),
-        currency: "RUB",
-        item_count: Number((cart || []).reduce((s, ci) => s + (Number(ci.qty) || 1), 0) || 0),
-        pickup_type: String((view.querySelector("#shipType")?.value || "")).trim(),
-        country: String((view.querySelector("#shipCountry")?.value || "")).trim(),
-      });
+      gaEvent("submit_order", { value: Number(calcCartTotal() || 0), currency: "RUB" });
     } catch {}
     try {
       _orderSubmitting = true;
