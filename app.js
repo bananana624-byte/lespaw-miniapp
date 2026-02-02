@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "203";
+const APP_BUILD = "204";
 
 // =====================
 // Paging (to prevent lags on big lists)
@@ -2341,8 +2341,28 @@ function bindTap(el, handler) {
       window.__LP_LAST_TAP_SRC = src;
     }
 
-    try { e?.preventDefault?.(); } catch {}
-    try { e?.stopPropagation?.(); } catch {}
+    // Allow native controls (checkboxes/radios/inputs) to behave normally.
+    // NOTE: bindTap() обычно делает preventDefault всегда, но это ломает переключение чекбоксов,
+    // особенно когда делегирование висит на #view. Поэтому для control-элементов мы НЕ блокируем default.
+    let allowNative = false;
+    try {
+      const t = e?.target;
+      if (t) {
+        const tag = (t.tagName || "").toUpperCase();
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") allowNative = true;
+        if (!allowNative && t.closest?.(".checkRow")) allowNative = true;
+        if (!allowNative) {
+          const lbl = t.closest?.("label");
+          if (lbl && lbl.querySelector?.('input[type="checkbox"],input[type="radio"]')) allowNative = true;
+        }
+      }
+    } catch {}
+
+    if (!allowNative) {
+      try { e?.preventDefault?.(); } catch {}
+      try { e?.stopPropagation?.(); } catch {}
+    }
+
     try {
       const r = handler(e);
       if (r && typeof r.then === "function") {
@@ -2998,6 +3018,7 @@ function renderFandomPage(fandomId) {
     { key: "box", title: "Боксы / конверты" },
   ];
   const knownKeys = new Set(groupsOrder.map((g) => g.key));
+
   const grouped = groupsOrder
     .map((g) => ({ ...g, items: all.filter((p) => normalizeTypeKey(p.product_type) === g.key) }))
     .filter((g) => g.items.length > 0);
@@ -3997,6 +4018,7 @@ if (g.key === "box") {
   // название товара без фандома
   lines.push(`• ${p.name} (${qty}шт — ${money(unitPrice * qty)})`);
 }
+
       if (g.key === "sticker") {
         const filmKey = pickStickerFilm(ci);
         const lamKey = pickStickerLam(ci);
