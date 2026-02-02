@@ -1549,3 +1549,11 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .pcardTitle, .fandomTitle{
   overflow-wrap:anywhere;
 }
+
+
+/* ===== Info / Reviews simple blocks (v205) ===== */
+.divider{height:1px;opacity:.18;background:currentColor;margin:14px 0;border-radius:999px;}
+.infoBlock{margin:12px 0;}
+.infoTitle{font-weight:800;margin:0 0 8px 0;}
+.infoList{margin:0; padding-left:18px;}
+.infoList li{margin:6px 0;}
