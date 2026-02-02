@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "200";
+const APP_BUILD = "202";
 
 // =====================
 // CSV ссылки (твои)
@@ -675,6 +675,30 @@ function postRenderEnhance() {
 // =====================
 const navStack = [];
 let currentRender = null;
+// =====================
+// Search paging (for heavy type searches)
+// =====================
+const SEARCH_PAGE_SIZE = 20;
+const searchPaging = { q: "", shownByGroup: Object.create(null) };
+
+function resetSearchPaging(q) {
+  searchPaging.q = String(q || "").trim();
+  searchPaging.shownByGroup = Object.create(null);
+}
+
+function getShownForGroup(key) {
+  const k = String(key || "");
+  const v = searchPaging.shownByGroup[k];
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? n : SEARCH_PAGE_SIZE;
+}
+
+function bumpShownForGroup(key) {
+  const k = String(key || "");
+  const cur = getShownForGroup(k);
+  searchPaging.shownByGroup[k] = cur + SEARCH_PAGE_SIZE;
+}
+
 
 function openPage(renderFn) {
   if (typeof renderFn !== "function") {
@@ -3270,6 +3294,9 @@ function renderSearch(q) {
   const queryRaw = (q || "").trim();
   const query = queryRaw.toLowerCase().trim();
 
+  // Reset paging when query changes (important for type chips: наклейки/значки/постеры/боксы)
+  if (searchPaging.q !== queryRaw) resetSearchPaging(queryRaw);
+
   // Treat "Значки/Боксы/Наклейки/Постеры" (любой язык/форма) as type-filter searches.
   // Important: we only accept known type keys, otherwise it would hijack normal searches.
   const qKey = normalizeTypeKey(query);
@@ -3317,8 +3344,11 @@ function renderSearch(q) {
   const other = rawPHits.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
-  const sectionHtml = (title, items) => {
-    const cards = items
+    const sectionHtml = (groupKey, title, items) => {
+    const shown = getShownForGroup(groupKey);
+    const visible = items.slice(0, shown);
+
+    const cards = visible
       .map(
         (p) => `
           <div class="pcard" data-id="${p.id}">
@@ -3339,10 +3369,16 @@ function renderSearch(q) {
       )
       .join("");
 
+    const hasMore = items.length > shown;
+    const moreBtn = hasMore
+      ? `<div class="moreWrap"><button class="btn btnMore" data-showmore="${escapeHTML(String(groupKey))}" type="button">Показать ещё</button></div>`
+      : ``;
+
     return `
-      <div class="fGroup mt12">
-        <div class="h3">${title}</div>
-        <div class="grid2 mt10">${cards}</div>
+      <div class="searchSection">
+        <div class="searchSectionTitle">${escapeHTML(title)}</div>
+        <div class="grid2">${cards}</div>
+        ${moreBtn}
       </div>
     `;
   };
@@ -3392,7 +3428,7 @@ function renderSearch(q) {
       <div class="small"><b>Товары</b></div>
       ${
         grouped.length
-          ? grouped.map((g) => sectionHtml(g.title, g.items)).join("")
+          ? grouped.map((g) => sectionHtml(g.key, g.title, g.items)).join("")
           : `<div class="small">Ничего не найдено</div>`
       }
     </div>
@@ -3436,6 +3472,21 @@ function renderSearch(q) {
       try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {
         openPage(() => renderSearch(q2));
       }
+    });
+  });
+
+  // Показать ещё (постраничная отрисовка)
+  view.querySelectorAll("[data-showmore]").forEach((b) => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
+      const key = String(b.dataset.showmore || "");
+      bumpShownForGroup(key);
+
+      // rerender search in-place (без openPage), сохраняя позицию прокрутки
+      const y = (typeof window !== "undefined" ? window.scrollY : 0);
+      try { renderSearch(searchPaging.q); } catch {}
+      try { if (typeof window !== "undefined") window.scrollTo(0, y); } catch {}
+      try { postRenderEnhance(); } catch {}
     });
   });
 
