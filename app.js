@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "201";
+const APP_BUILD = "202";
 
 // =====================
 // Paging (to prevent lags on big lists)
@@ -2475,21 +2475,18 @@ let renderEpoch = 0;
 // Init
 // =====================
 
-function renderLoading() {
-  view.dataset.page = "search";
-  view.dataset.searchQ = String(q || "");
+function renderLoading(label) {
+  // Safe loading screen (no external refs)
+  const title = label ? String(label) : "Загрузка…";
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Загрузка каталога…</div>
-      <div class="small">Секундочку ✨</div>
-      <div class="sp12"></div>
-      <div class="spinner" aria-hidden="true"></div>
-      <div class="sp10"></div>
-      <div class="small">Если интернет слабый — можно подождать или нажать «Повторить» на экране ошибки.</div>
+      <div class="h2">${escapeHTML(title)}</div>
+      <div class="emptyState">
+        <div class="spinner"></div>
+        <div class="emptyText small mt10">Пожалуйста, подожди пару секунд ✨</div>
+      </div>
     </div>
   `;
-  syncNav();
-  syncBottomSpace();
 }
 
 async function init() {
@@ -3020,6 +3017,12 @@ function renderFandomPage(fandomId) {
 // Поиск (только сверху)
 // =====================
 function renderSearch(q) {
+
+// mark page + persist query for "show more" rerenders
+try {
+  view.dataset.page = "search";
+  view.dataset.searchQ = String(q || "");
+} catch {}
   const queryRaw = (q || "").trim();
   const query = queryRaw.toLowerCase().trim();
 
@@ -3078,37 +3081,60 @@ function renderSearch(q) {
   const other = rawPHits.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
-  const sectionHtml = (title, items) => {
-    const cards = items
-      .map(
-        (p) => `
-          <div class="pcard" data-id="${p.id}">
-            ${cardThumbHTML(p)}
-            <div class="pcardTitle">${h(p.name)}</div>
-            ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
-            <div class="pcardPrice">${moneyDisplay(p.price)}</div>
-            <div class="pcardActions">
-              <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
-                <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
-              </button>
-              <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
-                <span class="plusGlyph">＋</span>
-              </button>
-            </div>
+  
+const sectionHtml = (title, items) => {
+  const cards = items
+    .map(
+      (p) => `
+        <div class="pcard" data-id="${p.id}">
+          ${cardThumbHTML(p)}
+          <div class="pcardTitle">${h(p.name)}</div>
+          ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+          <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+          <div class="pcardActions">
+            <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+              <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+            </button>
+            <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
+              <span class="plusGlyph">＋</span>
+            </button>
           </div>
-        `
-      )
-      .join("");
+        </div>
+      `
+    )
+    .join("");
 
-    return `
-      <div class="fGroup mt12">
-        <div class="h3">${title}</div>
-        <div class="grid2 mt10">${cards}</div>
-      </div>
-    `;
-  };
+  return `
+    <div class="fGroup mt12">
+      <div class="h3">${title}</div>
+      <div class="grid2 mt10">${cards}</div>
+    </div>
+  `;
+};
 
-  view.innerHTML = `
+// Type-search (Наклейки/Значки/Постеры/Боксы): paginate aggressively to avoid Telegram WebView lag
+const typeSectionHtml = () => {
+  const tTitle =
+    qKey === "sticker" ? "Наклейки" :
+    qKey === "pin" ? "Значки" :
+    qKey === "poster" ? "Постеры" :
+    qKey === "box" ? "Боксы / конверты" :
+    "Товары";
+
+  // We paginate within a single synthetic group
+  const ctx = `searchtype:${qKey}`;
+  const gKey = "__all__";
+  const grid = renderProductCardsGrid(rawPHits, ctx, gKey);
+  return `
+    <div class="fGroup mt12" data-group="${gKey}">
+      <div class="h3">${tTitle}</div>
+      ${grid}
+    </div>
+  `;
+};
+
+view.innerHTML = `
+
     <div class="card">
       <div class="h2">Поиск: “${h(q)}”</div>
       ${shortQuery ? `
@@ -3152,9 +3178,11 @@ function renderSearch(q) {
 
       <div class="small"><b>Товары</b></div>
       ${
-        grouped.length
-          ? grouped.map((g) => renderProductGroupSection(g.title, g.items, ctxKey, g.key)).join("")
-          : `<div class="small">Ничего не найдено</div>`
+        isTypeQuery
+          ? typeSectionHtml()
+          : (grouped.length
+              ? grouped.map((g) => renderProductGroupSection(g.title, g.items, ctxKey, g.key)).join("")
+              : `<div class="small">Ничего не найдено</div>`)
       }
     </div>
   `;
