@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "204";
+const APP_BUILD = "205";
 
 // =====================
 // Paging (to prevent lags on big lists)
@@ -2318,52 +2318,54 @@ function bindTap(el, handler) {
   let touchMoved = false;
 
   const fire = (e, src) => {
-    const now = Date.now();
+  const now = Date.now();
 
-    // Suppress delayed ghost clicks after a touch/pointer action.
-    if (src === "click" && now - window.__LP_LAST_TAP_TS < 700) {
-      try { e?.preventDefault?.(); } catch {}
-      try { e?.stopPropagation?.(); } catch {}
-      return;
-    }
-
-    // Deduplicate very close events (same element).
-    // (We use the same global stamp to also dedupe pointerup+touchend on hybrid devices.)
-    if (now - window.__LP_LAST_TAP_TS < 140 && window.__LP_LAST_TAP_SRC !== "click") {
-      try { e?.preventDefault?.(); } catch {}
-      try { e?.stopPropagation?.(); } catch {}
-      return;
-    }
-
-    // Record real taps (not delayed clicks).
-    if (src !== "click") {
-      window.__LP_LAST_TAP_TS = now;
-      window.__LP_LAST_TAP_SRC = src;
-    }
-
-    // Allow native controls (checkboxes/radios/inputs) to behave normally.
-    // NOTE: bindTap() обычно делает preventDefault всегда, но это ломает переключение чекбоксов,
-    // особенно когда делегирование висит на #view. Поэтому для control-элементов мы НЕ блокируем default.
-    let allowNative = false;
+  const isNativeTarget = () => {
     try {
       const t = e?.target;
-      if (t) {
-        const tag = (t.tagName || "").toUpperCase();
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") allowNative = true;
-        if (!allowNative && t.closest?.(".checkRow")) allowNative = true;
-        if (!allowNative) {
-          const lbl = t.closest?.("label");
-          if (lbl && lbl.querySelector?.('input[type="checkbox"],input[type="radio"]')) allowNative = true;
-        }
-      }
+      if (!t) return false;
+      const tag = (t.tagName || "").toUpperCase();
+      // Inputs/selects/textarea should keep native behavior
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      // Checkbox/radio labels or their containers
+      if (t.closest?.(".checkRow")) return true;
+      const lbl = t.closest?.("label");
+      if (lbl && lbl.querySelector?.('input[type="checkbox"],input[type="radio"]')) return true;
     } catch {}
+    return false;
+  };
 
-    if (!allowNative) {
-      try { e?.preventDefault?.(); } catch {}
-      try { e?.stopPropagation?.(); } catch {}
-    }
+  // Suppress delayed ghost clicks after a touch/pointer action.
+  // IMPORTANT: do NOT suppress native-control clicks (checkbox/radio/etc), otherwise they won't toggle.
+  if (src === "click" && now - window.__LP_LAST_TAP_TS < 700 && !isNativeTarget()) {
+    try { e?.preventDefault?.(); } catch {}
+    try { e?.stopPropagation?.(); } catch {}
+    return;
+  }
 
-    try {
+  // Deduplicate very close events (same element).
+  // (We use the same global stamp to also dedupe pointerup+touchend on hybrid devices.)
+  // IMPORTANT: allow native controls to receive their click even after touch/pointer.
+  if (now - window.__LP_LAST_TAP_TS < 140 && window.__LP_LAST_TAP_SRC !== "click" && !isNativeTarget()) {
+    try { e?.preventDefault?.(); } catch {}
+    try { e?.stopPropagation?.(); } catch {}
+    return;
+  }
+
+  // Record real taps (not delayed clicks).
+  if (src !== "click") {
+    window.__LP_LAST_TAP_TS = now;
+    window.__LP_LAST_TAP_SRC = src;
+  }
+
+  const allowNative = isNativeTarget();
+
+  if (!allowNative) {
+    try { e?.preventDefault?.(); } catch {}
+    try { e?.stopPropagation?.(); } catch {}
+  }
+
+try {
       const r = handler(e);
       if (r && typeof r.then === "function") {
         r.catch((err) => {
@@ -2863,6 +2865,94 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
 syncNav();
   syncBottomSpace();
 }
+// =====================
+// Важная информация (экран)
+// =====================
+function markImportantInfoViewed() {
+  // Помечаем как прочитанное в этой сессии и сохраняем версию (локально + в облако).
+  try { infoViewed = true; } catch {}
+  try { infoViewedThisSession = true; } catch {}
+  try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
+  try { cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {}); } catch {}
+}
+
+function renderInfo() {
+  // Открытие экрана считается "прочитано" (это и есть гейт в оформлении).
+  markImportantInfoViewed();
+
+  // Для стабильности и удобства back-навигации
+  try { view.dataset.page = "info"; } catch {}
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Важная информация</div>
+      <div class="small">Оплата, сроки, доставка и нюансы заказа.</div>
+
+      <div class="divider"></div>
+
+      <div class="infoBlock">
+        <div class="infoTitle">Оплата</div>
+        <ul class="infoList">
+          <li>Оплата и способ оплаты подтверждаются менеджеркой после согласования заказа.</li>
+          <li>Цены в приложении указаны в рублях. Для заказов из других стран итог и способ оплаты согласуются индивидуально.</li>
+        </ul>
+      </div>
+
+      <div class="infoBlock">
+        <div class="infoTitle">Сроки</div>
+        <ul class="infoList">
+          <li>Срок изготовления зависит от нагрузки и выбранных вариантов (плёнка/ламин.).</li>
+          <li>Если что-то срочно — напиши менеджерке, она подскажет ближайшие сроки.</li>
+        </ul>
+      </div>
+
+      <div class="infoBlock">
+        <div class="infoTitle">Доставка</div>
+        <ul class="infoList">
+          <li>Доставка рассчитывается менеджеркой индивидуально и не входит в итог в приложении.</li>
+          <li>Доступные варианты зависят от страны и выбранного пункта выдачи.</li>
+        </ul>
+      </div>
+
+      <div class="infoBlock">
+        <div class="infoTitle">Ozon / Wildberries</div>
+        <ul class="infoList">
+          <li>Для Ozon/WB обязательны: <b>страна доставки</b> и <b>аккаунтный номер телефона</b> в международном формате.</li>
+          <li>Страны: Россия, Казахстан, Беларусь, Армения, Кыргызстан, Узбекистан.</li>
+        </ul>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="small">
+        Если остались вопросы — смело пиши менеджерке, всё уточним ✨
+      </div>
+    </div>
+  `;
+
+  // Ничего не биндим через bindTap здесь: на этом экране нативных контролов нет,
+  // а back/домой/корзина/избранное живут в нижнем навбаре.
+}
+
+// =====================
+// Отзывы (минимальный экран-заглушка + ссылка в TG)
+// =====================
+function renderReviews() {
+  try { view.dataset.page = "reviews"; } catch {}
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Отзывы</div>
+      <div class="small">Отзывы от наших покупательниц — в Telegram.</div>
+      <div class="divider"></div>
+      <button class="btn btnPrimary" id="openReviewsTg" type="button">Открыть отзывы в Telegram</button>
+    </div>
+  `;
+
+  const b = document.getElementById("openReviewsTg");
+  bindTap(b, () => openExternal(REVIEWS_URL));
+}
+
+
 
 // =====================
 // Категории -> типы фандомов
