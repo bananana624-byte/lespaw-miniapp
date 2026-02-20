@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "208";
+const APP_BUILD = "209";
 
 // =====================
 // CSV ссылки (твои)
@@ -1521,15 +1521,14 @@ function addToCartById(id, opts){
   let pin_lamination = String(opts?.pin_lamination||"");
   let poster_pack = String(opts?.poster_pack||"");
   let poster_paper = String(opts?.poster_paper||"");
-
-  if (baseKey === "sticker") {
+s*if (typeKey === "sticker") {
     if (!film) film = "film_glossy";
     if (!lamination) lamination = "none";
   }
   if (groupKey === "pin_set" || groupKey === "pin_single") {
     if (!pin_lamination) pin_lamination = "pin_base";
   }
-  if (baseKey === "poster") {
+s*if (typeKey === "poster") {
     if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
     if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
   }
