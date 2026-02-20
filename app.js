@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "207";
+const APP_BUILD = "208";
 
 // =====================
 // CSV ссылки (твои)
@@ -194,6 +194,7 @@ function debugEnabled() {
 }
 function dbg(...args) {
   try { if (debugEnabled()) console.log("[lespaw]", ...args); } catch {}
+}
 // =====================
 // Global error guard (prevents silent blank screen in Telegram WebView)
 // =====================
@@ -281,8 +282,6 @@ try {
     try { renderFatalError("Ошибка приложения", ev?.reason || ev, "unhandledrejection"); } catch {}
   });
 } catch {}
-
-}
 
 // =====================
 // DOM
@@ -688,7 +687,12 @@ function openPage(renderFn) {
     try { postRenderEnhance(); } catch {}
   } catch (err) {
     console.error(err);
-    toast("Ошибка экрана", "warn");
+    try {
+      const msg = String(err?.message || err || "");
+      toast(debugEnabled() ? ("Ошибка экрана: " + msg) : "Ошибка экрана", "warn");
+    } catch {
+      toast("Ошибка экрана", "warn");
+    }
     currentRender = renderHome;
     navStack.length = 0;
     syncNav();
@@ -1567,9 +1571,68 @@ function pulseBadge(el) {
   } catch {}
 }
 
+let __pruningState = false;
+
+function pruneState() {
+  // очищаем "битые" элементы, чтобы не было странных бейджей и пустых списков
+  try {
+    if (__pruningState) return;
+    __pruningState = true;
+
+    // Favorites: normalize + drop unknown products + dedupe by variant key
+    try {
+      const norm = (fav || []).map(normalizeFavItem).filter((x) => x && x.id);
+      const seen = new Set();
+      const filtered = [];
+      for (const it of norm) {
+        if (Array.isArray(products) && products.length) {
+          if (!getProductById(it.id)) continue;
+        }
+        const k = favKey(it.id, it);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        filtered.push(it);
+      }
+      if (filtered.length !== (fav || []).length) {
+        // persist via setter (it will call updateBadges)
+        setFav(filtered);
+      }
+    } catch {}
+
+    // Cart: drop unknown products + drop qty<=0
+    try {
+      const normC = (cart || [])
+        .map((x) => ({ ...x, qty: Math.max(0, Number(x?.qty) || 0) }))
+        .filter((x) => x && x.id && (Number(x.qty) || 0) > 0);
+
+      const filteredC = [];
+      for (const it of normC) {
+        if (Array.isArray(products) && products.length) {
+          if (!getProductById(it.id)) continue;
+        }
+        filteredC.push(it);
+      }
+      if (filteredC.length !== (cart || []).length) {
+        setCart(filteredC);
+      }
+    } catch {}
+  } finally {
+    __pruningState = false;
+  }
+}
+
 function updateBadges() {
-  const favN = fav.length;
-  const cartN = cart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+  try {
+    if (!__pruningState) pruneState();
+  } catch {}
+
+  const favN = (fav || [])
+    .map(normalizeFavItem)
+    .filter((x) => x && x.id && (!products?.length || getProductById(x.id))).length;
+
+  const cartN = (cart || [])
+    .filter((it) => it && it.id && (!products?.length || getProductById(it.id)))
+    .reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
 
   if (favCount) {
     if (favN > 0) {
@@ -2477,6 +2540,9 @@ async function init() {
 
     fandoms = fFresh || [];
     products = pFresh || [];
+    // after catalog refresh we can safely prune state against real product ids
+    updateBadges();
+
 
     // Пересобираем settings из свежих
     settings = {
@@ -3523,6 +3589,7 @@ syncNav();
 // Product page (полная карточка)
 // =====================
 function renderProduct(productId, prefill) {
+  try {
   const p = getProductById(productId);
   if (!p) {
     view.innerHTML = `<div class="card"><div class="h2">Товар не найден</div></div>`;
@@ -3773,8 +3840,21 @@ if (isPoster) {
     syncNav();
     syncBottomSpace();
   }
-
   render();
+  } catch (err) {
+    try { console.error(err); } catch {}
+    try {
+      const msg = String(err?.message || err || '');
+      toast(debugEnabled() ? ('Ошибка товара: ' + msg) : 'Ошибка экрана', 'warn');
+    } catch {}
+    try {
+      view.innerHTML = `<div class="card"><div class="h2">Ошибка товара</div><div class="small">${escapeHTML(String(err?.message || err || ''))}</div><div class="sp10"></div><button class="btn is-active" id="backHomeAfterProdErr" type="button">На главную</button></div>`;
+      const b = document.getElementById('backHomeAfterProdErr');
+      if (b) bindTap(b, () => resetToHome());
+      syncNav();
+      syncBottomSpace();
+    } catch {}
+  }
 }
 
 // =====================
