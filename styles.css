@@ -1520,3 +1520,25 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .flexWrap{flex-wrap:wrap;}
 .minw34{min-width:34px;}
 .taCenter{text-align:center;}
+
+
+/* ===== In-app image viewer ===== */
+.noScroll { overflow: hidden !important; }
+.imgViewer { position: fixed; inset: 0; z-index: 9999; display: none; }
+.imgViewerBackdrop{ position: absolute; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(6px); }
+.imgViewerInner{ position: absolute; inset: 0; display:flex; align-items:center; justify-content:center; padding:18px; }
+.imgViewerStage{ width:100%; height:100%; max-width:980px; max-height:980px; display:flex; align-items:center; justify-content:center; }
+.imgViewerImg{ max-width:100%; max-height:100%; object-fit:contain; border-radius:18px; box-shadow:0 20px 70px rgba(0,0,0,.45); }
+.imgViewerClose{ position:absolute; top:14px; right:14px; width:42px; height:42px; border-radius:14px; border:1px solid rgba(255,255,255,.16); background:rgba(20,20,20,.35); color:rgba(255,255,255,.92); font-size:26px; line-height:1; }
+.imgViewerNav{ position:absolute; top:50%; transform:translateY(-50%); width:42px; height:42px; border-radius:14px; border:1px solid rgba(255,255,255,.14); background:rgba(20,20,20,.25); color:rgba(255,255,255,.92); font-size:26px; display:flex; align-items:center; justify-content:center; }
+.imgViewerPrev{ left:12px; }
+.imgViewerNext{ right:12px; }
+.imgViewerDots{ position:absolute; bottom:16px; left:0; right:0; display:flex; gap:6px; justify-content:center; pointer-events:none; }
+.imgViewerDot{ width:6px; height:6px; border-radius:99px; background: rgba(255,255,255,.25); }
+.imgViewerDot.is-active{ background: rgba(255,255,255,.85); }
+
+/* ===== Product swipe (pin_single) ===== */
+.prodSwipeCtrls{ display:flex; gap:8px; align-items:center; }
+.prodSwipeBtn{ width:34px; height:34px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:rgba(20,20,20,.22); color:rgba(255,255,255,.9); font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center; }
+.swipeHint{ margin:10px 0 0 0; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,.10); background:rgba(20,20,20,.18); color:rgba(255,255,255,.86); font-size:13px; text-align:center; box-shadow:0 10px 32px rgba(0,0,0,.25); backdrop-filter: blur(6px); transition: opacity .35s ease, transform .35s ease; }
+.swipeHint.is-hide{ opacity:0; transform: translateY(-6px); }
