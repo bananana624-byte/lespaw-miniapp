@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "205";
+const APP_BUILD = "206";
 
 // =====================
 // CSV ссылки (твои)
@@ -1509,8 +1509,8 @@ function addToCartById(id, opts){
   if (!sid) return;
 
   const p = getProductById(sid);
-  const typeKey = normalizeTypeKey(p?.product_type);
-
+  const baseKey = normalizeTypeKey(p?.product_type);
+  const groupKey = typeGroupKey(p);
   // options (with safe defaults)
   let film = String(opts?.film||"");
   let lamination = String(opts?.lamination||"");
@@ -1518,14 +1518,14 @@ function addToCartById(id, opts){
   let poster_pack = String(opts?.poster_pack||"");
   let poster_paper = String(opts?.poster_paper||"");
 
-  if (typeKey === "sticker") {
+  if (baseKey === "sticker") {
     if (!film) film = "film_glossy";
     if (!lamination) lamination = "none";
   }
-  if (typeKey === "pin_set" || typeKey === "pin_single") {
+  if (groupKey === "pin_set" || groupKey === "pin_single") {
     if (!pin_lamination) pin_lamination = "pin_base";
   }
-  if (typeKey === "poster") {
+  if (baseKey === "poster") {
     if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
     if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
   }
@@ -2042,9 +2042,10 @@ function applySurpriseInsideOverride(rawDesc, p) {
 
 function defaultShortByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
+  const groupKey = typeGroupKey(p);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin_set" || typeKey === "pin_single") {
+  if (groupKey === "pin_set" || groupKey === "pin_single") {
     return isPinSingleType(p?.product_type) ? "1 значок • металл • 44 мм" : "6 значков в наборе • металл • 44 мм";
   }
   if (typeKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
@@ -2079,7 +2080,7 @@ function defaultFullByType(p) {
     ].join("\n\n");
   }
 
-  if (typeKey === "sticker") {
+  if (baseKey === "sticker") {
     return [
       "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
       "📏 Характеристики\n• Размер листа: 16 × 25 см\n• Материал: глянцевая плёнка",
@@ -2087,7 +2088,7 @@ function defaultFullByType(p) {
     ].join("\n\n");
   }
 
-  if (typeKey === "poster") {
+  if (baseKey === "poster") {
     return [
       "✨ О товаре\nНабор рандомных фотопостеров с аккуратной печатью и приятной цветопередачей.\nКаждый заказ собирается случайным образом, поэтому каждый набор получается уникальным ✨",
       "🎲 Важно\nФотопостеры в заказе подбираются случайным образом.\n\nМы не кладем повторы внутри одного заказа, но при повторных заказах в будущем возможны повторения изображений, так как подбор осуществляется заново.",
@@ -2782,12 +2783,13 @@ function renderFandomPage(fandomId) {
   // Analytics: list view
   try { gaViewItemList(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, all); } catch {}
 
-  const groupsOrder = [
-    { key: "sticker", title: "Наклейки" },
-    { key: "pin", title: "Значки" },
-    { key: "poster", title: "Постеры" },
-    { key: "box", title: "Боксы / конверты" },
-  ];
+const groupsOrder = [
+  { key: "sticker", title: "Наклейки" },
+  { key: "pin_set", title: "Наборы значков" },
+  { key: "pin_single", title: "Значки поштучно" },
+  { key: "poster", title: "Постеры" },
+  { key: "box", title: "Боксы / конверты" },
+];
   const knownKeys = new Set(groupsOrder.map((g) => g.key));
 
   const grouped = groupsOrder
@@ -3352,12 +3354,13 @@ function renderSearch(q) {
   try { if (!shortQuery) gaViewItemList(`search:${query}`, rawPHits); } catch {}
   try { if (!shortQuery) gaSearch(queryRaw, (fHits.length + rawPHits.length)); } catch {}
 
-  const groupsOrder = [
-    { key: "sticker", title: "Наклейки" },
-    { key: "pin", title: "Значки" },
-    { key: "poster", title: "Постеры" },
-    { key: "box", title: "Боксы / конверты" },
-  ];
+const groupsOrder = [
+  { key: "sticker", title: "Наклейки" },
+  { key: "pin_set", title: "Наборы значков" },
+  { key: "pin_single", title: "Значки поштучно" },
+  { key: "poster", title: "Постеры" },
+  { key: "box", title: "Боксы / конверты" },
+];
   const knownKeys = new Set(groupsOrder.map((g) => g.key));
 
   const grouped = groupsOrder
@@ -3538,17 +3541,20 @@ const fandom = getFandomById(p.fandom_id);
   const overlayDelta = Number(settings.overlay_price_delta) || 100;
   const holoDelta = Number(settings.holo_base_price_delta) || 100;
 
-  const typeKey = typeGroupKey(p);
-  const isSticker = typeKey === "sticker";
+  const groupKey = typeGroupKey(p); // sticker | pin_set | pin_single | poster | box | ...
+  const baseKey = normalizeTypeKey(p?.product_type); // sticker | pin | poster | box | ...
+  const isSticker = groupKey === "sticker";
   // Похожие товары: из этого же фандома и/или этого же типа
   const sameFandom = (products || []).filter((x) => String(x.fandom_id) === String(p.fandom_id) && String(x.id) !== String(p.id));
-  const sameType = (products || []).filter((x) => normalizeTypeKey(x.product_type) === typeKey && String(x.id) !== String(p.id));
+  const sameType = (products || []).filter((x) => typeGroupKey(x) === groupKey && String(x.id) !== String(p.id));
   const pickFew = (arr, n) => arr.slice(0, n);
   const similarFandom = pickFew(shuffleArray(sameFandom), 4);
   const similarType = pickFew(shuffleArray(sameType.filter((x)=> String(x.fandom_id) !== String(p.fandom_id))), 4);
 
-  const isPin = typeKey === "pin";
-  const isPoster = typeKey === "poster";
+  const isPin = baseKey === "pin";
+  const isPinSingle = groupKey === "pin_single";
+  const isPinSet = groupKey === "pin_set";
+  const isPoster = groupKey === "poster";
 
   // --- defaults ---
   let selectedFilm = "film_glossy"; // default
@@ -3574,6 +3580,7 @@ if (isPoster) {
 
 
   const { FILM_OPTIONS, STICKER_LAM_OPTIONS, PIN_LAM_OPTIONS } = getOptionDefs(overlayDelta, holoDelta);
+  const PIN_LAM_OPTIONS_EFFECTIVE = isPinSingle ? PIN_LAM_OPTIONS.map(([k,l,_d]) => [k,l,0]) : PIN_LAM_OPTIONS;
 
   function calcPrice() {
     let price = Number(p.price) || 0;
@@ -3588,7 +3595,7 @@ if (isPoster) {
       price += Number(lamOpt?.[2] || 0);
     }
     if (isPin) {
-      const lamOpt = PIN_LAM_OPTIONS.find((x) => x[0] === selectedPinLam);
+      const lamOpt = PIN_LAM_OPTIONS_EFFECTIVE.find((x) => x[0] === selectedPinLam);
       price += Number(lamOpt?.[2] || 0);
     }
     return price;
@@ -3604,10 +3611,11 @@ if (isPoster) {
     };
   }
 
-  function renderOptionPanel(title, rows, selectedKey, onSelect) {
+  function renderOptionPanel(title, rows, selectedKey, hintText) {
     return `
       <div class="optPanel">
         <div class="optTitle"><b>${title}</b></div>
+        ${hintText ? `<div class="optHint">${hintText}</div>` : ``}
         <div class="optList">
           ${rows
             .map(([key, label, delta]) => {
@@ -3698,7 +3706,7 @@ if (isPoster) {
         ${
           isPin
             ? `
-              ${renderOptionPanel("Ламинация", PIN_LAM_OPTIONS, selectedPinLam)}
+              ${renderOptionPanel("Ламинация", PIN_LAM_OPTIONS_EFFECTIVE, selectedPinLam, isPinSingle ? "Ламинация для поштучных значков бесплатная — можно выбрать эффект дополнительно ✨" : "")}
               <div class="sp10"></div>
               <button class="btn btnGhost" id="btnExamples" type="button">Посмотреть примеры ламинации</button>
             `
@@ -3852,9 +3860,24 @@ function renderFavorites() {
     bindTap(b, (e) => {
       e.stopPropagation();
       const i = Number(b.dataset.toCart);
-      const fi = normalizeFavItem((fav || [])[i]);
+      const fi = items[i];
+      if (!fi || !fi.id) return;
+
+      // add with the same options variant
       addToCartById(fi.id, fi);
       toast("Добавлено в корзину", "good");
+
+      // remove this exact variant from favorites (so it doesn't stay there)
+      try {
+        const key = favKey(fi.id, fi);
+        const idx = favIndexByKey(key);
+        if (idx >= 0) {
+          const next = [...(fav || [])];
+          next.splice(idx, 1);
+          setFav(next);
+        }
+      } catch {}
+
       renderFavorites();
     });
   });
@@ -3879,7 +3902,7 @@ function calcItemUnitPrice(p, ci){
   }
   if (t === "pin") {
     const lam = String(ci?.pin_lamination||"") || "pin_base";
-    if (lam !== "pin_base") price += overlayDelta;
+    if (lam !== "pin_base" && !isPinSingleType(p?.product_type)) price += overlayDelta;
   }
   if (t === "poster") {
     const pack = String(ci?.poster_pack||"" ) || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
@@ -4271,7 +4294,7 @@ function buildOrderText() {
     const qty = Number(ci.qty) || 1;
     let unitPrice = Number(p.price) || 0;
 
-    if (typeKey === "sticker") {
+    if (baseKey === "sticker") {
       const filmKey = pickStickerFilm(ci);
       const lamKey = pickStickerLam(ci);
 
@@ -4281,13 +4304,13 @@ function buildOrderText() {
       if (lamKey && lamKey !== "none") unitPrice += overlayDelta;
     }
 
-    if (typeKey === "pin_set" || typeKey === "pin_single") {
+    if (groupKey === "pin_set" || groupKey === "pin_single") {
       const lamKey = pickPinLam(ci);
       // доплата за всё кроме базовой
       if (lamKey && lamKey !== "pin_base") unitPrice += overlayDelta;
     }
 
-    if (typeKey === "poster") {
+    if (baseKey === "poster") {
       const pack = String(ci?.poster_pack||"").trim() || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
       const base = Number(POSTER_PACK_PRICES[pack]) || Number(p.price) || 0;
       unitPrice = base;
