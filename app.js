@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "202";
+const APP_BUILD = "201";
 
 // =====================
 // CSV ссылки (твои)
@@ -675,30 +675,6 @@ function postRenderEnhance() {
 // =====================
 const navStack = [];
 let currentRender = null;
-// =====================
-// Search paging (for heavy type searches)
-// =====================
-const SEARCH_PAGE_SIZE = 20;
-const searchPaging = { q: "", shownByGroup: Object.create(null) };
-
-function resetSearchPaging(q) {
-  searchPaging.q = String(q || "").trim();
-  searchPaging.shownByGroup = Object.create(null);
-}
-
-function getShownForGroup(key) {
-  const k = String(key || "");
-  const v = searchPaging.shownByGroup[k];
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) && n > 0 ? n : SEARCH_PAGE_SIZE;
-}
-
-function bumpShownForGroup(key) {
-  const k = String(key || "");
-  const cur = getShownForGroup(k);
-  searchPaging.shownByGroup[k] = cur + SEARCH_PAGE_SIZE;
-}
-
 
 function openPage(renderFn) {
   if (typeof renderFn !== "function") {
@@ -1321,9 +1297,13 @@ function isDigitStart(name) {
   return /^[0-9]/.test((name || "").trim());
 }
 
+function isPinTypeKey(k){
+  return k === "pin_set" || k === "pin_single" || k === "pin";
+}
+
 function typeLabel(t) {
   const k = normalizeTypeKey(t);
-  const map = { sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
+  const map = { sticker: "Наклейки", pin_set: "Наборы значков", pin_single: "Значки поштучно", poster: "Постеры", box: "Боксы" };
   return map[k] || (t || "");
 }
 
@@ -1337,13 +1317,13 @@ function typeLabelDetailed(t) {
 
   const k = normalizeTypeKey(t);
   if (k === "sticker") return "Наклейки";
-  if (k === "pin") {
-    // prefer "Набор значков" when it looks like a set
-    if (s.includes("набор") || s.includes("значков")) return "Набор значков";
-    return "Значки";
-  }
+  if (k === "pin_set") return "Набор значков";
+  if (k === "pin_single") return "Значки поштучно";
   if (k === "poster") return "Постеры";
   if (k === "box") return "Боксы";
+
+  // Legacy fallback
+  if (k === "pin") return (s.includes("набор") || s.includes("значков")) ? "Набор значков" : "Значки";
 
   return raw || "";
 }
@@ -1367,15 +1347,30 @@ function normalizeTypeKey(t) {
   )
     return "sticker";
 
-  // pins
+  // pins (split: sets vs single)
   if (
-    s === "pin" ||
-    s === "pins" ||
-    s === "значок" ||
-    s === "значки" ||
-    s.includes("значк")
-  )
-    return "pin";
+    s === "pin_set" ||
+    s === "pinset" ||
+    (s.includes("набор") && s.includes("значк")) ||
+    (s === "pin" || s === "pins" || s === "значок" || s === "значки" || s.includes("значк"))
+  ) {
+    // single pins explicit
+    if (
+      s === "pin_single" ||
+      s === "pins_single" ||
+      s.includes("поштуч") ||
+      s.includes("по штуч") ||
+      s.includes("по 1") ||
+      s.includes("по-1") ||
+      s.includes("1шт") ||
+      s.includes("1 шт") ||
+      s.includes("одной шту") ||
+      s.includes("по одной")
+    ) return "pin_single";
+
+    // по умолчанию — наборы (так исторически было в приложении)
+    return "pin_set";
+  }
 
   // posters
   if (s === "poster" || s === "posters" || s.includes("постер")) return "poster";
@@ -1385,6 +1380,7 @@ function normalizeTypeKey(t) {
 
   return s;
 }
+
 
 function getFandomById(id) {
   return fandoms.find((f) => f.fandom_id === id);
@@ -1525,7 +1521,7 @@ function addToCartById(id, opts){
     if (!film) film = "film_glossy";
     if (!lamination) lamination = "none";
   }
-  if (typeKey === "pin") {
+  if (isPinTypeKey(typeKey)) {
     if (!pin_lamination) pin_lamination = "pin_base";
   }
   if (typeKey === "poster") {
@@ -2044,7 +2040,8 @@ function defaultShortByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin") return "6 значков в наборе • металл • 44 мм";
+  if (typeKey === "pin_set") return "6 значков в наборе • металл • 44 мм";
+  if (typeKey === "pin_single") return "1 значок • металл • 44 мм";
   if (typeKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
   if (typeKey === "poster") return "Рандомные фотопостеры • выбор формата";
   if (typeKey === "box") {
@@ -2058,7 +2055,7 @@ function defaultFullByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin") {
+  if (isPinTypeKey(typeKey)) {
     return [
       "✨ О товаре\nНабор из шести аккуратных значков с яркой печатью.\nХорошо подойдут для рюкзаков, сумок, курток или коллекций — лёгкие, удобные и приятные в использовании.",
       "📦 В наборе\n• 6 значков",
@@ -2758,7 +2755,8 @@ function renderFandomPage(fandomId) {
 
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
-    { key: "pin", title: "Значки" },
+    { key: "pin_set", title: "Наборы значков" },
+    { key: "pin_single", title: "Значки поштучно" },
     { key: "poster", title: "Постеры" },
     { key: "box", title: "Боксы / конверты" },
   ];
@@ -3294,13 +3292,10 @@ function renderSearch(q) {
   const queryRaw = (q || "").trim();
   const query = queryRaw.toLowerCase().trim();
 
-  // Reset paging when query changes (important for type chips: наклейки/значки/постеры/боксы)
-  if (searchPaging.q !== queryRaw) resetSearchPaging(queryRaw);
-
   // Treat "Значки/Боксы/Наклейки/Постеры" (любой язык/форма) as type-filter searches.
   // Important: we only accept known type keys, otherwise it would hijack normal searches.
   const qKey = normalizeTypeKey(query);
-  const isTypeQuery = qKey === "sticker" || qKey === "pin" || qKey === "poster" || qKey === "box";
+  const isTypeQuery = qKey === "sticker" || qKey === "pin_set" || qKey === "pin_single" || qKey === "poster" || qKey === "box";
 
   const shortQuery = !isTypeQuery && query.length < 3;
 
@@ -3316,7 +3311,12 @@ function renderSearch(q) {
     ? []
     : products
         .filter((p) => {
-          if (isTypeQuery) return normalizeTypeKey(p.product_type) === qKey;
+          if (isTypeQuery) {
+            const pk = normalizeTypeKey(p.product_type);
+            // "значки" (и старые "pin") должны показывать и наборы, и поштучные
+            if (qKey === "pin_set") return pk === "pin_set" || pk === "pin_single";
+            return pk === qKey;
+          }
 
           const typeName = String(p.product_type || "");
           const typeRu = `${typeLabel(typeName)} ${typeLabelDetailed(typeName)}`;
@@ -3331,7 +3331,8 @@ function renderSearch(q) {
 
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
-    { key: "pin", title: "Значки" },
+    { key: "pin_set", title: "Наборы значков" },
+    { key: "pin_single", title: "Значки поштучно" },
     { key: "poster", title: "Постеры" },
     { key: "box", title: "Боксы / конверты" },
   ];
@@ -3344,11 +3345,8 @@ function renderSearch(q) {
   const other = rawPHits.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
-    const sectionHtml = (groupKey, title, items) => {
-    const shown = getShownForGroup(groupKey);
-    const visible = items.slice(0, shown);
-
-    const cards = visible
+  const sectionHtml = (title, items) => {
+    const cards = items
       .map(
         (p) => `
           <div class="pcard" data-id="${p.id}">
@@ -3369,16 +3367,10 @@ function renderSearch(q) {
       )
       .join("");
 
-    const hasMore = items.length > shown;
-    const moreBtn = hasMore
-      ? `<div class="moreWrap"><button class="btn btnMore" data-showmore="${escapeHTML(String(groupKey))}" type="button">Показать ещё</button></div>`
-      : ``;
-
     return `
-      <div class="searchSection">
-        <div class="searchSectionTitle">${escapeHTML(title)}</div>
-        <div class="grid2">${cards}</div>
-        ${moreBtn}
+      <div class="fGroup mt12">
+        <div class="h3">${title}</div>
+        <div class="grid2 mt10">${cards}</div>
       </div>
     `;
   };
@@ -3393,6 +3385,7 @@ function renderSearch(q) {
           <div class="chips mt12">
             <button class="chip" data-sq="наклейки" type="button">Наклейки</button>
             <button class="chip" data-sq="значки" type="button">Значки</button>
+            <button class="chip" data-sq="значки поштучно" type="button">Значки поштучно</button>
             <button class="chip" data-sq="постеры" type="button">Постеры</button>
             <button class="chip" data-sq="боксы" type="button">Боксы</button>
           </div>
@@ -3428,7 +3421,7 @@ function renderSearch(q) {
       <div class="small"><b>Товары</b></div>
       ${
         grouped.length
-          ? grouped.map((g) => sectionHtml(g.key, g.title, g.items)).join("")
+          ? grouped.map((g) => sectionHtml(g.title, g.items)).join("")
           : `<div class="small">Ничего не найдено</div>`
       }
     </div>
@@ -3472,21 +3465,6 @@ function renderSearch(q) {
       try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {
         openPage(() => renderSearch(q2));
       }
-    });
-  });
-
-  // Показать ещё (постраничная отрисовка)
-  view.querySelectorAll("[data-showmore]").forEach((b) => {
-    bindTap(b, (e) => {
-      try { e?.stopPropagation?.(); } catch {}
-      const key = String(b.dataset.showmore || "");
-      bumpShownForGroup(key);
-
-      // rerender search in-place (без openPage), сохраняя позицию прокрутки
-      const y = (typeof window !== "undefined" ? window.scrollY : 0);
-      try { renderSearch(searchPaging.q); } catch {}
-      try { if (typeof window !== "undefined") window.scrollTo(0, y); } catch {}
-      try { postRenderEnhance(); } catch {}
     });
   });
 
@@ -3548,7 +3526,7 @@ const fandom = getFandomById(p.fandom_id);
   const similarFandom = pickFew(shuffleArray(sameFandom), 4);
   const similarType = pickFew(shuffleArray(sameType.filter((x)=> String(x.fandom_id) !== String(p.fandom_id))), 4);
 
-  const isPin = typeKey === "pin";
+  const isPin = isPinTypeKey(typeKey);
   const isPoster = typeKey === "poster";
 
   // --- defaults ---
@@ -3878,7 +3856,7 @@ function calcItemUnitPrice(p, ci){
     if (film === "film_holo") price += holoDelta;
     if (lam !== "none") price += overlayDelta;
   }
-  if (t === "pin") {
+  if (isPinTypeKey(t)) {
     const lam = String(ci?.pin_lamination||"") || "pin_base";
     if (lam !== "pin_base") price += overlayDelta;
   }
@@ -3899,7 +3877,7 @@ function optionPairsFor(ci, p) {
     // базовые варианты не показываем
     if (film !== "film_glossy") out.push({ k: "Плёнка", v: FILM_LABELS[film] || film });
     if (lam !== "none") out.push({ k: "Ламинация", v: STICKER_LAM_LABELS[lam] || lam });
-  } else if (t === "pin") {
+  } else if (isPinTypeKey(t)) {
     const lam = String(ci?.pin_lamination || "") || "pin_base";
     if (lam !== "pin_base") out.push({ k: "Ламинация", v: PIN_LAM_LABELS[lam] || lam });
   } else if (t === "poster") {
@@ -4234,7 +4212,8 @@ function buildOrderText() {
   // группируем товары по типам
   const groupsOrder = [
     { key: "sticker", title: H("Наклейки") + ":" },
-    { key: "pin", title: H("Значки") + ":" },
+    { key: "pin_set", title: H("Наборы значков") + ":" },
+    { key: "pin_single", title: H("Значки поштучно") + ":" },
     { key: "poster", title: H("Постеры") + ":" },
     { key: "box", title: H("Боксы") + ":" },
   ];
@@ -4281,7 +4260,7 @@ function buildOrderText() {
       if (lamKey && lamKey !== "none") unitPrice += overlayDelta;
     }
 
-    if (typeKey === "pin") {
+    if (isPinTypeKey(typeKey)) {
       const lamKey = pickPinLam(ci);
       // доплата за всё кроме базовой
       if (lamKey && lamKey !== "pin_base") unitPrice += overlayDelta;
@@ -4342,7 +4321,7 @@ if (g.key === "box") {
           const label = stickerLamLabelByKey[lamKey] || String(lamKey);
           lines.push(`${LBL("Ламинация")} ${label}`);
         }
-      } else if (g.key === "pin") {
+      } else if (isPinTypeKey(g.key)) {
         const lamKey = pickPinLam(ci);
         if (lamKey && lamKey !== "pin_base") {
           const label = pinLamLabelByKey[lamKey] || String(lamKey);
