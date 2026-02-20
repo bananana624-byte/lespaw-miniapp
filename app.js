@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "217";
+const APP_BUILD = "218";
 
 // =====================
 // CSV ссылки (твои)
@@ -695,7 +695,9 @@ function openImageViewer(urls, startIndex = 0) {
           <button class="imgViewerNav imgViewerPrev" type="button" aria-label="Предыдущее" data-prev="1">‹</button>
           <button class="imgViewerNav imgViewerNext" type="button" aria-label="Следующее" data-next="1">›</button>
           <div class="imgViewerStage">
-            <img class="imgViewerImg" alt="Изображение товара" loading="eager" decoding="async">
+            <div class="imgViewerPan" id="imgViewerPan">
+              <img class="imgViewerImg" alt="Изображение товара" loading="eager" decoding="async">
+            </div>
           </div>
           <div class="imgViewerDots" aria-hidden="true"></div>
         </div>
@@ -720,6 +722,7 @@ function openImageViewer(urls, startIndex = 0) {
       __imgViewerEl.addEventListener("touchend", (e) => {
         try {
           if (!moved) return;
+          try { if (__imgViewerEl && __imgViewerEl.classList.contains("isZoomed")) return; } catch {}
           const p1 = e.changedTouches && e.changedTouches[0];
           if (!p1) return;
           const dx = p1.clientX - sx;
@@ -731,6 +734,111 @@ function openImageViewer(urls, startIndex = 0) {
           else prevBtn && prevBtn.click();
         } catch {}
       }, { passive: true });
+
+      // zoom/pan inside viewer (pinch + double-tap)
+      try {
+        const panEl = __imgViewerEl.querySelector("#imgViewerPan");
+        const zi = { scale: 1, tx: 0, ty: 0, min: 1, max: 4, lastTap: 0, drag: null, pinch: null };
+        const apply = () => {
+          if (!panEl) return;
+          const s = Math.max(zi.min, Math.min(zi.scale, zi.max));
+          zi.scale = s;
+          panEl.style.transform = `translate3d(${zi.tx}px, ${zi.ty}px, 0) scale(${s})`;
+          __imgViewerEl.classList.toggle("isZoomed", s > 1.001);
+        };
+        const reset = () => { zi.scale = 1; zi.tx = 0; zi.ty = 0; zi.drag = null; zi.pinch = null; apply(); };
+
+        const clampPan = () => {
+          try {
+            if (!panEl) return;
+            const stage = __imgViewerEl.querySelector(".imgViewerStage");
+            if (!stage) return;
+            const rectS = stage.getBoundingClientRect();
+            const rectP = panEl.getBoundingClientRect();
+            // When zoomed, allow panning within bounds
+            const overflowX = Math.max(0, (rectP.width - rectS.width) / 2);
+            const overflowY = Math.max(0, (rectP.height - rectS.height) / 2);
+            zi.tx = Math.max(-overflowX, Math.min(overflowX, zi.tx));
+            zi.ty = Math.max(-overflowY, Math.min(overflowY, zi.ty));
+          } catch {}
+        };
+
+        const dist = (t0, t1) => {
+          const dx = (t1.clientX - t0.clientX);
+          const dy = (t1.clientY - t0.clientY);
+          return Math.sqrt(dx*dx + dy*dy);
+        };
+        const mid = (t0, t1) => ({ x: (t0.clientX + t1.clientX)/2, y: (t0.clientY + t1.clientY)/2 });
+
+        const onTouchStart = (e) => {
+          try {
+            if (!e || !e.touches) return;
+            if (e.touches.length === 2) {
+              const t0 = e.touches[0], t1 = e.touches[1];
+              zi.pinch = { d: dist(t0, t1), s: zi.scale, m: mid(t0, t1) };
+            } else if (e.touches.length === 1) {
+              const t = e.touches[0];
+              zi.drag = { x: t.clientX, y: t.clientY, tx: zi.tx, ty: zi.ty };
+            }
+          } catch {}
+        };
+        const onTouchMove = (e) => {
+          try {
+            if (!e || !e.touches) return;
+            if (e.touches.length === 2 && zi.pinch) {
+              e.preventDefault();
+              const t0 = e.touches[0], t1 = e.touches[1];
+              const d = dist(t0, t1);
+              const ratio = d / (zi.pinch.d || d || 1);
+              zi.scale = Math.max(zi.min, Math.min(zi.max, (zi.pinch.s || 1) * ratio));
+              apply();
+              clampPan();
+              apply();
+              return;
+            }
+            if (e.touches.length === 1 && zi.drag && zi.scale > 1.001) {
+              e.preventDefault();
+              const t = e.touches[0];
+              const dx = t.clientX - zi.drag.x;
+              const dy = t.clientY - zi.drag.y;
+              zi.tx = (zi.drag.tx || 0) + dx;
+              zi.ty = (zi.drag.ty || 0) + dy;
+              clampPan();
+              apply();
+            }
+          } catch {}
+        };
+        const onTouchEnd = () => { zi.drag = null; zi.pinch = null; };
+
+        // Double-tap to zoom
+        const onTap = (e) => {
+          try {
+            const now = Date.now();
+            const dt = now - (zi.lastTap || 0);
+            zi.lastTap = now;
+            if (dt > 0 && dt < 280) {
+              // toggle zoom
+              if (zi.scale > 1.001) reset();
+              else {
+                zi.scale = 2.4;
+                zi.tx = 0; zi.ty = 0;
+                apply();
+              }
+            }
+          } catch {}
+        };
+
+        const stage = __imgViewerEl.querySelector(".imgViewerStage");
+        if (stage) {
+          stage.addEventListener("touchstart", onTouchStart, { passive: true });
+          stage.addEventListener("touchmove", onTouchMove, { passive: false });
+          stage.addEventListener("touchend", onTouchEnd, { passive: true });
+          stage.addEventListener("click", onTap, { passive: true });
+        }
+
+        // expose for render() so we can reset zoom when switching images
+        __imgViewerEl.__zoomReset = reset;
+      } catch {}
     }
 
     const imgEl = __imgViewerEl.querySelector(".imgViewerImg");
@@ -745,6 +853,7 @@ function openImageViewer(urls, startIndex = 0) {
     };
 
     const render = () => {
+      try { __imgViewerEl && __imgViewerEl.__zoomReset && __imgViewerEl.__zoomReset(); } catch {}
       if (imgEl) imgEl.src = safeImgUrl(list[idx]);
       if (prevBtn) prevBtn.style.display = (list.length > 1 ? "flex" : "none");
       if (nextBtn) nextBtn.style.display = (list.length > 1 ? "flex" : "none");
@@ -2608,15 +2717,8 @@ async function init() {
       // как backspace и удалять текст по букве. Нам нужно: 1) снять фокус, 2) очистить поле,
       // 3) выполнить навигацию назад.
       try {
-        if (globalSearch) {
-          const had = String(globalSearch.value || "").length > 0;
-          globalSearch.blur();
-          if (had) {
-            globalSearch.value = "";
-            // Триггерим обработчики ввода, чтобы UI сразу вернулся к нормальному состоянию.
-            try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {}
-          }
-        }
+        // Важно: НЕ чистим поле и НЕ триггерим input — это может сбросить экран/скролл и сломать back-стек.
+        if (globalSearch) globalSearch.blur();
       } catch {}
       goBack();
     });
@@ -2896,7 +2998,6 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
     if (!w) return;
     nc.scrollTo({ left: i * w, behavior: "smooth" });
   };
-
   const scrollByPage = (dir) => scrollToPage(getActivePage() + dir);
 
   renderDots();
@@ -2958,6 +3059,10 @@ function renderFandomTypes() {
 // Список фандомов (алфавит + цифры в конце)
 // =====================
 function renderFandomList(type) {
+  // Спец-логика: "Что-то тематическое" — показываем товары сразу, без выбора фандома
+  if (String(type || "") === "Что-то тематическое") {
+    return renderThematicPage();
+  }
   const list = fandoms
     .filter((f) => truthy(f.is_active))
     .filter((f) => f.fandom_type === type)
@@ -3001,6 +3106,73 @@ function renderFandomList(type) {
 }
 
 // =====================
+// =====================
+// "Что-то тематическое" -> товары сразу (без выбора фандома)
+// =====================
+function renderThematicPage() {
+  const all = products
+    .filter((p) => truthy(p.is_active))
+    .filter((p) => String(p.fandom_type || "") === "Что-то тематическое");
+
+  try { gaViewItemList("thematic", all); } catch {}
+
+  const groupsOrder = [
+    { key: "sticker", title: "Наклейки" },
+    { key: "pin_single", title: "Значки поштучно" },
+    { key: "pin_set", title: "Наборы значков" },
+    { key: "poster", title: "Постеры" },
+    { key: "box", title: "Боксы" },
+    { key: "other", title: "Другое" },
+  ];
+
+  const groupMap = new Map();
+  for (const g of groupsOrder) groupMap.set(g.key, []);
+
+  all.forEach((p) => {
+    const tk = normalizeTypeKey(p.type);
+    if (groupMap.has(tk)) groupMap.get(tk).push(p);
+    else {
+      if (!groupMap.has("other")) groupMap.set("other", []);
+      groupMap.get("other").push(p);
+    }
+  });
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">Что-то тематическое</div>
+      <div class="small">Товары по группам</div>
+    </div>
+
+    ${groupsOrder
+      .map((g) => {
+        const items = (groupMap.get(g.key) || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru"));
+        if (!items.length) return "";
+        return `
+          <div class="card">
+            <div class="h3">${g.title}</div>
+            <div class="productGrid">
+              ${items
+                .map((p) => renderProductCard(p))
+                .join("")}
+            </div>
+          </div>
+        `;
+      })
+      .filter(Boolean)
+      .join("")}
+
+    ${(!all.length) ? `<div class="card"><div class="small">Пока нет товаров в этой категории.</div></div>` : ``}
+  `;
+
+  // bind product cards
+  view.querySelectorAll("[data-id]").forEach((el) => {
+    bindTap(el, () => openPage(() => renderProduct(el.dataset.id)));
+  });
+
+  syncNav();
+  syncBottomSpace();
+}
+
 // Страница фандома -> товары сеткой 2x (с фото)
 // =====================
 function renderFandomPage(fandomId) {
@@ -3825,7 +3997,6 @@ if (isPoster) {
   if (pf.poster_pack) selectedPosterPack = String(pf.poster_pack);
   if (pf.poster_paper) selectedPosterPaper = String(pf.poster_paper);
 }
-
 
   const { FILM_OPTIONS, STICKER_LAM_OPTIONS, PIN_LAM_OPTIONS } = getOptionDefs(overlayDelta, holoDelta);
   const PIN_LAM_OPTIONS_EFFECTIVE = isPinSingle ? PIN_LAM_OPTIONS.map(([k,l,_d]) => [k,l,0]) : PIN_LAM_OPTIONS;
