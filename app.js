@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "201";
+const APP_BUILD = "202";
 
 // =====================
 // CSV ссылки (твои)
@@ -1522,7 +1522,7 @@ function addToCartById(id, opts){
     if (!film) film = "film_glossy";
     if (!lamination) lamination = "none";
   }
-  if (typeKey === "pin") {
+  if (typeKey === "pin_set" || typeKey === "pin_single") {
     if (!pin_lamination) pin_lamination = "pin_base";
   }
   if (typeKey === "poster") {
@@ -2041,7 +2041,7 @@ function defaultShortByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin") {
+  if (typeKey === "pin_set" || typeKey === "pin_single") {
     return isPinSingleType(p?.product_type) ? "1 значок • металл • 44 мм" : "6 значков в наборе • металл • 44 мм";
   }
   if (typeKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
@@ -2057,7 +2057,7 @@ function defaultFullByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin") {
+  if (typeKey === "pin_set" || typeKey === "pin_single") {
     if (isPinSingleType(p?.product_type)) {
       return [
         "✨ О товаре\nЗначки по одной штуке — для тех, кто хочет конкретный дизайн без набора. Удобно комбинировать и собирать свою коллекцию, или взять один любимый.",
@@ -3531,7 +3531,7 @@ const fandom = getFandomById(p.fandom_id);
   const overlayDelta = Number(settings.overlay_price_delta) || 100;
   const holoDelta = Number(settings.holo_base_price_delta) || 100;
 
-  const typeKey = normalizeTypeKey(p.product_type);
+  const typeKey = typeGroupKey(p);
   const isSticker = typeKey === "sticker";
   // Похожие товары: из этого же фандома и/или этого же типа
   const sameFandom = (products || []).filter((x) => String(x.fandom_id) === String(p.fandom_id) && String(x.id) !== String(p.id));
@@ -4226,7 +4226,8 @@ function buildOrderText() {
   // группируем товары по типам
   const groupsOrder = [
     { key: "sticker", title: H("Наклейки") + ":" },
-    { key: "pin", title: H("Значки") + ":" },
+    { key: "pin_single", title: H("Значки поштучно") + ":" },
+    { key: "pin_set", title: H("Наборы значков") + ":" },
     { key: "poster", title: H("Постеры") + ":" },
     { key: "box", title: H("Боксы") + ":" },
   ];
@@ -4257,7 +4258,7 @@ function buildOrderText() {
     const p = getProductById(ci.id);
     if (!p) return;
 
-    const typeKey = normalizeTypeKey(p.product_type);
+    const typeKey = typeGroupKey(p);
     if (!groupedItems.has(typeKey)) return;
 
     const qty = Number(ci.qty) || 1;
@@ -4273,7 +4274,7 @@ function buildOrderText() {
       if (lamKey && lamKey !== "none") unitPrice += overlayDelta;
     }
 
-    if (typeKey === "pin") {
+    if (typeKey === "pin_set" || typeKey === "pin_single") {
       const lamKey = pickPinLam(ci);
       // доплата за всё кроме базовой
       if (lamKey && lamKey !== "pin_base") unitPrice += overlayDelta;
@@ -4334,7 +4335,7 @@ if (g.key === "box") {
           const label = stickerLamLabelByKey[lamKey] || String(lamKey);
           lines.push(`${LBL("Ламинация")} ${label}`);
         }
-      } else if (g.key === "pin") {
+      } else if (g.key === "pin_set" || g.key === "pin_single") {
         const lamKey = pickPinLam(ci);
         if (lamKey && lamKey !== "pin_base") {
           const label = pinLamLabelByKey[lamKey] || String(lamKey);
@@ -4368,8 +4369,7 @@ if (g.key === "box") {
 
   lines.push("");
   lines.push(`${LBL("Итоговая сумма")} ${money(total)}`);
-  lines.push(`${formatPlainValue("Доставка рассчитывается менеджеркой индивидуально.")}`);
-  if ((checkout.comment || "").trim()) {
+if ((checkout.comment || "").trim()) {
     lines.push(`${LBL("Комментарий")} ${formatPlainValue(checkout.comment)}`);
   }
   lines.push("");
