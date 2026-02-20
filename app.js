@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "213";
+const APP_BUILD = "214";
 
 // =====================
 // CSV ссылки (твои)
@@ -2110,8 +2110,8 @@ function defaultShortByType(p) {
   if (groupKey === "pin_set" || groupKey === "pin_single") {
     return isPinSingleType(p?.product_type) ? "1 значок • металл • 44 мм" : "6 значков в наборе • металл • 44 мм";
   }
-  if (baseKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
-  if (baseKey === "poster") return "Рандомные фотопостеры • выбор формата";
+  if (typeKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
+  if (typeKey === "poster") return "Рандомные фотопостеры • выбор формата";
   if (typeKey === "box") {
     if (nm.includes("конверт")) return "Сюрприз-конверт • компактный набор";
     return "Большой сюрприз-бокс • много наполнения";
