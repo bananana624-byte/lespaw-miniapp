@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "202";
+const APP_BUILD = "205";
 
 // =====================
 // CSV ссылки (твои)
@@ -1915,7 +1915,10 @@ function pickFirstField(obj, keys) {
   for (const k of keys) {
     const v = obj?.[k];
     const s = String(v ?? "").trim();
-    if (s) return s;
+    // Treat placeholder slashes/dashes as empty (common in the sheet)
+    if (!s) continue;
+    if (s === "/" || s === "-" || s === "—") continue;
+    return s;
   }
   return "";
 }
@@ -2054,11 +2057,15 @@ function defaultShortByType(p) {
 }
 
 function defaultFullByType(p) {
+  // Use grouped type (needed to distinguish pin single vs pin set)
+  const groupKey = typeGroupKey(p);
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin_set" || typeKey === "pin_single") {
-    if (isPinSingleType(p?.product_type)) {
+  // Pins: normalizeTypeKey() returns "pin" for both sets and single pieces,
+  // so we rely on groupKey to split them.
+  if (groupKey === "pin_single" || groupKey === "pin_set" || typeKey === "pin") {
+    if (groupKey === "pin_single" || isPinSingleType(p?.product_type)) {
       return [
         "✨ О товаре\nЗначки по одной штуке — для тех, кто хочет конкретный дизайн без набора. Удобно комбинировать и собирать свою коллекцию, или взять один любимый.",
         "📏 Характеристики\n• Размер значка: 44 мм\n• Материал: металл\n• Крепление: булавка сзади",
