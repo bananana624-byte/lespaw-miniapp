@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "215";
+const APP_BUILD = "217";
 
 // =====================
 // CSV ссылки (твои)
@@ -675,6 +675,169 @@ function postRenderEnhance() {
 const navStack = [];
 let currentRender = null;
 
+// =====================
+// In-app image viewer (modal)
+// =====================
+let __imgViewerEl = null;
+function openImageViewer(urls, startIndex = 0) {
+  try {
+    const list = (urls || []).map(String).filter(Boolean);
+    if (!list.length) return;
+    let idx = Math.max(0, Math.min(Number(startIndex || 0), list.length - 1));
+
+    if (!__imgViewerEl) {
+      __imgViewerEl = document.createElement("div");
+      __imgViewerEl.className = "imgViewer";
+      __imgViewerEl.innerHTML = `
+        <div class="imgViewerBackdrop" data-close="1"></div>
+        <div class="imgViewerInner" role="dialog" aria-modal="true">
+          <button class="imgViewerClose" type="button" aria-label="Закрыть" data-close="1">×</button>
+          <button class="imgViewerNav imgViewerPrev" type="button" aria-label="Предыдущее" data-prev="1">‹</button>
+          <button class="imgViewerNav imgViewerNext" type="button" aria-label="Следующее" data-next="1">›</button>
+          <div class="imgViewerStage">
+            <img class="imgViewerImg" alt="Изображение товара" loading="eager" decoding="async">
+          </div>
+          <div class="imgViewerDots" aria-hidden="true"></div>
+        </div>
+      `;
+      document.body.appendChild(__imgViewerEl);
+
+      // close
+      __imgViewerEl.addEventListener("click", (e) => {
+        const t = e.target;
+        if (!t) return;
+        if (t.closest && t.closest("[data-close]")) closeImageViewer();
+      });
+
+      // swipe inside viewer
+      let sx = 0, sy = 0, moved = false;
+      __imgViewerEl.addEventListener("touchstart", (e) => {
+        const p0 = e.touches && e.touches[0];
+        if (!p0) return;
+        sx = p0.clientX; sy = p0.clientY; moved = false;
+      }, { passive: true });
+      __imgViewerEl.addEventListener("touchmove", () => { moved = true; }, { passive: true });
+      __imgViewerEl.addEventListener("touchend", (e) => {
+        try {
+          if (!moved) return;
+          const p1 = e.changedTouches && e.changedTouches[0];
+          if (!p1) return;
+          const dx = p1.clientX - sx;
+          const dy = p1.clientY - sy;
+          if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+          const prevBtn = __imgViewerEl.querySelector("[data-prev]");
+          const nextBtn = __imgViewerEl.querySelector("[data-next]");
+          if (dx < 0) nextBtn && nextBtn.click();
+          else prevBtn && prevBtn.click();
+        } catch {}
+      }, { passive: true });
+    }
+
+    const imgEl = __imgViewerEl.querySelector(".imgViewerImg");
+    const dotsEl = __imgViewerEl.querySelector(".imgViewerDots");
+    const prevBtn = __imgViewerEl.querySelector("[data-prev]");
+    const nextBtn = __imgViewerEl.querySelector("[data-next]");
+
+    const renderDots = () => {
+      if (!dotsEl) return;
+      if (list.length <= 1) { dotsEl.innerHTML = ""; return; }
+      dotsEl.innerHTML = list.map((_, i) => `<span class="imgViewerDot ${i===idx?"is-active":""}"></span>`).join("");
+    };
+
+    const render = () => {
+      if (imgEl) imgEl.src = safeImgUrl(list[idx]);
+      if (prevBtn) prevBtn.style.display = (list.length > 1 ? "flex" : "none");
+      if (nextBtn) nextBtn.style.display = (list.length > 1 ? "flex" : "none");
+      renderDots();
+    };
+
+    const step = (d) => {
+      idx = (idx + d + list.length) % list.length;
+      render();
+    };
+
+    if (prevBtn) prevBtn.onclick = () => step(-1);
+    if (nextBtn) nextBtn.onclick = () => step(+1);
+
+    __imgViewerEl.style.display = "block";
+    document.body.classList.add("noScroll");
+    render();
+  } catch {}
+}
+function closeImageViewer() {
+  try {
+    if (!__imgViewerEl) return;
+    __imgViewerEl.style.display = "none";
+    document.body.classList.remove("noScroll");
+  } catch {}
+}
+// =====================
+// Stable scroll restore (fixes slight "jump" on back)
+// =====================
+function restoreScrollStable(y) {
+  const target = Math.max(0, Number(y || 0));
+  try {
+    const apply = () => { try { window.scrollTo(0, target); } catch {} };
+    requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(() => {
+        apply();
+        setTimeout(() => {
+          try {
+            const now = Number(window.scrollY || 0);
+            if (Math.abs(now - target) > 2) apply();
+          } catch {}
+        }, 120);
+      });
+    });
+  } catch {
+    try { window.scrollTo(0, target); } catch {}
+  }
+}
+
+// =====================
+// Product swipe (only for "pin_single")
+// =====================
+let __pinSingleSwipeCtx = { ids: [], idx: -1, source: "" };
+function setPinSingleSwipeContext(ids, currentId, sourceName) {
+  try {
+    const arr = (ids || []).map((x) => String(x)).filter(Boolean);
+    const cid = String(currentId || "");
+    const i = arr.indexOf(cid);
+    __pinSingleSwipeCtx = { ids: arr, idx: i, source: String(sourceName || "") };
+  } catch {
+    __pinSingleSwipeCtx = { ids: [], idx: -1, source: "" };
+  }
+}
+function clearPinSingleSwipeContext() {
+  __pinSingleSwipeCtx = { ids: [], idx: -1, source: "" };
+}
+function canSwipePinSingles(currentId) {
+  try {
+    const cid = String(currentId || "");
+    return __pinSingleSwipeCtx.ids.length > 1 && __pinSingleSwipeCtx.ids.indexOf(cid) !== -1;
+  } catch { return false; }
+}
+function nextPinSingleId(currentId, dir) {
+  try {
+    const cid = String(currentId || "");
+    const arr = __pinSingleSwipeCtx.ids || [];
+    const i = arr.indexOf(cid);
+    if (i < 0 || !arr.length) return "";
+    const ni = (i + (dir > 0 ? 1 : -1) + arr.length) % arr.length;
+    return arr[ni] || "";
+  } catch { return ""; }
+}
+function replaceCurrentPage(renderFn, opts = {}) {
+  if (typeof renderFn !== "function") return;
+  currentRender = renderFn;
+  syncNav();
+  try { renderFn(); try { postRenderEnhance(); } catch {} } catch (err) { console.error(err); resetToHome(); return; }
+  if (opts.scrollTop) scrollToTop();
+  syncBottomSpace();
+}
+
+
 function openPage(renderFn) {
   if (typeof renderFn !== "function") {
     console.error("openPage: renderFn is not a function", renderFn);
@@ -714,7 +877,7 @@ function goBack() {
   syncNav();
   try { currentRender();
     try { postRenderEnhance(); } catch {}
-    try { window.scrollTo(0, prevScroll); } catch {}
+    try { restoreScrollStable(prevScroll); } catch { try { window.scrollTo(0, prevScroll); } catch {} }
   } catch (err) {
     console.error(err);
     resetToHome();
@@ -2860,6 +3023,8 @@ const groupsOrder = [
     .map((g) => ({ ...g, items: all.filter((p) => typeGroupKey(p) === g.key) }))
     .filter((g) => g.items.length > 0);
 
+  const pinSingleIds = (grouped.find((g) => g.key === "pin_single")?.items || []).map((x) => String(x.id));
+
   const other = all.filter((p) => !knownKeys.has(typeGroupKey(p)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
@@ -2912,12 +3077,28 @@ const groupsOrder = [
     bindTap(el, (e) => {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+
+      // Analytics: select item
       try {
         const pid = String(el.dataset.id || "");
-        const p = getProductById(pid);
-        gaSelectItem(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, p);
+        const pp = getProductById(pid);
+        gaSelectItem(`fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`, pp);
       } catch {}
-openPage(() => renderProduct(el.dataset.id));
+
+      // Контекст листания: только для «значков поштучно»
+      try {
+        const pid = String(el.dataset.id || "");
+        const pp = getProductById(pid);
+        if (pp && typeGroupKey(pp) === "pin_single") setPinSingleSwipeContext(pinSingleIds, pid, `fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`);
+        else clearPinSingleSwipeContext();
+      } catch { clearPinSingleSwipeContext(); }
+      try {
+        const pid = String(el.dataset.id || "");
+        const pp = getProductById(pid);
+        if (pp && typeGroupKey(pp) === "pin_single") setPinSingleSwipeContext(pinSingleIds, pid, "search");
+        else clearPinSingleSwipeContext();
+      } catch { clearPinSingleSwipeContext(); }
+      openPage(() => renderProduct(el.dataset.id));
     });
   });
 
@@ -3431,6 +3612,8 @@ const groupsOrder = [
     .map((g) => ({ ...g, items: rawPHits.filter((p) => typeGroupKey(p) === g.key) }))
     .filter((g) => g.items.length > 0);
 
+  const pinSingleIds = (grouped.find((g) => g.key === "pin_single")?.items || []).map((x) => String(x.id));
+
   const other = rawPHits.filter((p) => !knownKeys.has(typeGroupKey(p)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
@@ -3730,16 +3913,23 @@ if (isPoster) {
 
     view.innerHTML = `
       <div class="card">
-        <div class="prodHead">
+        <div class=\"prodHead\">
           <div>
-            <div class="h2">${h(p.name)}</div>
-            <div class="small">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
+            <div class=\"h2\">${h(p.name)}</div>
+            <div class=\"small\">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
           </div>
-</div>
+          ${ (isPinSingle && canSwipePinSingles(p.id)) ? `
+            <div class=\"prodSwipeCtrls\" aria-label=\"Листать значки\">
+              <button class=\"prodSwipeBtn\" id=\"prodPrev\" type=\"button\" aria-label=\"Предыдущий значок\">‹</button>
+              <button class=\"prodSwipeBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий значок\">›</button>
+            </div>
+          ` : `` }
+        </div>
+        ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class="thumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" class="mt12" data-hide-onerror="1">` : ""}
+        ${img ? `<img class=\"thumb mt12\" id=\"prodMainImg\" src=\"${safeImgUrl(img)}\" alt=\"${escapeHTML('Фото: ' + (p?.name || 'товар'))}\" loading=\"lazy\" decoding=\"async\" data-hide-onerror=\"1\">` : ''}
 
         ${getFullDesc(p) ? `<div class="descBlocks mt10">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -3835,6 +4025,60 @@ if (isPoster) {
       bindTap(btnExamples, () => openExamples());
     }
 
+    const prodImgEl = document.getElementById('prodMainImg');
+    if (prodImgEl && img) {
+      bindTap(prodImgEl, () => openImageViewer([img], 0));
+    }
+
+    // Swipe between PRODUCTS (only for pin_single)
+    if (isPinSingle && canSwipePinSingles(p.id)) {
+      const goNeighbor = (dir) => {
+        const nid = nextPinSingleId(p.id, dir);
+        if (!nid || nid === String(p.id)) return;
+        try { localStorage.setItem('lespaw_pin_swipe_hint_v1', JSON.stringify(true)); } catch {}
+        replaceCurrentPage(() => renderProduct(nid), { scrollTop: true });
+      };
+
+      const btnPrev = document.getElementById('prodPrev');
+      const btnNext = document.getElementById('prodNext');
+      if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
+      if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
+
+      const hintEl = document.getElementById('pinSwipeHint');
+      if (hintEl) {
+        try {
+          setTimeout(() => { try { hintEl.classList.add('is-hide'); } catch {} }, 1600);
+          setTimeout(() => { try { hintEl.remove(); } catch {} }, 2400);
+          try { localStorage.setItem('lespaw_pin_swipe_hint_v1', JSON.stringify(true)); } catch {}
+        } catch {}
+      }
+
+      const rootCard = document.querySelector('.card');
+      if (rootCard) {
+        let sx = 0, sy = 0, active = false;
+        rootCard.addEventListener('touchstart', (e) => {
+          const t = e.target;
+          if (t && (t.closest?.('button') || t.closest?.('.optPanel') || t.closest?.('.thumb') || t.closest?.('input') || t.closest?.('select') || t.closest?.('textarea'))) {
+            active = false;
+            return;
+          }
+          const p0 = e.touches && e.touches[0];
+          if (!p0) return;
+          sx = p0.clientX; sy = p0.clientY; active = true;
+        }, { passive: true });
+        rootCard.addEventListener('touchend', (e) => {
+          if (!active) return;
+          const p1 = e.changedTouches && e.changedTouches[0];
+          if (!p1) return;
+          const dx = p1.clientX - sx;
+          const dy = p1.clientY - sy;
+          if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+          if (dx < 0) goNeighbor(+1);
+          else goNeighbor(-1);
+        }, { passive: true });
+      }
+    }
+
     syncNav();
     syncBottomSpace();
   }
@@ -3914,6 +4158,7 @@ function renderFavorites() {
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const idx = Number(el.dataset.idx || 0);
       const fi = items[idx];
+      try { clearPinSingleSwipeContext(); } catch {}
       openPage(() => renderProduct(el.dataset.open, fi));
     });
   });
@@ -4161,6 +4406,7 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
     const idx = Number(el.dataset.idx || 0);
     const ci = items[idx];
     if (!ci) return;
+    try { clearPinSingleSwipeContext(); } catch {}
     openPage(() => renderProduct(ci.id, ci));
   });
 });
@@ -4595,7 +4841,7 @@ function renderCheckout() {
 
           <div class="checkWrap">
             <label class="checkRow small" id="rowAgreeInfo">
-              <input type="checkbox" id="agreeInfo" ${infoViewedThisSession ? "" : "disabled"}>
+              <input type="checkbox" id="agreeInfo" ${infoViewedThisSession ? "checked" : ""} ${infoViewedThisSession ? "" : "disabled"}>
               <span>
                 Я ознакомилась с «Важной информацией».
                 ${infoViewedThisSession ? "" : `<div class="checkSub">Сначала нажми «Открыть».</div>`}
@@ -4905,4 +5151,3 @@ function renderCheckout() {
   syncNav();
   syncBottomSpace();
 }let _orderSubmitting = false;
-
