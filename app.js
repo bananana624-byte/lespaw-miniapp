@@ -1297,13 +1297,9 @@ function isDigitStart(name) {
   return /^[0-9]/.test((name || "").trim());
 }
 
-function isPinTypeKey(k){
-  return k === "pin_set" || k === "pin_single" || k === "pin";
-}
-
 function typeLabel(t) {
   const k = normalizeTypeKey(t);
-  const map = { sticker: "Наклейки", pin_set: "Наборы значков", pin_single: "Значки поштучно", poster: "Постеры", box: "Боксы" };
+  const map = { sticker: "Наклейки", pin: "Значки", poster: "Постеры", box: "Боксы" };
   return map[k] || (t || "");
 }
 
@@ -1317,15 +1313,36 @@ function typeLabelDetailed(t) {
 
   const k = normalizeTypeKey(t);
   if (k === "sticker") return "Наклейки";
-  if (k === "pin_set") return "Набор значков";
-  if (k === "pin_single") return "Значки поштучно";
+
+  if (k === "pin") {
+    // split pins into sets vs single pieces
+    if (isPinSingleType(t)) return "Значки поштучно";
+    if (s.includes("набор") || s.includes("значков")) return "Набор значков";
+    return "Значки";
+  }
+
   if (k === "poster") return "Постеры";
   if (k === "box") return "Боксы";
 
-  // Legacy fallback
-  if (k === "pin") return (s.includes("набор") || s.includes("значков")) ? "Набор значков" : "Значки";
-
   return raw || "";
+}
+
+function isPinSingleType(t) {
+  const s = String(t || "").trim().toLowerCase();
+  if (!s) return false;
+  // Signals for single-piece pins
+  if (s.includes("пошт")) return true; // поштучно / поштучные
+  if (s.includes("по одной") || s.includes("по 1") || s.includes("1 шт")) return true;
+  if (s.includes("один") && s.includes("значк")) return true;
+  // If explicitly mentions "набор" — it's not single
+  if (s.includes("набор")) return false;
+  return false;
+}
+
+function typeGroupKey(p) {
+  const base = normalizeTypeKey(p?.product_type);
+  if (base === "pin") return isPinSingleType(p?.product_type) ? "pin_single" : "pin_set";
+  return base;
 }
 
 
@@ -1347,30 +1364,15 @@ function normalizeTypeKey(t) {
   )
     return "sticker";
 
-  // pins (split: sets vs single)
+  // pins
   if (
-    s === "pin_set" ||
-    s === "pinset" ||
-    (s.includes("набор") && s.includes("значк")) ||
-    (s === "pin" || s === "pins" || s === "значок" || s === "значки" || s.includes("значк"))
-  ) {
-    // single pins explicit
-    if (
-      s === "pin_single" ||
-      s === "pins_single" ||
-      s.includes("поштуч") ||
-      s.includes("по штуч") ||
-      s.includes("по 1") ||
-      s.includes("по-1") ||
-      s.includes("1шт") ||
-      s.includes("1 шт") ||
-      s.includes("одной шту") ||
-      s.includes("по одной")
-    ) return "pin_single";
-
-    // по умолчанию — наборы (так исторически было в приложении)
-    return "pin_set";
-  }
+    s === "pin" ||
+    s === "pins" ||
+    s === "значок" ||
+    s === "значки" ||
+    s.includes("значк")
+  )
+    return "pin";
 
   // posters
   if (s === "poster" || s === "posters" || s.includes("постер")) return "poster";
@@ -1380,7 +1382,6 @@ function normalizeTypeKey(t) {
 
   return s;
 }
-
 
 function getFandomById(id) {
   return fandoms.find((f) => f.fandom_id === id);
@@ -1521,7 +1522,7 @@ function addToCartById(id, opts){
     if (!film) film = "film_glossy";
     if (!lamination) lamination = "none";
   }
-  if (isPinTypeKey(typeKey)) {
+  if (typeKey === "pin") {
     if (!pin_lamination) pin_lamination = "pin_base";
   }
   if (typeKey === "poster") {
@@ -2040,8 +2041,9 @@ function defaultShortByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (typeKey === "pin_set") return "6 значков в наборе • металл • 44 мм";
-  if (typeKey === "pin_single") return "1 значок • металл • 44 мм";
+  if (typeKey === "pin") {
+    return isPinSingleType(p?.product_type) ? "1 значок • металл • 44 мм" : "6 значков в наборе • металл • 44 мм";
+  }
   if (typeKey === "sticker") return "Лист наклеек • глянец • 16×25 см";
   if (typeKey === "poster") return "Рандомные фотопостеры • выбор формата";
   if (typeKey === "box") {
@@ -2055,7 +2057,14 @@ function defaultFullByType(p) {
   const typeKey = normalizeTypeKey(p?.product_type);
   const nm = String(p?.name || "").toLowerCase();
 
-  if (isPinTypeKey(typeKey)) {
+  if (typeKey === "pin") {
+    if (isPinSingleType(p?.product_type)) {
+      return [
+        "✨ О товаре\nЗначки по одной штуке — для тех, кто хочет конкретный дизайн без набора. Удобно комбинировать и собирать свою коллекцию, или взять один любимый.",
+        "📏 Характеристики\n• Размер значка: 44 мм\n• Материал: металл\n• Крепление: булавка сзади",
+      ].join("\n\n");
+    }
+
     return [
       "✨ О товаре\nНабор из шести аккуратных значков с яркой печатью.\nХорошо подойдут для рюкзаков, сумок, курток или коллекций — лёгкие, удобные и приятные в использовании.",
       "📦 В наборе\n• 6 значков",
@@ -2121,6 +2130,19 @@ function stripPosterStaticChoiceBlocks(raw) {
 
 function getFullDesc(p) {
   const fromCsv = pickFirstField(p, ["description_full", "description", "full_description", "descriptionFull", "desc"]);
+
+  // Pins: if this is a single-piece pin but CSV contains the set template — force the correct blocks.
+  if (normalizeTypeKey(p?.product_type) === "pin" && isPinSingleType(p?.product_type)) {
+    const t = String(fromCsv || "").toLowerCase();
+    const looksLikeSet = t.includes("в наборе") || t.includes("6 значк") || t.includes("набор из шести");
+    const looksLikeSingle = t.includes("по одной") || t.includes("пошт") || t.includes("1 знач");
+    if (!fromCsv || looksLikeGenericDesc(fromCsv) || looksLikeSet) {
+      // If CSV is empty/generic/wrong-for-single — use our single-piece template
+      return applySurpriseInsideOverride((defaultFullByType(p) || fromCsv), p);
+    }
+    // If CSV already explicitly looks like single-piece — respect it
+    if (looksLikeSingle) return applySurpriseInsideOverride(fromCsv, p);
+  }
   if (!fromCsv) return applySurpriseInsideOverride((defaultFullByType(p) || ""), p);
 
   // If the csv text is too generic, upgrade to our default template
@@ -2755,18 +2777,17 @@ function renderFandomPage(fandomId) {
 
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
-    { key: "pin_set", title: "Наборы значков" },
-    { key: "pin_single", title: "Значки поштучно" },
+    { key: "pin", title: "Значки" },
     { key: "poster", title: "Постеры" },
     { key: "box", title: "Боксы / конверты" },
   ];
   const knownKeys = new Set(groupsOrder.map((g) => g.key));
 
   const grouped = groupsOrder
-    .map((g) => ({ ...g, items: all.filter((p) => normalizeTypeKey(p.product_type) === g.key) }))
+    .map((g) => ({ ...g, items: all.filter((p) => typeGroupKey(p) === g.key) }))
     .filter((g) => g.items.length > 0);
 
-  const other = all.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
+  const other = all.filter((p) => !knownKeys.has(typeGroupKey(p)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
   const sectionHtml = (title, items) => {
@@ -3295,7 +3316,7 @@ function renderSearch(q) {
   // Treat "Значки/Боксы/Наклейки/Постеры" (любой язык/форма) as type-filter searches.
   // Important: we only accept known type keys, otherwise it would hijack normal searches.
   const qKey = normalizeTypeKey(query);
-  const isTypeQuery = qKey === "sticker" || qKey === "pin_set" || qKey === "pin_single" || qKey === "poster" || qKey === "box";
+  const isTypeQuery = qKey === "sticker" || qKey === "pin" || qKey === "poster" || qKey === "box";
 
   const shortQuery = !isTypeQuery && query.length < 3;
 
@@ -3311,12 +3332,7 @@ function renderSearch(q) {
     ? []
     : products
         .filter((p) => {
-          if (isTypeQuery) {
-            const pk = normalizeTypeKey(p.product_type);
-            // "значки" (и старые "pin") должны показывать и наборы, и поштучные
-            if (qKey === "pin_set") return pk === "pin_set" || pk === "pin_single";
-            return pk === qKey;
-          }
+          if (isTypeQuery) return normalizeTypeKey(p.product_type) === qKey;
 
           const typeName = String(p.product_type || "");
           const typeRu = `${typeLabel(typeName)} ${typeLabelDetailed(typeName)}`;
@@ -3331,18 +3347,17 @@ function renderSearch(q) {
 
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
-    { key: "pin_set", title: "Наборы значков" },
-    { key: "pin_single", title: "Значки поштучно" },
+    { key: "pin", title: "Значки" },
     { key: "poster", title: "Постеры" },
     { key: "box", title: "Боксы / конверты" },
   ];
   const knownKeys = new Set(groupsOrder.map((g) => g.key));
 
   const grouped = groupsOrder
-    .map((g) => ({ ...g, items: rawPHits.filter((p) => normalizeTypeKey(p.product_type) === g.key) }))
+    .map((g) => ({ ...g, items: rawPHits.filter((p) => typeGroupKey(p) === g.key) }))
     .filter((g) => g.items.length > 0);
 
-  const other = rawPHits.filter((p) => !knownKeys.has(normalizeTypeKey(p.product_type)));
+  const other = rawPHits.filter((p) => !knownKeys.has(typeGroupKey(p)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
   const sectionHtml = (title, items) => {
@@ -3385,7 +3400,6 @@ function renderSearch(q) {
           <div class="chips mt12">
             <button class="chip" data-sq="наклейки" type="button">Наклейки</button>
             <button class="chip" data-sq="значки" type="button">Значки</button>
-            <button class="chip" data-sq="значки поштучно" type="button">Значки поштучно</button>
             <button class="chip" data-sq="постеры" type="button">Постеры</button>
             <button class="chip" data-sq="боксы" type="button">Боксы</button>
           </div>
@@ -3526,7 +3540,7 @@ const fandom = getFandomById(p.fandom_id);
   const similarFandom = pickFew(shuffleArray(sameFandom), 4);
   const similarType = pickFew(shuffleArray(sameType.filter((x)=> String(x.fandom_id) !== String(p.fandom_id))), 4);
 
-  const isPin = isPinTypeKey(typeKey);
+  const isPin = typeKey === "pin";
   const isPoster = typeKey === "poster";
 
   // --- defaults ---
@@ -3856,7 +3870,7 @@ function calcItemUnitPrice(p, ci){
     if (film === "film_holo") price += holoDelta;
     if (lam !== "none") price += overlayDelta;
   }
-  if (isPinTypeKey(t)) {
+  if (t === "pin") {
     const lam = String(ci?.pin_lamination||"") || "pin_base";
     if (lam !== "pin_base") price += overlayDelta;
   }
@@ -3877,7 +3891,7 @@ function optionPairsFor(ci, p) {
     // базовые варианты не показываем
     if (film !== "film_glossy") out.push({ k: "Плёнка", v: FILM_LABELS[film] || film });
     if (lam !== "none") out.push({ k: "Ламинация", v: STICKER_LAM_LABELS[lam] || lam });
-  } else if (isPinTypeKey(t)) {
+  } else if (t === "pin") {
     const lam = String(ci?.pin_lamination || "") || "pin_base";
     if (lam !== "pin_base") out.push({ k: "Ламинация", v: PIN_LAM_LABELS[lam] || lam });
   } else if (t === "poster") {
@@ -4212,8 +4226,7 @@ function buildOrderText() {
   // группируем товары по типам
   const groupsOrder = [
     { key: "sticker", title: H("Наклейки") + ":" },
-    { key: "pin_set", title: H("Наборы значков") + ":" },
-    { key: "pin_single", title: H("Значки поштучно") + ":" },
+    { key: "pin", title: H("Значки") + ":" },
     { key: "poster", title: H("Постеры") + ":" },
     { key: "box", title: H("Боксы") + ":" },
   ];
@@ -4260,7 +4273,7 @@ function buildOrderText() {
       if (lamKey && lamKey !== "none") unitPrice += overlayDelta;
     }
 
-    if (isPinTypeKey(typeKey)) {
+    if (typeKey === "pin") {
       const lamKey = pickPinLam(ci);
       // доплата за всё кроме базовой
       if (lamKey && lamKey !== "pin_base") unitPrice += overlayDelta;
@@ -4321,7 +4334,7 @@ if (g.key === "box") {
           const label = stickerLamLabelByKey[lamKey] || String(lamKey);
           lines.push(`${LBL("Ламинация")} ${label}`);
         }
-      } else if (isPinTypeKey(g.key)) {
+      } else if (g.key === "pin") {
         const lamKey = pickPinLam(ci);
         if (lamKey && lamKey !== "pin_base") {
           const label = pinLamLabelByKey[lamKey] || String(lamKey);
