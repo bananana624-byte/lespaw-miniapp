@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "206";
+const APP_BUILD = "207";
 
 // =====================
 // CSV ссылки (твои)
@@ -4291,6 +4291,9 @@ function buildOrderText() {
     const typeKey = typeGroupKey(p);
     if (!groupedItems.has(typeKey)) return;
 
+    const groupKey = typeKey;
+    const baseKey = normalizeTypeKey(p.product_type);
+
     const qty = Number(ci.qty) || 1;
     let unitPrice = Number(p.price) || 0;
 
@@ -4304,10 +4307,14 @@ function buildOrderText() {
       if (lamKey && lamKey !== "none") unitPrice += overlayDelta;
     }
 
-    if (groupKey === "pin_set" || groupKey === "pin_single") {
+    if (groupKey === "pin_set") {
       const lamKey = pickPinLam(ci);
-      // доплата за всё кроме базовой
+      // Наборы значков: ламинация платная (всё кроме базовой)
       if (lamKey && lamKey !== "pin_base") unitPrice += overlayDelta;
+    }
+    if (groupKey === "pin_single") {
+      // Значки поштучно: ламинация бесплатная (0 ₽)
+      // (цена не меняется)
     }
 
     if (baseKey === "poster") {
