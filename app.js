@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "209";
+const APP_BUILD = "210";
 
 // =====================
 // CSV ссылки (твои)
@@ -1521,14 +1521,14 @@ function addToCartById(id, opts){
   let pin_lamination = String(opts?.pin_lamination||"");
   let poster_pack = String(opts?.poster_pack||"");
   let poster_paper = String(opts?.poster_paper||"");
-s*if (typeKey === "sticker") {
+  if (typeKey === "sticker") {
     if (!film) film = "film_glossy";
     if (!lamination) lamination = "none";
   }
   if (groupKey === "pin_set" || groupKey === "pin_single") {
     if (!pin_lamination) pin_lamination = "pin_base";
   }
-s*if (typeKey === "poster") {
+  if (typeKey === "poster") {
     if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
     if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
   }
@@ -2141,16 +2141,14 @@ function defaultFullByType(p) {
       "📏 Характеристики\n• Размер одного значка: 44 мм\n• Материал: металл\n• Крепление: булавка сзади",
     ].join("\n\n");
   }
-
-  if (baseKey === "sticker") {
+  if (typeKey === "sticker") {
     return [
       "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
       "📏 Характеристики\n• Размер листа: 16 × 25 см\n• Материал: глянцевая плёнка",
       "⚠️ Важно\nНаклейки не вырезаны по контуру — лист идёт цельным.",
     ].join("\n\n");
   }
-
-  if (baseKey === "poster") {
+  if (typeKey === "poster") {
     return [
       "✨ О товаре\nНабор рандомных фотопостеров с аккуратной печатью и приятной цветопередачей.\nКаждый заказ собирается случайным образом, поэтому каждый набор получается уникальным ✨",
       "🎲 Важно\nФотопостеры в заказе подбираются случайным образом.\n\nМы не кладем повторы внутри одного заказа, но при повторных заказах в будущем возможны повторения изображений, так как подбор осуществляется заново.",
@@ -4375,8 +4373,7 @@ function buildOrderText() {
 
     const qty = Number(ci.qty) || 1;
     let unitPrice = Number(p.price) || 0;
-
-    if (baseKey === "sticker") {
+  if (typeKey === "sticker") {
       const filmKey = pickStickerFilm(ci);
       const lamKey = pickStickerLam(ci);
 
@@ -4395,8 +4392,7 @@ function buildOrderText() {
       // Значки поштучно: ламинация бесплатная (0 ₽)
       // (цена не меняется)
     }
-
-    if (baseKey === "poster") {
+  if (typeKey === "poster") {
       const pack = String(ci?.poster_pack||"").trim() || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
       const base = Number(POSTER_PACK_PRICES[pack]) || Number(p.price) || 0;
       unitPrice = base;
