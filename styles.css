@@ -267,23 +267,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   gap:12px;
 }
 @media (max-width:360px){ .grid2{ grid-template-columns:1fr; } }
-.searchSection{
-  margin: 14px 0 18px;
-}
-.searchSectionTitle{
-  font-weight: 800;
-  letter-spacing: .2px;
-  margin: 0 0 10px;
-  color: rgba(11,11,18,.92);
-  text-shadow: 0 0 18px rgba(190,120,255,.18);
-}
-.moreWrap{
-  margin-top: 12px;
-}
-.btnMore{
-  width: 100%;
-  border-radius: 16px;
-}
 
 .pcard{
   background:rgba(0,0,0,.04);
@@ -1015,7 +998,6 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   transform:scale(.985);
   filter:brightness(1.03);
 }
-
 /* Checkout must-read banner */
 .mustRead{
   margin-top:10px;
