@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "218";
+const APP_BUILD = "219";
 
 // =====================
 // CSV ссылки (твои)
@@ -699,6 +699,11 @@ function openImageViewer(urls, startIndex = 0) {
               <img class="imgViewerImg" alt="Изображение товара" loading="eager" decoding="async">
             </div>
           </div>
+          <div class="imgViewerZoom" aria-label="Масштаб">
+            <button class="imgViewerZoomBtn" type="button" data-zoom-out="1" aria-label="Уменьшить">−</button>
+            <input class="imgViewerZoomRange" type="range" min="1" max="4" step="0.05" value="1" aria-label="Масштаб" />
+            <button class="imgViewerZoomBtn" type="button" data-zoom-in="1" aria-label="Увеличить">+</button>
+          </div>
           <div class="imgViewerDots" aria-hidden="true"></div>
         </div>
       `;
@@ -735,9 +740,12 @@ function openImageViewer(urls, startIndex = 0) {
         } catch {}
       }, { passive: true });
 
-      // zoom/pan inside viewer (pinch + double-tap)
+      // zoom/pan inside viewer (pinch + double-tap + desktop wheel/drag)
       try {
         const panEl = __imgViewerEl.querySelector("#imgViewerPan");
+        const zoomRange = __imgViewerEl.querySelector(".imgViewerZoomRange");
+        const zoomInBtn = __imgViewerEl.querySelector("[data-zoom-in]");
+        const zoomOutBtn = __imgViewerEl.querySelector("[data-zoom-out]");
         const zi = { scale: 1, tx: 0, ty: 0, min: 1, max: 4, lastTap: 0, drag: null, pinch: null };
         const apply = () => {
           if (!panEl) return;
@@ -745,6 +753,7 @@ function openImageViewer(urls, startIndex = 0) {
           zi.scale = s;
           panEl.style.transform = `translate3d(${zi.tx}px, ${zi.ty}px, 0) scale(${s})`;
           __imgViewerEl.classList.toggle("isZoomed", s > 1.001);
+          try { if (zoomRange) zoomRange.value = String(s); } catch {}
         };
         const reset = () => { zi.scale = 1; zi.tx = 0; zi.ty = 0; zi.drag = null; zi.pinch = null; apply(); };
 
@@ -834,7 +843,63 @@ function openImageViewer(urls, startIndex = 0) {
           stage.addEventListener("touchmove", onTouchMove, { passive: false });
           stage.addEventListener("touchend", onTouchEnd, { passive: true });
           stage.addEventListener("click", onTap, { passive: true });
+
+          // Desktop: mouse wheel zoom
+          stage.addEventListener("wheel", (e) => {
+            try {
+              if (!__imgViewerEl || __imgViewerEl.style.display !== "block") return;
+              e.preventDefault();
+              const dy = Number(e.deltaY || 0);
+              const factor = Math.exp(-dy * 0.002);
+              const prev = zi.scale;
+              zi.scale = Math.max(zi.min, Math.min(zi.max, zi.scale * factor));
+              if (Math.abs(zi.scale - prev) < 0.0001) return;
+              clampPan();
+              apply();
+            } catch {}
+          }, { passive: false });
+
+          // Desktop: drag to pan when zoomed
+          stage.addEventListener("pointerdown", (e) => {
+            try {
+              if (!e) return;
+              if (typeof e.button === "number" && e.button !== 0) return;
+              if (zi.scale <= 1.001) return;
+              e.preventDefault();
+              stage.setPointerCapture && stage.setPointerCapture(e.pointerId);
+              zi.drag = { x: e.clientX, y: e.clientY, tx: zi.tx, ty: zi.ty };
+            } catch {}
+          }, { passive: false });
+          stage.addEventListener("pointermove", (e) => {
+            try {
+              if (!zi.drag || zi.scale <= 1.001) return;
+              e.preventDefault();
+              const dx = e.clientX - zi.drag.x;
+              const dy = e.clientY - zi.drag.y;
+              zi.tx = (zi.drag.tx || 0) + dx;
+              zi.ty = (zi.drag.ty || 0) + dy;
+              clampPan();
+              apply();
+            } catch {}
+          }, { passive: false });
+          stage.addEventListener("pointerup", () => { zi.drag = null; }, { passive: true });
+          stage.addEventListener("pointercancel", () => { zi.drag = null; }, { passive: true });
         }
+
+        // Zoom controls (range + +/-)
+        const setScale = (s) => {
+          zi.scale = Math.max(zi.min, Math.min(zi.max, Number(s || 1)));
+          if (zi.scale <= 1.001) { zi.tx = 0; zi.ty = 0; }
+          clampPan();
+          apply();
+        };
+        if (zoomRange) {
+          zoomRange.addEventListener("input", () => {
+            try { setScale(Number(zoomRange.value || "1")); } catch {}
+          }, { passive: true });
+        }
+        if (zoomInBtn) bindTap(zoomInBtn, () => setScale(zi.scale + 0.25));
+        if (zoomOutBtn) bindTap(zoomOutBtn, () => setScale(zi.scale - 0.25));
 
         // expose for render() so we can reset zoom when switching images
         __imgViewerEl.__zoomReset = reset;
@@ -947,12 +1012,18 @@ function replaceCurrentPage(renderFn, opts = {}) {
 }
 
 
-function openPage(renderFn) {
+function openPage(renderFn, opts = {}) {
   if (typeof renderFn !== "function") {
     console.error("openPage: renderFn is not a function", renderFn);
     return;
   }
-  if (currentRender) navStack.push({ renderFn: currentRender, scrollY: (typeof window !== 'undefined' ? window.scrollY : 0) });
+  if (currentRender) {
+    navStack.push({
+      renderFn: currentRender,
+      scrollY: (typeof window !== 'undefined' ? window.scrollY : 0),
+      anchorId: String(opts?.anchorId || ""),
+    });
+  }
   currentRender = renderFn;
   syncNav();
   try { renderFn();
@@ -982,11 +1053,27 @@ function goBack() {
   const prev = navStack.pop();
   const prevFn = (prev && typeof prev === "object" && typeof prev.renderFn === "function") ? prev.renderFn : ((typeof prev === "function") ? prev : renderHome);
   const prevScroll = (prev && typeof prev === "object") ? (Number(prev.scrollY) || 0) : 0;
+  const prevAnchor = (prev && typeof prev === "object") ? String(prev.anchorId || "") : "";
   currentRender = prevFn;
   syncNav();
   try { currentRender();
     try { postRenderEnhance(); } catch {}
-    try { restoreScrollStable(prevScroll); } catch { try { window.scrollTo(0, prevScroll); } catch {} }
+    try {
+      if (prevAnchor) {
+        const el = document.getElementById(prevAnchor);
+        if (el && el.scrollIntoView) {
+          requestAnimationFrame(() => {
+            try { el.scrollIntoView({ block: "center", inline: "nearest" }); } catch {}
+          });
+        } else {
+          restoreScrollStable(prevScroll);
+        }
+      } else {
+        restoreScrollStable(prevScroll);
+      }
+    } catch {
+      try { window.scrollTo(0, prevScroll); } catch {}
+    }
   } catch (err) {
     console.error(err);
     resetToHome();
@@ -1911,7 +1998,6 @@ function updateBadges() {
       favCount.textContent = String(favN);
     } else favCount.classList.add("isHidden");
   }
-
   if (cartCount) {
     if (cartN > 0) {
       cartCount.classList.remove("isHidden");
@@ -2998,6 +3084,7 @@ bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
     if (!w) return;
     nc.scrollTo({ left: i * w, behavior: "smooth" });
   };
+
   const scrollByPage = (dir) => scrollToPage(getActivePage() + dir);
 
   renderDots();
@@ -3110,9 +3197,20 @@ function renderFandomList(type) {
 // "Что-то тематическое" -> товары сразу (без выбора фандома)
 // =====================
 function renderThematicPage() {
+  // Важно: в таблице продукты могут НЕ иметь fandom_type напрямую.
+  // Поэтому считаем «что-то тематическое» по связанному фандому (fandoms sheet)
+  // И как fallback — по p.fandom_type (если оно есть).
   const all = products
     .filter((p) => truthy(p.is_active))
-    .filter((p) => String(p.fandom_type || "") === "Что-то тематическое");
+    .filter((p) => {
+      try {
+        if (String(p.fandom_type || "") === "Что-то тематическое") return true;
+        const f = getFandomById(p.fandom_id);
+        return String(f?.fandom_type || "") === "Что-то тематическое";
+      } catch {
+        return false;
+      }
+    });
 
   try { gaViewItemList("thematic", all); } catch {}
 
@@ -3150,9 +3248,24 @@ function renderThematicPage() {
         return `
           <div class="card">
             <div class="h3">${g.title}</div>
-            <div class="productGrid">
+            <div class="grid2 mt10">
               ${items
-                .map((p) => renderProductCard(p))
+                .map((p) => `
+                  <div class="pcard" id="p_${p.id}" data-id="${p.id}">
+                    ${cardThumbHTML(p)}
+                    <div class="pcardTitle">${h(p.name)}</div>
+                    ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+                    <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+                    <div class="pcardActions">
+                      <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+                        <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+                      </button>
+                      <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
+                        <span class="plusGlyph">＋</span>
+                      </button>
+                    </div>
+                  </div>
+                `)
                 .join("")}
             </div>
           </div>
@@ -3165,8 +3278,47 @@ function renderThematicPage() {
   `;
 
   // bind product cards
-  view.querySelectorAll("[data-id]").forEach((el) => {
-    bindTap(el, () => openPage(() => renderProduct(el.dataset.id)));
+  // открыть карточку по тапу на карточку
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e?.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+
+      // Контекст листания: только для «значков поштучно»
+      try {
+        const pid = String(el.dataset.id || "");
+        const pp = getProductById(pid);
+        if (pp && typeGroupKey(pp) === "pin_single") {
+          const ids = (groupMap.get("pin_single") || []).map((x) => String(x.id));
+          setPinSingleSwipeContext(ids, pid, "thematic");
+        } else clearPinSingleSwipeContext();
+      } catch { clearPinSingleSwipeContext(); }
+
+      const pid = String(el.dataset.id || "");
+      openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
+    });
+  });
+
+  // мини-действия
+  view.querySelectorAll("[data-fav]").forEach((b) => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
+      const id = String(b.dataset.fav || "");
+      toggleFav(id);
+      // обновим локально сердечко
+      try {
+        const heart = b.querySelector(".heartGlyph");
+        if (heart) heart.textContent = isFavId(id) ? "♥" : "♡";
+        b.classList.toggle("is-active", isFavId(id));
+      } catch {}
+    });
+  });
+  view.querySelectorAll("[data-add]").forEach((b) => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
+      const id = String(b.dataset.add || "");
+      addToCart(id);
+    });
   });
 
   syncNav();
@@ -3204,7 +3356,7 @@ const groupsOrder = [
     const cards = items
       .map(
         (p) => `
-          <div class="pcard" data-id="${p.id}">
+          <div class="pcard" id="p_${p.id}" data-id="${p.id}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${h(p.name)}</div>
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3264,13 +3416,9 @@ const groupsOrder = [
         if (pp && typeGroupKey(pp) === "pin_single") setPinSingleSwipeContext(pinSingleIds, pid, `fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`);
         else clearPinSingleSwipeContext();
       } catch { clearPinSingleSwipeContext(); }
-      try {
-        const pid = String(el.dataset.id || "");
-        const pp = getProductById(pid);
-        if (pp && typeGroupKey(pp) === "pin_single") setPinSingleSwipeContext(pinSingleIds, pid, "search");
-        else clearPinSingleSwipeContext();
-      } catch { clearPinSingleSwipeContext(); }
-      openPage(() => renderProduct(el.dataset.id));
+
+      const pid = String(el.dataset.id || "");
+      openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
 
@@ -3997,6 +4145,7 @@ if (isPoster) {
   if (pf.poster_pack) selectedPosterPack = String(pf.poster_pack);
   if (pf.poster_paper) selectedPosterPaper = String(pf.poster_paper);
 }
+
 
   const { FILM_OPTIONS, STICKER_LAM_OPTIONS, PIN_LAM_OPTIONS } = getOptionDefs(overlayDelta, holoDelta);
   const PIN_LAM_OPTIONS_EFFECTIVE = isPinSingle ? PIN_LAM_OPTIONS.map(([k,l,_d]) => [k,l,0]) : PIN_LAM_OPTIONS;
