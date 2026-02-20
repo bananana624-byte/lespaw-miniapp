@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "214";
+const APP_BUILD = "215";
 
 // =====================
 // CSV ссылки (твои)
@@ -2123,6 +2123,7 @@ function defaultFullByType(p) {
   // Use grouped type (needed to distinguish pin single vs pin set)
   const groupKey = typeGroupKey(p);
   const typeKey = normalizeTypeKey(p?.product_type);
+  const baseKey = typeKey;
   const nm = String(p?.name || "").toLowerCase();
 
   // Pins: normalizeTypeKey() returns "pin" for both sets and single pieces,
