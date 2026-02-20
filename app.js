@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "219";
+const APP_BUILD = "221";
 
 // =====================
 // CSV ссылки (твои)
@@ -969,6 +969,103 @@ function restoreScrollStable(y) {
   }
 }
 
+
+// =====================
+// Last route (restore after refresh)
+// =====================
+const LS_LAST_ROUTE = "lespaw_last_route_v1";
+
+let __currentRoute = { page: "home" };
+
+function saveLastRoute(routeObj) {
+  try {
+    const r = routeObj && typeof routeObj === "object" ? routeObj : { page: "home" };
+    localStorage.setItem(LS_LAST_ROUTE, JSON.stringify({ ts: Date.now(), route: r }));
+  } catch {}
+}
+function loadLastRoute() {
+  try {
+    const raw = localStorage.getItem(LS_LAST_ROUTE);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !obj.route) return null;
+    return obj.route;
+  } catch {
+    return null;
+  }
+}
+function setCurrentRoute(routeObj) {
+  __currentRoute = (routeObj && typeof routeObj === "object") ? routeObj : { page: "home" };
+  saveLastRoute(__currentRoute);
+}
+function restoreLastRouteIfAny() {
+  const r = loadLastRoute();
+  if (!r || !r.page) return false;
+  // don't restore if we are already on something else (e.g., user typed search quickly)
+  try {
+    const q = String(globalSearch?.value || "").trim();
+    if (q) return false;
+  } catch {}
+  try {
+    const page = String(r.page || "");
+    if (page === "home") {
+      resetToHome();
+      return true;
+    }
+    if (page === "category" && r.type) {
+      currentRender = () => renderFandomList(String(r.type));
+      syncNav();
+      currentRender();
+      try { postRenderEnhance(); } catch {}
+      setCurrentRoute({ page: "category", type: String(r.type) });
+      return true;
+    }
+    if (page === "thematic") {
+      currentRender = () => renderThematicPage();
+      syncNav();
+      currentRender();
+      try { postRenderEnhance(); } catch {}
+      setCurrentRoute({ page: "thematic" });
+      return true;
+    }
+    if (page === "fandom" && r.id) {
+      const fid = String(r.id);
+      currentRender = () => renderFandomPage(fid);
+      syncNav();
+      currentRender();
+      try { postRenderEnhance(); } catch {}
+      setCurrentRoute({ page: "fandom", id: fid });
+      return true;
+    }
+    if (page === "favorites") {
+      currentRender = renderFavorites;
+      syncNav();
+      currentRender();
+      try { postRenderEnhance(); } catch {}
+      setCurrentRoute({ page: "favorites" });
+      return true;
+    }
+    if (page === "cart") {
+      currentRender = renderCart;
+      syncNav();
+      currentRender();
+      try { postRenderEnhance(); } catch {}
+      setCurrentRoute({ page: "cart" });
+      return true;
+    }
+    if (page === "product" && r.id) {
+      const pid = String(r.id);
+      currentRender = () => renderProduct(pid);
+      syncNav();
+      currentRender();
+      try { postRenderEnhance(); } catch {}
+      setCurrentRoute({ page: "product", id: pid });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 // =====================
 // Product swipe (only for "pin_single")
 // =====================
@@ -1005,6 +1102,7 @@ function nextPinSingleId(currentId, dir) {
 function replaceCurrentPage(renderFn, opts = {}) {
   if (typeof renderFn !== "function") return;
   currentRender = renderFn;
+  if (opts && opts.route) setCurrentRoute(opts.route);
   syncNav();
   try { renderFn(); try { postRenderEnhance(); } catch {} } catch (err) { console.error(err); resetToHome(); return; }
   if (opts.scrollTop) scrollToTop();
@@ -1022,9 +1120,11 @@ function openPage(renderFn, opts = {}) {
       renderFn: currentRender,
       scrollY: (typeof window !== 'undefined' ? window.scrollY : 0),
       anchorId: String(opts?.anchorId || ""),
+      route: (__currentRoute && typeof __currentRoute === "object") ? __currentRoute : { page: "home" },
     });
   }
   currentRender = renderFn;
+  if (opts && opts.route) setCurrentRoute(opts.route);
   syncNav();
   try { renderFn();
     try { postRenderEnhance(); } catch {}
@@ -1037,6 +1137,7 @@ function openPage(renderFn, opts = {}) {
       toast("Ошибка экрана", "warn");
     }
     currentRender = renderHome;
+  try { setCurrentRoute({ page: "home" }); } catch {}
     navStack.length = 0;
     syncNav();
     renderHome();
@@ -1055,6 +1156,8 @@ function goBack() {
   const prevScroll = (prev && typeof prev === "object") ? (Number(prev.scrollY) || 0) : 0;
   const prevAnchor = (prev && typeof prev === "object") ? String(prev.anchorId || "") : "";
   currentRender = prevFn;
+  try { if (prev && typeof prev === "object" && prev.route) __currentRoute = prev.route; } catch {}
+  try { saveLastRoute(__currentRoute); } catch {}
   syncNav();
   try { currentRender();
     try { postRenderEnhance(); } catch {}
@@ -1084,6 +1187,7 @@ function goBack() {
 function resetToHome() {
   navStack.length = 0;
   currentRender = renderHome;
+  try { setCurrentRoute({ page: "home" }); } catch {}
   if (globalSearch) globalSearch.value = "";
   syncNav();
   renderHome();
@@ -1380,6 +1484,17 @@ const CATEGORY_EMOJI = {
   "Что-то тематическое": "✨",
 };
 
+
+
+function isThematicTypeLabel(v) {
+  const s = String(v ?? "")
+    .toLowerCase()
+    .replace(/[‐‑–—]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  // ловим варианты: "что-то тематическое", "что то тематическое", "тематическое", и т.п.
+  return s.includes("темат");
+}
 const FILM_LABELS = {
   film_glossy: "Стандартная глянцевая плёнка",
   film_holo: "Голографическая плёнка",
@@ -1998,6 +2113,7 @@ function updateBadges() {
       favCount.textContent = String(favN);
     } else favCount.classList.add("isHidden");
   }
+
   if (cartCount) {
     if (cartN > 0) {
       cartCount.classList.remove("isHidden");
@@ -2809,8 +2925,8 @@ async function init() {
       goBack();
     });
     bindTap(navHome, () => resetToHome());
-    bindTap(navFav, () => openPage(renderFavorites));
-    bindTap(navCart, () => openPage(renderCart));
+    bindTap(navFav, () => openPage(renderFavorites, { route: { page: "favorites" } }));
+    bindTap(navCart, () => openPage(renderCart, { route: { page: "cart" } }));
 
     // Поиск: лёгкий debounce, чтобы не перерисовывать экран на каждый символ (особенно на больших CSV)
     let __searchTimer = null;
@@ -2908,6 +3024,15 @@ async function init() {
     });
 
     reviews = normalizeReviews(rFresh || []);
+
+    // Restore last open section after refresh (only if user has no active search)
+    try {
+      if (!currentRender || currentRender === renderHome) {
+        if (restoreLastRouteIfAny()) {
+          // restored
+        }
+      }
+    } catch {}
 
     const shouldKickHomeAfterLoad = (!currentRender || currentRender === renderHome);
     if (shouldKickHomeAfterLoad) {
@@ -3135,7 +3260,7 @@ function renderFandomTypes() {
   `;
 
   view.querySelectorAll("[data-type]").forEach((el) => {
-    bindTap(el, () => openPage(() => renderFandomList(el.dataset.type)));
+    bindTap(el, () => openPage(() => renderFandomList(el.dataset.type), { route: { page: "category", type: String(el.dataset.type) } }));
   });
 
   syncNav();
@@ -3147,7 +3272,7 @@ function renderFandomTypes() {
 // =====================
 function renderFandomList(type) {
   // Спец-логика: "Что-то тематическое" — показываем товары сразу, без выбора фандома
-  if (String(type || "") === "Что-то тематическое") {
+  if (isThematicTypeLabel(type) || String(type || "") === "Что-то тематическое") {
     return renderThematicPage();
   }
   const list = fandoms
@@ -3197,16 +3322,45 @@ function renderFandomList(type) {
 // "Что-то тематическое" -> товары сразу (без выбора фандома)
 // =====================
 function renderThematicPage() {
+  try { setCurrentRoute({ page: "thematic" }); } catch {}
   // Важно: в таблице продукты могут НЕ иметь fandom_type напрямую.
-  // Поэтому считаем «что-то тематическое» по связанному фандому (fandoms sheet)
-  // И как fallback — по p.fandom_type (если оно есть).
-  const all = products
-    .filter((p) => truthy(p.is_active))
+  // Поэтому считаем «что-то тематическое» по нескольким источникам:
+  // 1) p.category / p.category_name (если ты перенесла это в категорию)
+  // 2) p.fandom_type (если есть)
+  // 3) fandoms sheet по p.fandom_id (даже если есть пробелы/разные тире)
+  // 4) fallback по названию подборки (WLW/BI/Феминизм)
+  const norm = (v) => String(v ?? "").trim();
+  const getFandomByIdLoose = (id) => {
+    const nid = norm(id);
+    if (!nid) return null;
+    return (fandoms || []).find((f) => norm(f?.fandom_id) === nid) || null;
+  };
+  const isActiveOrMissing = (v) => {
+    const s = String(v ?? "").trim();
+    return s === "" ? true : truthy(s);
+  };
+
+  const all = (products || [])
+    .filter((p) => isActiveOrMissing(p.is_active))
     .filter((p) => {
       try {
-        if (String(p.fandom_type || "") === "Что-то тематическое") return true;
-        const f = getFandomById(p.fandom_id);
-        return String(f?.fandom_type || "") === "Что-то тематическое";
+        // 1) category fields
+        if (isThematicTypeLabel(p.category) || isThematicTypeLabel(p.category_name) || String(p.category || "") === "Что-то тематическое" || String(p.category_name || "") === "Что-то тематическое") return true;
+
+        // 2) product's own fandom_type field
+        if (isThematicTypeLabel(p.fandom_type) || String(p.fandom_type || "") === "Что-то тематическое") return true;
+
+        // 3) linked fandom
+        const f = getFandomByIdLoose(p.fandom_id) || getFandomById(p.fandom_id);
+        if (isThematicTypeLabel(f?.fandom_type) || String(f?.fandom_type || "") === "Что-то тематическое") return true;
+
+        // 4) fallback by collection name
+        const fn = String(f?.fandom_name || f?.name || "").toLowerCase();
+        if (fn.includes("wlw") || fn.includes("фемин") || fn.includes("bi") || fn.includes("би")) return true;
+
+        // extra fallback: sometimes stored in product fields
+        const pn = String(p.fandom_name || p.collection || p.group || p.section || "").toLowerCase();
+        return (pn.includes("wlw") || pn.includes("фемин") || pn.includes("bi") || pn.includes("би"));
       } catch {
         return false;
       }
@@ -3328,6 +3482,7 @@ function renderThematicPage() {
 // Страница фандома -> товары сеткой 2x (с фото)
 // =====================
 function renderFandomPage(fandomId) {
+  try { setCurrentRoute({ page: "fandom", id: String(fandomId || "") }); } catch {}
   const f = getFandomById(fandomId);
   const all = products.filter((p) => p.fandom_id === fandomId);
 
@@ -4025,7 +4180,7 @@ const groupsOrder = [
     bindTap(el, (e) => {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-      openPage(() => renderProduct(el.dataset.id));
+      openPage(() => renderProduct(String(el.dataset.id||"")), { anchorId: String(el.id || (`p_${String(el.dataset.id||"")}`)) });
     });
   });
 
@@ -4077,7 +4232,7 @@ const groupsOrder = [
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const id = String(el.dataset.id || "");
       if (!id) return;
-      openPage(() => renderProduct(id));
+      openPage(() => renderProduct(String(id||"")), { anchorId: String(el?.id || (`p_${String(id||"")}`)) });
     });
   });
 
@@ -4090,6 +4245,7 @@ syncNav();
 // Product page (полная карточка)
 // =====================
 function renderProduct(productId, prefill) {
+  try { setCurrentRoute({ page: "product", id: String(arguments[0] || "") }); } catch {}
   try {
   const p = getProductById(productId);
   if (!p) {
