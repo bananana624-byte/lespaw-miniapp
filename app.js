@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "240";
+const APP_BUILD = "241";
 
 // =====================
 // CSV ссылки (твои)
@@ -3740,6 +3740,21 @@ function renderThematicPage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
+
+      // thematic item navigation context (within current group)
+      // IMPORTANT: do NOT mix with global pin_single swipe; this is isolated to the thematic vitrines.
+      try {
+        const info = thematicDetailNavMap && thematicDetailNavMap[pid];
+        if (info && Array.isArray(info.ids) && info.ids.length) {
+          const idx = Math.max(0, info.ids.indexOf(String(pid)));
+          detailNavContext = { mode: "thematic", groupKey: info.groupKey, ids: info.ids.slice(), idx };
+        } else {
+          detailNavContext = null;
+        }
+      } catch {
+        detailNavContext = null;
+      }
+
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -5983,7 +5998,6 @@ function renderCheckout() {
     } else {
       setAriaInvalid(cPickupAddress, false);
     }
-
     // гейт: без открытия важной информации нельзя подтверждать
     if (!infoViewedThisSession) {
       rowAgreeInfo?.classList.add("is-error");
