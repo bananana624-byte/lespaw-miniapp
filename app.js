@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "226";
+const APP_BUILD = "227";
 
 // Pagination for type chips
 const TYPE_PAGE_SIZE = 20;
@@ -3464,7 +3464,18 @@ function renderThematicPage() {
         const fid = norm(p?.fandom_id);
 
         // Если в таблице fandoms есть явные тематические фандомы — считаем ТОЛЬКО по ним (самый строгий и стабильный вариант).
-        if (thematicIds.size > 0) return thematicIds.has(fid);
+        if (thematicIds.size > 0) {
+          // основной путь: точное совпадение fandom_id
+          if (thematicIds.has(fid)) return true;
+
+          // фолбэк: сопоставим через связанный фандом (на случай пробелов/неожиданных форматов id)
+          const ff = getFandomByIdLoose(p.fandom_id) || getFandomById(p.fandom_id);
+          const ffid = norm(ff?.fandom_id);
+          if (ffid && thematicIds.has(ffid)) return true;
+          if (isThematicStrict(ff?.fandom_type)) return true;
+
+          return false;
+        }
 
         // Фолбэк: явные поля у товара (на случай другой структуры таблиц).
         if (isThematicStrict(p.category) || isThematicStrict(p.category_name)) return true;
@@ -4998,6 +5009,7 @@ function renderCart() {
                           ${optionPairsHTML(pairs)}
                         </div>
                       </div>
+
                       <div class="row miniIndentRow row miniIndentRow mt12 aiCenter">
                         <button class="btn" data-dec="${idx}">−</button>
                         <div class="small small minw34 taCenter"><b>${Number(ci.qty) || 1}</b></div>
