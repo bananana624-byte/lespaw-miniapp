@@ -1,4 +1,4 @@
-/* LESPAW STYLE v185 — prod-safe UX/analytics */
+/* LESPAW STYLE v235 — prod-safe UX/analytics */
 
 :root{
   --lp-text: #fff;
@@ -1652,3 +1652,37 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   background: rgba(125, 60, 255, .10);
   border: 1px solid rgba(125, 60, 255, .18);
 }
+
+/* =====================
+   v235 Overrides (prod-safe)
+   ===================== */
+.btnSmall{padding:9px 11px;border-radius:12px}
+.checkoutBlock{border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);padding:10px 10px 8px 10px;border-radius:16px}
+.checkoutSectionTitle{margin:0 0 10px 0}
+.checkoutBlockTitle{margin:0 0 6px 0}
+.checkoutBlockText{margin:0}
+.checkWrap{gap:10px}
+.checkoutNote{margin-top:10px}
+
+/* Chips — a bit more “nav” */
+button.chip{min-height:34px;border-radius:999px;transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease}
+button.chip:active{transform:translateY(1px)}
+button.chip.is-active, button.chip[aria-current="true"]{border-color:rgba(190,120,255,.75);box-shadow:0 0 0 2px rgba(190,120,255,.18), 0 10px 26px rgba(125,60,255,.18)}
+
+/* Product card polish */
+.pcard{transition:transform .14s ease, box-shadow .14s ease}
+@media (hover:hover){.pcard:hover{transform:translateY(-1px);box-shadow:0 18px 46px rgba(0,0,0,.28)}}
+.pcard:active{transform:translateY(1px)}
+.pcardPrice{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16)}
+
+/* Make cart action slightly more primary than fav */
+.iconBtnCart{border-color:rgba(190,120,255,.55);box-shadow:0 0 0 1px rgba(190,120,255,.10) inset}
+.iconBtnCart:active{transform:translateY(1px)}
+.iconBtnHeart{opacity:.92}
+.iconBtnHeart.is-on, .iconBtnHeart[aria-pressed="true"]{opacity:1}
+
+/* Empty state warmth */
+.emptyBox::before{content:"✨";display:block;font-size:20px;margin-bottom:6px;opacity:.95}
+
+/* Image viewer stage: prevent scroll */
+.imgViewerStage{touch-action:none}
