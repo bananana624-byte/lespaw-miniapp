@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "233";
+const APP_BUILD = "235";
 
 // =====================
 // CSV ссылки (твои)
@@ -83,7 +83,15 @@ const GA_MEASUREMENT_ID = "G-EHCT6BJYJQ";
 function gaEvent(name, params = {}) {
   try {
     if (typeof window.gtag === "function") {
-      window.gtag("event", name, params || {});
+      const raw = params && typeof params === "object" ? params : {};
+      const clean = {};
+      const banRe = /(phone|tel|тел|телефон|address|адрес|fio|фио|паспорт|passport|email|e-mail)/i;
+      for (const k in raw) {
+        if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
+        if (banRe.test(String(k))) continue;
+        clean[k] = raw[k];
+      }
+      window.gtag("event", name, clean);
     }
   } catch {}
 }
@@ -303,7 +311,7 @@ if (view && !view.__lespawDelegationBound) {
       const t = e.target;
 
       // Chips: open type browse (works from any screen)
-      const chip = t && t.closest ? t.closest(".chip[data-type]") : null;
+      const chip = t && t.closest ? t.closest("button.chip[data-type]") : null;
       if (chip) {
         try { e.preventDefault(); e.stopPropagation(); } catch {}
         const key = String(chip.dataset.type || "").trim();
@@ -732,6 +740,7 @@ let currentRender = null;
 // In-app image viewer (modal)
 // =====================
 let __imgViewerEl = null;
+let __imgViewerKeyHandler = null;
 function openImageViewer(urls, startIndex = 0) {
   try {
     const list = (urls || []).map(String).filter(Boolean);
@@ -988,6 +997,19 @@ function openImageViewer(urls, startIndex = 0) {
 
     __imgViewerEl.style.display = "block";
     document.body.classList.add("noScroll");
+    // Esc to close (desktop)
+    try {
+      if (!__imgViewerKeyHandler) {
+        __imgViewerKeyHandler = (ev) => {
+          try {
+            if (ev && (ev.key === "Escape" || ev.key === "Esc")) {
+              closeImageViewer();
+            }
+          } catch {}
+        };
+      }
+      window.addEventListener("keydown", __imgViewerKeyHandler, { passive: true });
+    } catch {}
     render();
   } catch {}
 }
@@ -996,6 +1018,9 @@ function closeImageViewer() {
     if (!__imgViewerEl) return;
     __imgViewerEl.style.display = "none";
     document.body.classList.remove("noScroll");
+    try {
+      if (__imgViewerKeyHandler) window.removeEventListener("keydown", __imgViewerKeyHandler);
+    } catch {}
   } catch {}
 }
 // =====================
@@ -2998,6 +3023,7 @@ function bindTap(el, handler) {
   // We guard globally, not per-element.
   window.__LP_LAST_TAP_TS = window.__LP_LAST_TAP_TS || 0;
   window.__LP_LAST_TAP_SRC = window.__LP_LAST_TAP_SRC || "";
+
   let touchMoved = false;
 
   const fire = (e, src) => {
