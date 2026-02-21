@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v198 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v232 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "231";
+const APP_BUILD = "232";
 
 // =====================
 // CSV ссылки (твои)
@@ -290,6 +290,59 @@ const view = document.getElementById("view");
 const globalSearch = document.getElementById("globalSearch");
 const searchClear = document.getElementById("searchClear");
 const searchWrap = globalSearch ? globalSearch.closest(".searchWrap") : null;
+
+
+// =====================
+// Global click delegation (chips / mini actions) — reduces "forgot to bind" regressions (v232)
+// =====================
+if (view && !view.__lespawDelegationBound) {
+  view.__lespawDelegationBound = true;
+
+  view.addEventListener("click", (e) => {
+    try {
+      const t = e.target;
+
+      // Chips: open type browse (works from any screen)
+      const chip = t && t.closest ? t.closest(".chip[data-type]") : null;
+      if (chip) {
+        try { e.preventDefault(); e.stopPropagation(); } catch {}
+        const key = String(chip.dataset.type || "").trim();
+        if (key) openTypeBrowse(key, (chip.textContent || "").trim());
+        return;
+      }
+
+      // Favorite toggle (mini cards + any place using data-fav)
+      const favEl = t && t.closest ? t.closest("[data-fav]") : null;
+      if (favEl) {
+        try { e.preventDefault(); e.stopPropagation(); } catch {}
+        const id = String(favEl.getAttribute("data-fav") || "").trim();
+        if (!id) return;
+        try { toggleFav(id); } catch {}
+        // Optimistic UI update for the clicked button
+        try {
+          const btn = favEl.classList && favEl.classList.contains("iconBtn") ? favEl : favEl.closest(".iconBtn");
+          if (btn) {
+            const active = !!isFavId(id);
+            btn.classList.toggle("is-active", active);
+            const g = btn.querySelector(".heartGlyph");
+            if (g) g.textContent = active ? "♥" : "♡";
+          }
+        } catch {}
+        return;
+      }
+
+      // Add to cart (mini cards + any place using data-add)
+      const addEl = t && t.closest ? t.closest("[data-add]") : null;
+      if (addEl) {
+        try { e.preventDefault(); e.stopPropagation(); } catch {}
+        const id = String(addEl.getAttribute("data-add") || "").trim();
+        if (!id) return;
+        try { addToCartById(id); } catch {}
+        return;
+      }
+    } catch {}
+  }, { passive: false });
+}
 
 const navBack = document.getElementById("navBack");
 const navHome = document.getElementById("navHome");
@@ -998,6 +1051,7 @@ function setCurrentRoute(routeObj) {
   __currentRoute = (routeObj && typeof routeObj === "object") ? routeObj : { page: "home" };
   saveLastRoute(__currentRoute);
 }
+
 function restoreLastRouteIfAny() {
   const r = loadLastRoute();
   if (!r || !r.page) return false;
@@ -3570,7 +3624,7 @@ function renderThematicPage() {
 
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Что-то тематическое</div>
+      <div class="h2">Что-то тематическое <span class="inlineBadge">витрина</span></div>
       <div class="small">Товары по группам</div>
     </div>
 
