@@ -1609,12 +1609,12 @@ function getOptionDefs(overlayDelta, holoDelta) {
 
 // Posters: packs + paper (interactive options)
 const POSTER_PACKS = [
-  ["p10x15_8", "8 фотопостеров 10 × 15 см", 450],
+  ["p10x15_8", "10 фотопостеров 10 × 15 см", 450],
   ["p21x30_5", "5 фотопостеров 21 × 30 см", 750],
-  ["p_mix", "8 фотопостеров 10 × 15 см + 5 фотопостеров 21 × 30 см", 1100],
+  ["p_mix", "10 фотопостеров 10 × 15 см + 5 фотопостеров 21 × 30 см", 1100],
 ];
 const POSTER_PAPERS = [
-  ["glossy", "Глянцевая — яркие цвета и выразительный блеск", 0],
+  ["glossy", "Глянцевая — выразительный блеск", 0],
   ["matte", "Матовая — мягкая цветопередача без бликов", 0],
 ];
 const POSTER_PACK_LABELS = Object.fromEntries(POSTER_PACKS.map(x=>[x[0], x[1]]));
