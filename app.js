@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v233 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v240 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "239";
+const APP_BUILD = "240";
 
 // =====================
 // CSV ссылки (твои)
@@ -3607,6 +3607,16 @@ function renderTypeBrowsePage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
+      // set thematic item navigation context (within current group)
+      try {
+        const info = thematicDetailNavMap && thematicDetailNavMap[pid];
+        if (info && Array.isArray(info.ids) && info.ids.length) {
+          const idx = Math.max(0, info.ids.indexOf(String(pid)));
+          detailNavContext = { mode: 'thematic', groupKey: info.groupKey, ids: info.ids.slice(), idx };
+        } else {
+          detailNavContext = null;
+        }
+      } catch { detailNavContext = null; }
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3682,6 +3692,14 @@ function renderThematicPage() {
   const grouped = groupsOrder
     .map((g) => ({ ...g, items: allRaw.filter((p) => typeGroupKey(p) === g.key) }))
     .filter((g) => g.items.length > 0);
+
+  // Prepare per-product nav context (within each group)
+  thematicDetailNavMap = {};
+  grouped.forEach((g) => {
+    const ids = g.items.map((p) => String(p.id));
+    ids.forEach((pid) => { thematicDetailNavMap[pid] = { groupKey: g.key, ids }; });
+  });
+
 
   view.innerHTML = `
     <div class="card">
@@ -4672,6 +4690,52 @@ if (isPoster) {
     } catch {}
   }
 
+  
+// --- thematic next/prev navigation (within group) ---
+// If context exists but current product is not inside it, drop it to avoid "sticky" arrows outside thematic.
+try {
+  if (detailNavContext && detailNavContext.mode === "thematic") {
+    const ids = Array.isArray(detailNavContext.ids) ? detailNavContext.ids.map(String) : [];
+    if (!ids.includes(String(p.id))) detailNavContext = null;
+    else detailNavContext.idx = Math.max(0, ids.indexOf(String(p.id)));
+  }
+} catch { detailNavContext = null; }
+
+const hasThematicNav = !!(detailNavContext && detailNavContext.mode === "thematic" && Array.isArray(detailNavContext.ids) && detailNavContext.ids.length > 1);
+const thematicPrevId = (() => {
+  if (!hasThematicNav) return null;
+  const i = Number(detailNavContext.idx) || 0;
+  return (i > 0) ? String(detailNavContext.ids[i - 1]) : null;
+})();
+const thematicNextId = (() => {
+  if (!hasThematicNav) return null;
+  const i = Number(detailNavContext.idx) || 0;
+  return (i < detailNavContext.ids.length - 1) ? String(detailNavContext.ids[i + 1]) : null;
+})();
+
+function switchThematicProduct(nextId) {
+  if (!nextId) return;
+  try {
+    const ids = detailNavContext && Array.isArray(detailNavContext.ids) ? detailNavContext.ids.map(String) : [];
+    const idx = ids.indexOf(String(nextId));
+    if (idx >= 0) detailNavContext.idx = idx;
+  } catch {}
+
+  // Prefer "replace" navigation (no new history entry)
+  try {
+    if (typeof replaceCurrentPage === "function") {
+      replaceCurrentPage(() => renderProduct(String(nextId)), { scrollTop: true });
+      return;
+    }
+  } catch {}
+
+  // Fallback: switch render in place
+  currentRender = () => renderProduct(String(nextId));
+  syncNav();
+  try { currentRender(); } catch (err) { console.error(err); }
+  try { window.scrollTo(0, 0); } catch {}
+}
+
   function render(pulse = false) {
     const inFavNow = isFavId(p.id);
     const priceNow = calcPrice();
@@ -4683,14 +4747,20 @@ if (isPoster) {
             <div class=\"h2\">${h(p.name)}</div>
             <div class=\"small\">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
           </div>
-          ${ (isPinSingle && canSwipePinSingles(p.id)) ? `
+          ${ (hasThematicNav) ? `
+            <div class=\"prodSwipeCtrls\" aria-label=\"Листать товары\">
+              <button class=\"prodSwipeBtn\" id=\"prodPrevItem\" type=\"button\" ${thematicPrevId ? "" : "disabled"} aria-label=\"Предыдущий товар\">‹</button>
+              <button class=\"prodSwipeBtn\" id=\"prodNextItem\" type=\"button\" ${thematicNextId ? "" : "disabled"} aria-label=\"Следующий товар\">›</button>
+            </div>
+          ` : `` }
+          ${ (!hasThematicNav && (isPinSingle && canSwipePinSingles(p.id))) ? `
             <div class=\"prodSwipeCtrls\" aria-label=\"Листать значки\">
               <button class=\"prodSwipeBtn\" id=\"prodPrev\" type=\"button\" aria-label=\"Предыдущий значок\">‹</button>
               <button class=\"prodSwipeBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий значок\">›</button>
             </div>
           ` : `` }
         </div>
-        ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
+        ${ (isPinSingle && canSwipePinSingles(p.id) && !hasThematicNav && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
@@ -4803,13 +4873,20 @@ if (isPoster) {
         try { localStorage.setItem('lespaw_pin_swipe_hint_v1', JSON.stringify(true)); } catch {}
         replaceCurrentPage(() => renderProduct(nid), { scrollTop: true });
       };
+// Thematic item nav (within current group)
+const btnPrevItem = document.getElementById('prodPrevItem');
+const btnNextItem = document.getElementById('prodNextItem');
+if (btnPrevItem) bindTap(btnPrevItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicPrevId); });
+if (btnNextItem) bindTap(btnNextItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicNextId); });
 
-      const btnPrev = document.getElementById('prodPrev');
-      const btnNext = document.getElementById('prodNext');
-      if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
-      if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
-
-      const hintEl = document.getElementById('pinSwipeHint');
+// Pin-single swipe controls (global), only when not inside thematic nav
+const btnPrev = document.getElementById('prodPrev');
+const btnNext = document.getElementById('prodNext');
+if (!hasThematicNav) {
+  if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
+  if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
+}
+const hintEl = document.getElementById('pinSwipeHint');
       if (hintEl) {
         try {
           setTimeout(() => { try { hintEl.classList.add('is-hide'); } catch {} }, 1600);
