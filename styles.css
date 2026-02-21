@@ -1560,6 +1560,10 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .swipeHint{ margin:10px 0 0 0; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,.10); background:rgba(20,20,20,.18); color:rgba(255,255,255,.86); font-size:13px; text-align:center; box-shadow:0 10px 32px rgba(0,0,0,.25); backdrop-filter: blur(6px); transition: opacity .35s ease, transform .35s ease; }
 .swipeHint.is-hide{ opacity:0; transform: translateY(-6px); }
 
+/* ===== Product navigation (thematic) ===== */
+.prodNavCtrls{ display:flex; gap:8px; align-items:center; margin-left:8px; }
+.prodNavBtn{ width:30px; height:30px; border-radius:11px; border:1px solid rgba(255,255,255,.12); background:rgba(20,20,20,.18); color:rgba(255,255,255,.9); font-size:20px; line-height:1; display:flex; align-items:center; justify-content:center; }
+
 
 /* =====================
    UI polish (v232)
