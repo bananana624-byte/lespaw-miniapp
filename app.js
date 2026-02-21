@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "225";
+const APP_BUILD = "226";
 
 // Pagination for type chips
 const TYPE_PAGE_SIZE = 20;
@@ -1731,6 +1731,19 @@ const LAMINATION_EXAMPLES = [
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
 }
+
+
+// Активность строк из CSV: пусто = активно (по умолчанию), TRUE/1 = активно, 0/FALSE = неактивно
+function isActiveOrMissingFlag(v) {
+  const s = String(v ?? "").trim();
+  if (s === "") return true;
+  if (s === "1") return true;
+  if (s === "0") return false;
+  const u = s.toUpperCase();
+  if (u === "FALSE") return false;
+  if (u === "TRUE") return true;
+  return truthy(s);
+}
 function money(n) {
   return `${Number(n) || 0} ₽`;
 }
@@ -3418,7 +3431,7 @@ function renderThematicPage() {
   const norm = (v) => String(v ?? "").trim();
   const normType = (v) => norm(v)
     .toLowerCase()
-    .replace(/[–—−]/g, "-")
+    .replace(/[‐‑‒–—―−]/g, "-")
     .replace(/\s+/g, " ");
   const THEMATIC = normType("Что-то тематическое");
   const isThematicStrict = (v) => {
@@ -4162,7 +4175,7 @@ function renderTypeList(typeKey, shown) {
   const limit = __typeShownByKey[key] || pageSize;
 
   const all = (products || [])
-    .filter((p) => truthy(p.is_active))
+    .filter((p) => isActiveOrMissingFlag(p.is_active))
     .filter((p) => {
       const gk = typeGroupKey(p);
       if (key === "pin") return gk === "pin_single" || gk === "pin_set" || normalizeTypeKey(p.product_type) === "pin";
@@ -4985,7 +4998,6 @@ function renderCart() {
                           ${optionPairsHTML(pairs)}
                         </div>
                       </div>
-
                       <div class="row miniIndentRow row miniIndentRow mt12 aiCenter">
                         <button class="btn" data-dec="${idx}">−</button>
                         <div class="small small minw34 taCenter"><b>${Number(ci.qty) || 1}</b></div>
