@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "230";
+const APP_BUILD = "231";
 
 // =====================
 // CSV ссылки (твои)
@@ -3616,8 +3616,14 @@ function renderThematicPage() {
     bindTap(b, (e) => {
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.fav || "");
-      toggleFavById(id);
-      renderThematicPage();
+      toggleFav(id);
+      // обновим сердечки без полной перерисовки
+      view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
+        const active = isFavId(id);
+        x.classList.toggle("is-active", active);
+        const g = x.querySelector(".heartGlyph");
+        if (g) g.textContent = active ? "♥" : "♡";
+      });
     });
   });
   view.querySelectorAll("[data-add]").forEach((b) => {
