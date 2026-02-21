@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "233";
+const APP_BUILD = "238";
 
 // =====================
 // CSV ссылки (твои)
@@ -1152,6 +1152,47 @@ function nextPinSingleId(currentId, dir) {
     const ni = (i + (dir > 0 ? 1 : -1) + arr.length) % arr.length;
     return arr[ni] || "";
   } catch { return ""; }
+}
+
+// =====================
+// Product navigation (only for "Что-то тематическое")
+// - context is per GROUP inside thematic page (stickers / pin_set / ...)
+// - shows compact arrows in product header to switch PRODUCTS (not photos)
+// =====================
+let __thematicNavCtx = { ids: [], idx: -1, source: "" };
+function setThematicNavContext(ids, currentId, sourceName) {
+  try {
+    const arr = (ids || []).map((x) => String(x)).filter(Boolean);
+    const cid = String(currentId || "");
+    const i = arr.indexOf(cid);
+    __thematicNavCtx = { ids: arr, idx: i, source: String(sourceName || "") };
+  } catch {
+    __thematicNavCtx = { ids: [], idx: -1, source: "" };
+  }
+}
+function clearThematicNavContext() {
+  __thematicNavCtx = { ids: [], idx: -1, source: "" };
+}
+function canNavThematic(currentId) {
+  try {
+    const cid = String(currentId || "");
+    if (!(__thematicNavCtx?.source || "").startsWith("thematic:")) return false;
+    return (__thematicNavCtx.ids || []).length > 1 && (__thematicNavCtx.ids || []).indexOf(cid) !== -1;
+  } catch {
+    return false;
+  }
+}
+function nextThematicId(currentId, dir) {
+  try {
+    const cid = String(currentId || "");
+    const arr = __thematicNavCtx.ids || [];
+    const i = arr.indexOf(cid);
+    if (i < 0 || !arr.length) return "";
+    const ni = (i + (dir > 0 ? 1 : -1) + arr.length) % arr.length;
+    return arr[ni] || "";
+  } catch {
+    return "";
+  }
 }
 function replaceCurrentPage(renderFn, opts = {}) {
   if (typeof renderFn !== "function") return;
@@ -3607,6 +3648,8 @@ function renderTypeBrowsePage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
+      try { clearThematicNavContext(); } catch {}
+      try { clearPinSingleSwipeContext(); } catch {}
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3694,7 +3737,7 @@ function renderThematicPage() {
         <div class="h3">${h(g.title)}</div>
         <div class="grid2 mt12">
           ${g.items.map((p) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}">
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-g="${g.key}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3722,6 +3765,17 @@ function renderThematicPage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
+
+      // Контекст навигации: только внутри "Что-то тематическое" и строго по текущей группе
+      try {
+        const gk = String(el.dataset.g || "");
+        const ids = (grouped.find((g) => String(g.key) === gk)?.items || []).map((x) => String(x.id));
+        setThematicNavContext(ids, pid, `thematic:${gk}`);
+      } catch { try { clearThematicNavContext(); } catch {} }
+
+      // Не смешиваем с листанием pin_single
+      try { clearPinSingleSwipeContext(); } catch {}
+
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3846,6 +3900,7 @@ const groupsOrder = [
       try {
         const pid = String(el.dataset.id || "");
         const pp = getProductById(pid);
+        try { clearThematicNavContext(); } catch {}
         if (pp && typeGroupKey(pp) === "pin_single") setPinSingleSwipeContext(pinSingleIds, pid, `fandom:${String(f?.fandom_name || f?.name || fandomId || "")}`);
         else clearPinSingleSwipeContext();
       } catch { clearPinSingleSwipeContext(); }
@@ -4459,6 +4514,8 @@ const groupsOrder = [
     bindTap(el, (e) => {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      try { clearThematicNavContext(); } catch {}
+      try { clearPinSingleSwipeContext(); } catch {}
       openPage(() => renderProduct(String(el.dataset.id||"")), { anchorId: String(el.id || (`p_${String(el.dataset.id||"")}`)) });
     });
   });
@@ -4521,6 +4578,8 @@ const groupsOrder = [
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const id = String(el.dataset.id || "");
       if (!id) return;
+      try { clearThematicNavContext(); } catch {}
+      try { clearPinSingleSwipeContext(); } catch {}
       openPage(() => renderProduct(String(id||"")), { anchorId: String(el?.id || (`p_${String(id||"")}`)) });
     });
   });
@@ -4689,6 +4748,12 @@ if (isPoster) {
               <button class=\"prodSwipeBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий значок\">›</button>
             </div>
           ` : `` }
+          ${ (canNavThematic(p.id)) ? `
+            <div class=\"prodNavCtrls\" aria-label=\"Листать товары\">
+              <button class=\"prodNavBtn\" id=\"prodTPrev\" type=\"button\" aria-label=\"Предыдущий товар\">‹</button>
+              <button class=\"prodNavBtn\" id=\"prodTNext\" type=\"button\" aria-label=\"Следующий товар\">›</button>
+            </div>
+          ` : `` }
         </div>
         ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
 
@@ -4844,6 +4909,21 @@ if (isPoster) {
       }
     }
 
+    // Thematic product navigation (arrows only)
+    if (canNavThematic(p.id)) {
+      const goNeighbor = (dir) => {
+        const nid = nextThematicId(p.id, dir);
+        if (!nid || nid === String(p.id)) return;
+        try { setThematicNavContext(__thematicNavCtx.ids || [], nid, __thematicNavCtx.source || "thematic:"); } catch {}
+        replaceCurrentPage(() => renderProduct(nid), { scrollTop: true, route: { page: "product", id: String(nid) } });
+      };
+
+      const btnPrev = document.getElementById('prodTPrev');
+      const btnNext = document.getElementById('prodTNext');
+      if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
+      if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
+    }
+
     syncNav();
     syncBottomSpace();
   }
@@ -4927,6 +5007,7 @@ function renderFavorites() {
       const idx = Number(el.dataset.idx || 0);
       const fi = items[idx];
       try { clearPinSingleSwipeContext(); } catch {}
+      try { clearThematicNavContext(); } catch {}
       openPage(() => renderProduct(el.dataset.open, fi));
     });
   });
@@ -5214,6 +5295,7 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
     const ci = items[idx];
     if (!ci) return;
     try { clearPinSingleSwipeContext(); } catch {}
+    try { clearThematicNavContext(); } catch {}
     openPage(() => renderProduct(ci.id, ci));
   });
 });
