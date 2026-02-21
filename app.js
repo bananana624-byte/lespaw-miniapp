@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "229";
+const APP_BUILD = "230";
 
 // =====================
 // CSV ссылки (твои)
@@ -3534,86 +3534,39 @@ function renderTypeBrowsePage() {
 // =====================
 function renderThematicPage() {
   try { setCurrentRoute({ page: "thematic" }); } catch {}
-  // Важно: чтобы не подтягивать «рандомные» товары,
-  // считаем «что-то тематическое» ТОЛЬКО по явным полям:
-  // 1) p.category / p.category_name
-  // 2) p.fandom_type (если есть)
-  // 3) linked fandom.fandom_type по p.fandom_id
-  // Никаких fuzzy/поисков по названиям (WLW/BI/Феминизм) — они слишком легко дают ложные совпадения.
-  const norm = (v) => String(v ?? "").trim();
-  const normType = (v) => norm(v)
-    .toLowerCase()
-    .replace(/[–—−]/g, "-")
-    .replace(/\s+/g, " ");
-  const THEMATIC = normType("Что-то тематическое");
-  const isThematicStrict = (v) => {
-    const t = normType(v);
-    if (!t) return false;
-    // принимаем варианты с дефисом и без, но только для этого точного ярлыка
-    return t === THEMATIC || t === THEMATIC.replace("-", " ");
-  };
-  const getFandomByIdLoose = (id) => {
-    const nid = norm(id);
-    if (!nid) return null;
-    return (fandoms || []).find((f) => norm(f?.fandom_id) === nid) || null;
-  };
-  const isActiveOrMissing = (v) => {
-    const s = String(v ?? "").trim();
-    return s === "" ? true : truthy(s);
-  };
 
+  const WANT_TYPE = "Что-то тематическое";
+  const norm = (v) => String(v ?? "").trim();
+  const normSpace = (s) => norm(s).replace(/\s+/g, " ").trim();
+  const isThematicType = (v) => normSpace(v).toLowerCase() === normSpace(WANT_TYPE).toLowerCase();
+
+  // Таблицы — источник истины:
+  // находим фандом(ы) с fandom_type="Что-то тематическое" и показываем ТОЛЬКО товары, привязанные к ним через fandom_id.
   const thematicIds = new Set(
     (fandoms || [])
-      .filter((f) => isThematicStrict(f?.fandom_type))
-      .map((f) => norm(f?.fandom_id))
+      .filter((f) => isThematicType(f?.fandom_type))
+      .map((f) => String(f?.fandom_id || f?.id || "").trim())
       .filter(Boolean)
   );
 
-  const all = (products || [])
-    .filter((p) => isActiveOrMissing(p.is_active))
-    .filter((p) => {
-      try {
-        const fid = norm(p?.fandom_id);
+  const allRaw = (products || [])
+    .filter((p) => isActiveOrMissingFlag(p?.is_active))
+    .filter((p) => thematicIds.has(String(p?.fandom_id || "").trim()));
 
-        // Если в таблице fandoms есть явные тематические фандомы — считаем ТОЛЬКО по ним (самый строгий и стабильный вариант).
-        if (thematicIds.size > 0) return thematicIds.has(fid);
-
-        // Фолбэк: явные поля у товара (на случай другой структуры таблиц).
-        if (isThematicStrict(p.category) || isThematicStrict(p.category_name)) return true;
-        if (isThematicStrict(p.fandom_type)) return true;
-
-        // Фолбэк: связанный фандом
-        const f = getFandomByIdLoose(p.fandom_id) || getFandomById(p.fandom_id);
-        if (isThematicStrict(f?.fandom_type)) return true;
-
-        return false;
-      } catch {
-        return false;
-      }
-    });
-
-  try { gaViewItemList("thematic", all); } catch {}
+  // Analytics: list view
+  try { gaViewItemList("thematic", allRaw); } catch {}
 
   const groupsOrder = [
     { key: "sticker", title: "Наклейки" },
-    { key: "pin_single", title: "Значки поштучно" },
     { key: "pin_set", title: "Наборы значков" },
+    { key: "pin_single", title: "Значки поштучно" },
     { key: "poster", title: "Постеры" },
-    { key: "box", title: "Боксы" },
-    { key: "other", title: "Другое" },
+    { key: "box", title: "Боксы / конверты" },
   ];
 
-  const groupMap = new Map();
-  for (const g of groupsOrder) groupMap.set(g.key, []);
-
-  all.forEach((p) => {
-    const tk = typeGroupKey(p) || normalizeTypeKey(p?.product_type) || "other";
-    if (groupMap.has(tk)) groupMap.get(tk).push(p);
-    else {
-      if (!groupMap.has("other")) groupMap.set("other", []);
-      groupMap.get("other").push(p);
-    }
-  });
+  const grouped = groupsOrder
+    .map((g) => ({ ...g, items: allRaw.filter((p) => typeGroupKey(p) === g.key) }))
+    .filter((g) => g.items.length > 0);
 
   view.innerHTML = `
     <div class="card">
@@ -3621,76 +3574,50 @@ function renderThematicPage() {
       <div class="small">Товары по группам</div>
     </div>
 
-    ${groupsOrder
-      .map((g) => {
-        const items = (groupMap.get(g.key) || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru"));
-        if (!items.length) return "";
-        return `
-          <div class="card">
-            <div class="h3">${g.title}</div>
-            <div class="grid2 mt10">
-              ${items
-                .map((p) => `
-                  <div class="pcard" id="p_${p.id}" data-id="${p.id}">
-                    ${cardThumbHTML(p)}
-                    <div class="pcardTitle">${h(p.name)}</div>
-                    ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
-                    <div class="pcardPrice">${moneyDisplay(p.price)}</div>
-                    <div class="pcardActions">
-                      <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
-                        <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
-                      </button>
-                      <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
-                        <span class="plusGlyph">＋</span>
-                      </button>
-                    </div>
-                  </div>
-                `)
-                .join("")}
+    ${grouped.length ? grouped.map((g) => `
+      <div class="card">
+        <div class="h3">${h(g.title)}</div>
+        <div class="grid2 mt12">
+          ${g.items.map((p) => `
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}">
+              ${cardThumbHTML(p)}
+              <div class="pcardTitle">${h(p.name)}</div>
+              ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+              <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+              <div class="pcardActions">
+                <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+                  <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+                </button>
+                <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
+                  <span class="plusGlyph">＋</span>
+                </button>
+              </div>
             </div>
-          </div>
-        `;
-      })
-      .filter(Boolean)
-      .join("")}
-
-    ${(!all.length) ? `<div class="card"><div class="small">Пока нет товаров в этой категории.</div></div>` : ``}
+          `).join("")}
+        </div>
+      </div>
+    `).join("") : `
+      <div class="card"><div class="small">Пока нет товаров в этой категории.</div></div>
+    `}
   `;
 
-  // bind product cards
-  // открыть карточку по тапу на карточку
+  // bind cards
   view.querySelectorAll(".pcard[data-id]").forEach((el) => {
     bindTap(el, (e) => {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-
-      // Контекст листания: только для «значков поштучно»
-      try {
-        const pid = String(el.dataset.id || "");
-        const pp = getProductById(pid);
-        if (pp && typeGroupKey(pp) === "pin_single") {
-          const ids = (groupMap.get("pin_single") || []).map((x) => String(x.id));
-          setPinSingleSwipeContext(ids, pid, "thematic");
-        } else clearPinSingleSwipeContext();
-      } catch { clearPinSingleSwipeContext(); }
-
       const pid = String(el.dataset.id || "");
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
 
-  // мини-действия
+  // actions
   view.querySelectorAll("[data-fav]").forEach((b) => {
     bindTap(b, (e) => {
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.fav || "");
-      toggleFav(id);
-      // обновим локально сердечко
-      try {
-        const heart = b.querySelector(".heartGlyph");
-        if (heart) heart.textContent = isFavId(id) ? "♥" : "♡";
-        b.classList.toggle("is-active", isFavId(id));
-      } catch {}
+      toggleFavById(id);
+      renderThematicPage();
     });
   });
   view.querySelectorAll("[data-add]").forEach((b) => {
@@ -3699,12 +3626,15 @@ function renderThematicPage() {
       const id = String(b.dataset.add || "");
       addToCartById(id);
       toast("Добавлено в корзину", "good");
+      // лёгкое обновление бейджей
+      syncNav();
     });
   });
 
   syncNav();
   syncBottomSpace();
 }
+
 
 // Страница фандома -> товары сеткой 2x (с фото)
 // =====================
@@ -4453,6 +4383,16 @@ const groupsOrder = [
   });
 
   
+
+  // быстрые чипсы типов товаров (на экране поиска/пустых состояний)
+  view.querySelectorAll(".chip[data-type]").forEach((btn) => {
+    bindTap(btn, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
+      const key = String(btn.dataset.type || "").trim();
+      if (!key) return;
+      openTypeBrowse(key, (btn.textContent || "").trim());
+    });
+  });
   // открыть похожие товары
   view.querySelectorAll(".pcard[data-id]").forEach((el) => {
     bindTap(el, (e) => {
