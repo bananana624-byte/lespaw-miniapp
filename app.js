@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "227";
+const APP_BUILD = "228";
 
 // Pagination for type chips
 const TYPE_PAGE_SIZE = 20;
@@ -1458,11 +1458,11 @@ let _csvBgToastShown = false;
 function onCsvBackgroundUpdate(cacheKey, freshData) {
   try {
     if (cacheKey === LS_CSV_CACHE_PRODUCTS) {
-      products = (freshData || []);
+      products = sanitizeProducts(freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_REVIEWS) {
-      reviews = (freshData || []);
+      reviews = normalizeReviews(freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_FANDOMS) {
-      fandoms = (freshData || []);
+      fandoms = sanitizeFandoms(freshData || []);
     } else if (cacheKey === LS_CSV_CACHE_SETTINGS) {
       // settings хранится как объект key->value
       const next = {};
@@ -1730,19 +1730,6 @@ const LAMINATION_EXAMPLES = [
 
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
-}
-
-
-// Активность строк из CSV: пусто = активно (по умолчанию), TRUE/1 = активно, 0/FALSE = неактивно
-function isActiveOrMissingFlag(v) {
-  const s = String(v ?? "").trim();
-  if (s === "") return true;
-  if (s === "1") return true;
-  if (s === "0") return false;
-  const u = s.toUpperCase();
-  if (u === "FALSE") return false;
-  if (u === "TRUE") return true;
-  return truthy(s);
 }
 function money(n) {
   return `${Number(n) || 0} ₽`;
@@ -3431,7 +3418,7 @@ function renderThematicPage() {
   const norm = (v) => String(v ?? "").trim();
   const normType = (v) => norm(v)
     .toLowerCase()
-    .replace(/[‐‑‒–—―−]/g, "-")
+    .replace(/[–—−]/g, "-")
     .replace(/\s+/g, " ");
   const THEMATIC = normType("Что-то тематическое");
   const isThematicStrict = (v) => {
@@ -3464,18 +3451,7 @@ function renderThematicPage() {
         const fid = norm(p?.fandom_id);
 
         // Если в таблице fandoms есть явные тематические фандомы — считаем ТОЛЬКО по ним (самый строгий и стабильный вариант).
-        if (thematicIds.size > 0) {
-          // основной путь: точное совпадение fandom_id
-          if (thematicIds.has(fid)) return true;
-
-          // фолбэк: сопоставим через связанный фандом (на случай пробелов/неожиданных форматов id)
-          const ff = getFandomByIdLoose(p.fandom_id) || getFandomById(p.fandom_id);
-          const ffid = norm(ff?.fandom_id);
-          if (ffid && thematicIds.has(ffid)) return true;
-          if (isThematicStrict(ff?.fandom_type)) return true;
-
-          return false;
-        }
+        if (thematicIds.size > 0) return thematicIds.has(fid);
 
         // Фолбэк: явные поля у товара (на случай другой структуры таблиц).
         if (isThematicStrict(p.category) || isThematicStrict(p.category_name)) return true;
@@ -4186,7 +4162,7 @@ function renderTypeList(typeKey, shown) {
   const limit = __typeShownByKey[key] || pageSize;
 
   const all = (products || [])
-    .filter((p) => isActiveOrMissingFlag(p.is_active))
+    .filter((p) => truthy(p.is_active))
     .filter((p) => {
       const gk = typeGroupKey(p);
       if (key === "pin") return gk === "pin_single" || gk === "pin_set" || normalizeTypeKey(p.product_type) === "pin";
