@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "241";
+const APP_BUILD = "242";
 
 // =====================
 // CSV ссылки (твои)
@@ -4833,6 +4833,13 @@ function switchThematicProduct(nextId) {
     const btnCart = document.getElementById("btnCart");
     const btnExamples = document.getElementById("btnExamples");
 
+    // Thematic item nav (within current group)
+    const btnPrevItem = document.getElementById("prodPrevItem");
+    const btnNextItem = document.getElementById("prodNextItem");
+    if (btnPrevItem) bindTap(btnPrevItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicPrevId); });
+    if (btnNextItem) bindTap(btnNextItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicNextId); });
+
+
     if (pulse) {
       haptic("select");
       pulsePriceUI();
@@ -4888,11 +4895,6 @@ function switchThematicProduct(nextId) {
         try { localStorage.setItem('lespaw_pin_swipe_hint_v1', JSON.stringify(true)); } catch {}
         replaceCurrentPage(() => renderProduct(nid), { scrollTop: true });
       };
-// Thematic item nav (within current group)
-const btnPrevItem = document.getElementById('prodPrevItem');
-const btnNextItem = document.getElementById('prodNextItem');
-if (btnPrevItem) bindTap(btnPrevItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicPrevId); });
-if (btnNextItem) bindTap(btnNextItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicNextId); });
 
 // Pin-single swipe controls (global), only when not inside thematic nav
 const btnPrev = document.getElementById('prodPrev');
@@ -5998,6 +6000,7 @@ function renderCheckout() {
     } else {
       setAriaInvalid(cPickupAddress, false);
     }
+
     // гейт: без открытия важной информации нельзя подтверждать
     if (!infoViewedThisSession) {
       rowAgreeInfo?.classList.add("is-error");
