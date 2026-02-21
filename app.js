@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v232 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v233 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "232";
+const APP_BUILD = "233";
 
 // =====================
 // CSV ссылки (твои)
@@ -2096,9 +2096,71 @@ function normalizeFavItem(raw){
 }
 
 
+function favIndexesById(id){
+  const sid = String(id||"").trim();
+  if (!sid) return [];
+  const arr = (fav || []);
+  const idxs = [];
+  for (let i = 0; i < arr.length; i++){
+    try {
+      const fi = normalizeFavItem(arr[i]);
+      if (String(fi.id||"").trim() === sid) idxs.push(i);
+    } catch {}
+  }
+  return idxs;
+}
+
 function isFavId(id){
-  // Для мини-сердечек в сетке: считаем базовый вариант товара (без доп. опций)
-  return isFav(String(id||"").trim(), null);
+  // Для мини-сердечек: считаем товар избранным, если в избранном есть ЛЮБОЙ вариант этого товара
+  return favIndexesById(id).length > 0;
+}
+
+function removeFavAllVariants(id){
+  const idxs = favIndexesById(id);
+  if (!idxs.length) return false;
+  const sid = String(id||"").trim();
+  const next = [];
+  const arr = (fav || []);
+  for (let i = 0; i < arr.length; i++){
+    // пропускаем все варианты этого товара
+    if (idxs.includes(i)) continue;
+    next.push(arr[i]);
+  }
+  setFav(next);
+  gaEvent("remove_from_wishlist", { item_id: sid });
+  gaEvent("remove_from_favorite", { item_id: sid });
+  return true;
+}
+
+function toggleFavAny(id, optsForAdd){
+  const sid = String(id||"").trim();
+  if (!sid) return;
+  if (isFavId(sid)){
+    removeFavAllVariants(sid);
+    toast("Убрано из избранного", "warn");
+    haptic("light");
+    updateBadges();
+    return false;
+  }
+  // добавляем вариант (обычно текущие опции из полной карточки; из мини — базовый)
+  const opts = optsForAdd || null;
+  // напрямую добавляем (без двойных тостов)
+  const next = [...(fav||[])];
+  next.push({
+    id: sid,
+    film: String(opts?.film||""),
+    lamination: String(opts?.lamination||""),
+    pin_lamination: String(opts?.pin_lamination||""),
+    poster_pack: String(opts?.poster_pack||""),
+    poster_paper: String(opts?.poster_paper||""),
+  });
+  setFav(next);
+  gaEvent("add_to_wishlist", { item_id: sid });
+  gaEvent("add_to_favorite", { item_id: sid });
+  toast("Добавлено в избранное", "ok");
+  haptic("success");
+  updateBadges();
+  return true;
 }
 
 // В некоторых местах старого кода toggleFav вызывался без опций.
@@ -2936,7 +2998,6 @@ function bindTap(el, handler) {
   // We guard globally, not per-element.
   window.__LP_LAST_TAP_TS = window.__LP_LAST_TAP_TS || 0;
   window.__LP_LAST_TAP_SRC = window.__LP_LAST_TAP_SRC || "";
-
   let touchMoved = false;
 
   const fire = (e, src) => {
@@ -4612,7 +4673,7 @@ if (isPoster) {
   }
 
   function render(pulse = false) {
-    const inFavNow = isFav(p.id, currentOpts());
+    const inFavNow = isFavId(p.id);
     const priceNow = calcPrice();
 
     view.innerHTML = `
@@ -4694,7 +4755,7 @@ if (isPoster) {
 
     if (btnFav) {
       bindTap(btnFav, () => {
-        toggleFav(p.id, currentOpts());
+        toggleFavAny(p.id, currentOpts());
         render();
       });
     }
@@ -4811,7 +4872,10 @@ function renderFavorites() {
 
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Избранное</div>
+      <div class="row rowBetween">
+        <div class="h2">Избранное</div>
+        ${items.length ? `<button class="btn btnGhost" id="btnClearFav" type="button">Очистить</button>` : ``}
+      </div>
       <div class="small">То, что понравилось — чтобы не потерять.</div>
       <hr>
 
@@ -4870,20 +4934,59 @@ function renderFavorites() {
   const goCats = document.getElementById("goCatsFromEmptyFav");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
+const btnClearFav = document.getElementById("btnClearFav");
+if (btnClearFav) {
+  bindTap(btnClearFav, (e) => {
+    try { e?.stopPropagation?.(); } catch {}
+    const prev = [...(fav || [])];
+    if (!prev.length) return;
+    setFav([]);
+    toast("Избранное очищено", "warn");
+    haptic("light");
+    renderFavorites();
+    showUndoBar("Избранное очищено", () => {
+      setFav(prev);
+      renderFavorites();
+      toast("Возвращено", "ok");
+      haptic("success");
+    });
+  });
+}
+
   view.querySelectorAll("[data-remove]").forEach((b) => {
     bindTap(b, (e) => {
       e.stopPropagation();
       const i = Number(b.dataset.remove);
-      const next = [...(fav || [])];
+      const prev = [...(fav || [])];
+      const removed = prev[i];
+      if (removed == null) return;
+
+      const next = [...prev];
       next.splice(i, 1);
       setFav(next);
       toast("Убрано из избранного", "warn");
-    haptic("light");
+      haptic("light");
       renderFavorites();
+
+      showUndoBar("Убрано из избранного", () => {
+        const cur = [...(fav || [])];
+        // если уже вернули — не дублируем
+        try {
+          const ri = normalizeFavItem(removed);
+          const key = favKey(ri.id, ri);
+          if (favIndexByKey(key) >= 0) return;
+        } catch {}
+        const restored = [...cur];
+        restored.splice(Math.min(i, restored.length), 0, removed);
+        setFav(restored);
+        renderFavorites();
+        toast("Возвращено", "ok");
+        haptic("success");
+      });
     });
   });
 
-  view.querySelectorAll("[data-to-cart]").forEach((b) => {
+view.querySelectorAll("[data-to-cart]").forEach((b) => {
     bindTap(b, (e) => {
       e.stopPropagation();
       const i = Number(b.dataset.toCart);
