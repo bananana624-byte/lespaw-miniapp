@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "223";
+const APP_BUILD = "224";
 
 // =====================
 // CSV ссылки (твои)
@@ -3486,7 +3486,8 @@ function renderThematicPage() {
     bindTap(b, (e) => {
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
-      addToCart(id);
+      addToCartById(id);
+      toast("Добавлено в корзину", "good");
     });
   });
 
@@ -4997,6 +4998,7 @@ function saveCheckout(next) {
     }, 350);
   } catch {}
 }
+
 async function syncCheckoutFromCloud() {
   try {
     const raw = await cloudGet(CLOUD_CHECKOUT);
