@@ -1557,3 +1557,96 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .prodSwipeBtn{ width:34px; height:34px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:rgba(20,20,20,.22); color:rgba(255,255,255,.9); font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center; }
 .swipeHint{ margin:10px 0 0 0; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,.10); background:rgba(20,20,20,.18); color:rgba(255,255,255,.86); font-size:13px; text-align:center; box-shadow:0 10px 32px rgba(0,0,0,.25); backdrop-filter: blur(6px); transition: opacity .35s ease, transform .35s ease; }
 .swipeHint.is-hide{ opacity:0; transform: translateY(-6px); }
+
+
+/* =====================
+   UI polish (v232)
+   ===================== */
+
+/* Cards feel a bit more "alive" */
+.pcard{
+  transition: transform .10s ease, box-shadow .18s ease, filter .18s ease;
+  will-change: transform;
+}
+@media (hover:hover) and (pointer:fine){
+  .pcard:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .14);
+    filter: brightness(1.01);
+  }
+}
+.pcard:active{
+  transform: translateY(0);
+  filter: brightness(1.02);
+}
+
+/* Price as a subtle pill anchor */
+.pcardPrice{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 8px;
+  border-radius:999px;
+  background: rgba(125, 60, 255, .08);
+  border: 1px solid rgba(125, 60, 255, .18);
+}
+
+/* Action buttons: clearer feedback */
+.iconBtn{
+  transition: transform .08s ease, box-shadow .18s ease, filter .18s ease, background .18s ease;
+}
+.iconBtn:active{
+  transform: scale(.985);
+  box-shadow: 0 0 0 3px rgba(125,60,255,.16), 0 0 24px rgba(190,120,255,.22);
+  filter: brightness(1.03);
+}
+
+/* Chips as navigation */
+.chip{
+  padding:10px 13px;
+}
+.chip.is-active{
+  border-color: rgba(125,60,255,.38);
+  background: rgba(125,60,255,.10);
+  box-shadow: 0 0 0 3px rgba(125,60,255,.14), 0 0 24px rgba(190,120,255,.18);
+}
+
+/* Empty states feel warmer without changing templates */
+.emptyState{
+  position: relative;
+  padding-top: 46px;
+}
+.emptyState::before{
+  content: "✨";
+  position:absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius: 999px;
+  background: rgba(125,60,255,.10);
+  border: 1px solid rgba(125,60,255,.18);
+  box-shadow: 0 0 22px rgba(190,120,255,.18);
+  font-size: 16px;
+}
+
+/* Inline badge (for headings) */
+.inlineBadge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:4px 8px;
+  margin-left:8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:1000;
+  letter-spacing:.3px;
+  text-transform:uppercase;
+  color:#0b0b12;
+  background: rgba(125, 60, 255, .10);
+  border: 1px solid rgba(125, 60, 255, .18);
+}
