@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "221";
+const APP_BUILD = "223";
 
 // =====================
 // CSV ссылки (твои)
@@ -3323,13 +3323,24 @@ function renderFandomList(type) {
 // =====================
 function renderThematicPage() {
   try { setCurrentRoute({ page: "thematic" }); } catch {}
-  // Важно: в таблице продукты могут НЕ иметь fandom_type напрямую.
-  // Поэтому считаем «что-то тематическое» по нескольким источникам:
-  // 1) p.category / p.category_name (если ты перенесла это в категорию)
+  // Важно: чтобы не подтягивать «рандомные» товары,
+  // считаем «что-то тематическое» ТОЛЬКО по явным полям:
+  // 1) p.category / p.category_name
   // 2) p.fandom_type (если есть)
-  // 3) fandoms sheet по p.fandom_id (даже если есть пробелы/разные тире)
-  // 4) fallback по названию подборки (WLW/BI/Феминизм)
+  // 3) linked fandom.fandom_type по p.fandom_id
+  // Никаких fuzzy/поисков по названиям (WLW/BI/Феминизм) — они слишком легко дают ложные совпадения.
   const norm = (v) => String(v ?? "").trim();
+  const normType = (v) => norm(v)
+    .toLowerCase()
+    .replace(/[–—−]/g, "-")
+    .replace(/\s+/g, " ");
+  const THEMATIC = normType("Что-то тематическое");
+  const isThematicStrict = (v) => {
+    const t = normType(v);
+    if (!t) return false;
+    // принимаем варианты с дефисом и без, но только для этого точного ярлыка
+    return t === THEMATIC || t === THEMATIC.replace("-", " ");
+  };
   const getFandomByIdLoose = (id) => {
     const nid = norm(id);
     if (!nid) return null;
@@ -3340,27 +3351,31 @@ function renderThematicPage() {
     return s === "" ? true : truthy(s);
   };
 
+  const thematicIds = new Set(
+    (fandoms || [])
+      .filter((f) => isThematicStrict(f?.fandom_type))
+      .map((f) => norm(f?.fandom_id))
+      .filter(Boolean)
+  );
+
   const all = (products || [])
     .filter((p) => isActiveOrMissing(p.is_active))
     .filter((p) => {
       try {
-        // 1) category fields
-        if (isThematicTypeLabel(p.category) || isThematicTypeLabel(p.category_name) || String(p.category || "") === "Что-то тематическое" || String(p.category_name || "") === "Что-то тематическое") return true;
+        const fid = norm(p?.fandom_id);
 
-        // 2) product's own fandom_type field
-        if (isThematicTypeLabel(p.fandom_type) || String(p.fandom_type || "") === "Что-то тематическое") return true;
+        // Если в таблице fandoms есть явные тематические фандомы — считаем ТОЛЬКО по ним (самый строгий и стабильный вариант).
+        if (thematicIds.size > 0) return thematicIds.has(fid);
 
-        // 3) linked fandom
+        // Фолбэк: явные поля у товара (на случай другой структуры таблиц).
+        if (isThematicStrict(p.category) || isThematicStrict(p.category_name)) return true;
+        if (isThematicStrict(p.fandom_type)) return true;
+
+        // Фолбэк: связанный фандом
         const f = getFandomByIdLoose(p.fandom_id) || getFandomById(p.fandom_id);
-        if (isThematicTypeLabel(f?.fandom_type) || String(f?.fandom_type || "") === "Что-то тематическое") return true;
+        if (isThematicStrict(f?.fandom_type)) return true;
 
-        // 4) fallback by collection name
-        const fn = String(f?.fandom_name || f?.name || "").toLowerCase();
-        if (fn.includes("wlw") || fn.includes("фемин") || fn.includes("bi") || fn.includes("би")) return true;
-
-        // extra fallback: sometimes stored in product fields
-        const pn = String(p.fandom_name || p.collection || p.group || p.section || "").toLowerCase();
-        return (pn.includes("wlw") || pn.includes("фемин") || pn.includes("bi") || pn.includes("би"));
+        return false;
       } catch {
         return false;
       }
@@ -3381,7 +3396,7 @@ function renderThematicPage() {
   for (const g of groupsOrder) groupMap.set(g.key, []);
 
   all.forEach((p) => {
-    const tk = normalizeTypeKey(p.type);
+    const tk = typeGroupKey(p) || normalizeTypeKey(p?.product_type) || "other";
     if (groupMap.has(tk)) groupMap.get(tk).push(p);
     else {
       if (!groupMap.has("other")) groupMap.set("other", []);
@@ -4982,7 +4997,6 @@ function saveCheckout(next) {
     }, 350);
   } catch {}
 }
-
 async function syncCheckoutFromCloud() {
   try {
     const raw = await cloudGet(CLOUD_CHECKOUT);
