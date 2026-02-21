@@ -14,7 +14,12 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "224";
+const APP_BUILD = "225";
+
+// Pagination for type chips
+const TYPE_PAGE_SIZE = 20;
+let __typeShownByKey = Object.create(null);
+
 
 // =====================
 // CSV ссылки (твои)
@@ -998,6 +1003,7 @@ function setCurrentRoute(routeObj) {
   __currentRoute = (routeObj && typeof routeObj === "object") ? routeObj : { page: "home" };
   saveLastRoute(__currentRoute);
 }
+
 function restoreLastRouteIfAny() {
   const r = loadLastRoute();
   if (!r || !r.page) return false;
@@ -1402,6 +1408,49 @@ async function fetchCSVWithCache(url, cacheKey) {
   const fresh = await fetchCSV(url);
   saveCsvCache(cacheKey, fresh);
   return fresh;
+}
+
+
+// =====================
+// CSV sanitizers (мягко отсекаем битые строки, не ломая прод)
+// =====================
+function sanitizeFandoms(rows) {
+  const out = [];
+  (rows || []).forEach((r) => {
+    try {
+      const fandom_id = String(r.fandom_id || r.id || "").trim();
+      if (!fandom_id) return;
+      out.push({
+        ...r,
+        fandom_id,
+        fandom_name: String(r.fandom_name || "").trim(),
+        fandom_type: String(r.fandom_type || "").trim(),
+        is_active: (r.is_active === undefined ? "1" : r.is_active),
+      });
+    } catch {}
+  });
+  return out;
+}
+
+function sanitizeProducts(rows) {
+  const out = [];
+  (rows || []).forEach((r) => {
+    try {
+      const id = String(r.id || "").trim();
+      if (!id) return;
+      const priceNum = Number(r.price);
+      out.push({
+        ...r,
+        id,
+        price: Number.isFinite(priceNum) ? priceNum : 0,
+        name: String(r.name || "").trim(),
+        product_type: String(r.product_type || "").trim(),
+        fandom_id: String(r.fandom_id || "").trim(),
+        is_active: (r.is_active === undefined ? "1" : r.is_active),
+      });
+    } catch {}
+  });
+  return out;
 }
 
 
@@ -1826,6 +1875,25 @@ function typeGroupKey(p) {
 
 // Нормализуем тип товара из CSV (в таблице могут быть как ключи sticker/pin,
 // так и русские подписи вроде "Наклейки", "Набор значков" и т.п.)
+
+// Map search/chip phrases to type-group keys used in UI.
+// Returns: sticker | pin_single | pin_set | pin | poster | box | null
+function normalizeTypeQueryGroupKey(q) {
+  const s = String(q || "").toLowerCase().trim();
+  if (!s) return null;
+
+  if (/(накле|sticker)/.test(s)) return "sticker";
+  if (/(постер|poster)/.test(s)) return "poster";
+  if (/(бокс|box|конверт)/.test(s)) return "box";
+
+  if (/(поштучн|по\s*штучн|single)/.test(s) && /(значк|pin)/.test(s)) return "pin_single";
+  if (/(набор|сет|set)/.test(s) && /(значк|pin)/.test(s)) return "pin_set";
+
+  if (/(значк|pin)/.test(s)) return "pin";
+
+  return null;
+}
+
 function normalizeTypeKey(t) {
   const s = String(t || "").trim().toLowerCase();
   if (!s) return "";
@@ -2960,6 +3028,24 @@ async function init() {
         try { globalSearch.focus(); } catch {}
       });
     }
+    // CloudStorage: try to flush pending writes when the mini app is hidden/closed,
+    // so корзина/избранное don't get lost if user closes immediately after changes.
+    try {
+      if (!window.__cloudFlushOnHideBound) {
+        window.__cloudFlushOnHideBound = true;
+        const flushAll = () => {
+          try {
+            __cloudPending.forEach((_, key) => {
+              try { __cloudFlushKey(key); } catch {}
+            });
+          } catch {}
+        };
+        document.addEventListener("visibilitychange", () => { if (document.hidden) flushAll(); });
+        window.addEventListener("pagehide", flushAll);
+      }
+    } catch {}
+
+
 
     // Быстрый старт: пробуем взять данные из кеша (если есть)
     // и сразу показываем главную, чтобы меню не "висело" пустым.
@@ -2968,8 +3054,8 @@ async function init() {
       const cachedP = loadCsvCache(LS_CSV_CACHE_PRODUCTS);
       const cachedS = loadCsvCache(LS_CSV_CACHE_SETTINGS);
       const cachedR = loadCsvCache(LS_CSV_CACHE_REVIEWS);
-      if (cachedF?.data?.length) fandoms = cachedF.data;
-      if (cachedP?.data?.length) products = cachedP.data;
+      if (cachedF?.data?.length) fandoms = sanitizeFandoms(cachedF.data);
+      if (cachedP?.data?.length) products = sanitizeProducts(cachedP.data);
       if (cachedS?.data?.length) {
         // settings кешируем как массив строк (как из CSV)
         cachedS.data.forEach((row) => {
@@ -3003,8 +3089,8 @@ async function init() {
     // If another init/render cycle started while we were fetching — ignore stale result.
     if (myEpoch !== renderEpoch) return;
 
-    fandoms = fFresh || [];
-    products = pFresh || [];
+    fandoms = sanitizeFandoms(fFresh || []);
+    products = sanitizeProducts(pFresh || []);
     // after catalog refresh we can safely prune state against real product ids
     updateBadges();
 
@@ -4051,6 +4137,112 @@ function renderLaminationExampleDetail(exId) {
 }
 
 
+
+// =====================
+// Type list (для чипсов: наклейки/постеры/значки и т.д.)
+// =====================
+function renderTypeList(typeKey, shown) {
+  try { setCurrentRoute({ page: "type", key: String(typeKey || "") }); } catch {}
+  const key = String(typeKey || "").trim();
+  const pageSize = TYPE_PAGE_SIZE;
+
+  const titleMap = {
+    sticker: "Наклейки",
+    pin_single: "Значки поштучно",
+    pin_set: "Наборы значков",
+    pin: "Значки",
+    poster: "Постеры",
+    box: "Боксы / конверты",
+  };
+
+  const title = titleMap[key] || "Товары";
+
+  if (!Number.isFinite(Number(shown))) __typeShownByKey[key] = pageSize;
+  else __typeShownByKey[key] = Math.max(pageSize, Number(shown) || pageSize);
+  const limit = __typeShownByKey[key] || pageSize;
+
+  const all = (products || [])
+    .filter((p) => truthy(p.is_active))
+    .filter((p) => {
+      const gk = typeGroupKey(p);
+      if (key === "pin") return gk === "pin_single" || gk === "pin_set" || normalizeTypeKey(p.product_type) === "pin";
+      return gk === key;
+    });
+
+  try { gaViewItemList(`type:${key}`, all.slice(0, Math.min(limit, all.length))); } catch {}
+
+  const slice = all.slice(0, limit);
+  const hasMore = all.length > slice.length;
+
+  const cards = slice.map((p) => `
+    <div class="pcard" data-id="${p.id}">
+      ${cardThumbHTML(p)}
+      <div class="pcardTitle">${h(p.name)}</div>
+      ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+      <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+      <div class="pcardActions">
+        <button class="iconBtn iconBtnHeart ${isFavId(p.id) ? "is-active" : ""}" data-fav="${p.id}" type="button" aria-label="В избранное">
+          <span class="heartGlyph">${isFavId(p.id) ? "♥" : "♡"}</span>
+        </button>
+        <button class="iconBtn" data-add="${p.id}" type="button" aria-label="Добавить в корзину">
+          <span class="plusGlyph">＋</span>
+        </button>
+      </div>
+    </div>
+  `).join("");
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">${h(title)}</div>
+      <div class="small">Показано: <b>${slice.length}</b> из ${all.length}</div>
+      ${slice.length ? `<div class="grid2 mt10">${cards}</div>` : `<div class="emptyState mt12"><div class="emptyTitle">Пока пусто</div><div class="emptyText small">Товары этой категории ещё не добавлены.</div></div>`}
+      ${hasMore ? `<div class="sp12"></div><button class="btn" id="btnTypeMore" type="button">Показать ещё</button>` : ``}
+    </div>
+  `;
+
+  view.querySelectorAll(".pcard[data-id]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      openPage(() => renderProduct(String(el.dataset.id||"")), { anchorId: String(el.id || (`p_${String(el.dataset.id||"")}`)) });
+    });
+  });
+
+  view.querySelectorAll("[data-fav]").forEach((b) => {
+    bindTap(b, (e) => {
+      e.stopPropagation();
+      const id = String(b.dataset.fav || "");
+      toggleFav(id);
+      view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
+        x.classList.toggle("is-active", isFavId(id));
+        const g = x.querySelector(".heartGlyph");
+        if (g) g.textContent = isFavId(id) ? "♥" : "♡";
+      });
+    });
+  });
+
+  view.querySelectorAll("[data-add]").forEach((b) => {
+    bindTap(b, (e) => {
+      e.stopPropagation();
+      const id = String(b.dataset.add || "");
+      addToCartById(id);
+      toast("Добавлено в корзину", "good");
+    });
+  });
+
+  const more = document.getElementById("btnTypeMore");
+  if (more) {
+    bindTap(more, () => {
+      const prevY = window.scrollY || 0;
+      renderTypeList(key, (limit + pageSize));
+      try { window.scrollTo(0, prevY); } catch {}
+    });
+  }
+
+  syncNav();
+  syncBottomSpace();
+}
+
 // =====================
 // Поиск (только сверху)
 // =====================
@@ -4058,13 +4250,16 @@ function renderSearch(q) {
   const queryRaw = (q || "").trim();
   const query = queryRaw.toLowerCase().trim();
 
-  // Treat "Значки/Боксы/Наклейки/Постеры" (любой язык/форма) as type-filter searches.
-  // Important: we only accept known type keys, otherwise it would hijack normal searches.
-  const qKey = normalizeTypeKey(query);
-  const isTypeQuery = qKey === "sticker" || qKey === "pin" || qKey === "poster" || qKey === "box";
+  // Type query (from chips or manual typing)
+  const qGroup = normalizeTypeQueryGroupKey(query);
+  const isTypeQuery = !!qGroup;
+  if (isTypeQuery) {
+    // render dedicated paginated list instead of generic search results
+    renderTypeList(qGroup);
+    return;
+  }
 
-  const shortQuery = !isTypeQuery && query.length < 3;
-
+  const shortQuery = query.length < 3;
   const fHits =
     shortQuery || isTypeQuery
       ? []
@@ -4146,10 +4341,11 @@ const groupsOrder = [
           <div class="emptyTitle">Введи минимум 3 символа</div>
           <div class="emptyText small">Так поиск будет точнее и не будет лагать на больших списках.</div>
           <div class="chips mt12">
-            <button class="chip" data-sq="наклейки" type="button">Наклейки</button>
-            <button class="chip" data-sq="значки" type="button">Значки</button>
-            <button class="chip" data-sq="постеры" type="button">Постеры</button>
-            <button class="chip" data-sq="боксы" type="button">Боксы</button>
+            <button class="chip" data-typekey="sticker" type="button">Наклейки</button>
+            <button class="chip" data-typekey="pin_single" type="button">Значки поштучно</button>
+            <button class="chip" data-typekey="pin_set" type="button">Наборы значков</button>
+            <button class="chip" data-typekey="poster" type="button">Постеры</button>
+            <button class="chip" data-typekey="box" type="button">Боксы</button>
           </div>
         </div>
       ` : ``}
@@ -4214,19 +4410,13 @@ const groupsOrder = [
     });
   });
 
-  // быстрые чипсы поиска
-  view.querySelectorAll("[data-sq]").forEach((b) => {
+  // быстрые чипсы типов
+  view.querySelectorAll("[data-typekey]").forEach((b) => {
     bindTap(b, (e) => {
       e.stopPropagation();
-      const q2 = String(b.dataset.sq || "");
-      if (!q2) return;
-      try { globalSearch.value = q2; } catch {}
-      try {
-        if (searchWrap) searchWrap.classList.add("hasText");
-      } catch {}
-      try { globalSearch.dispatchEvent(new Event("input", { bubbles: true })); } catch {
-        openPage(() => renderSearch(q2));
-      }
+      const k = String(b.dataset.typekey || "");
+      if (!k) return;
+      openPage(() => renderTypeList(k), { route: { page: "type", key: k } });
     });
   });
 
@@ -4811,10 +5001,11 @@ function renderCart() {
                 <div class="sp10"></div>
 
                 <div class="chips flexWrap">
-                  <button class="chip" data-etype="Наклейки" type="button">Наклейки</button>
-                  <button class="chip" data-etype="Значки" type="button">Значки</button>
-                  <button class="chip" data-etype="Постеры" type="button">Постеры</button>
-                  <button class="chip" data-etype="Боксы" type="button">Боксы</button>
+                  <button class="chip" data-typekey="sticker" type="button">Наклейки</button>
+                  <button class="chip" data-typekey="pin_single" type="button">Значки поштучно</button>
+                  <button class="chip" data-typekey="pin_set" type="button">Наборы значков</button>
+                  <button class="chip" data-typekey="poster" type="button">Постеры</button>
+                  <button class="chip" data-typekey="box" type="button">Боксы</button>
                 </div>
 
                 <div class="sp10"></div>
@@ -4910,14 +5101,13 @@ const goCats = document.getElementById("goCatsFromEmptyCart");
     try { globalSearch?.focus?.(); } catch {}
   });
 
-  // Быстрые чипсы по типам — просто подставляем в поиск (так не нужно плодить отдельные роуты)
+  // Быстрые чипсы по типам — открываем отдельный пагинированный список
   try {
-    Array.from(view.querySelectorAll('[data-etype]')).forEach((btn) => {
+    Array.from(view.querySelectorAll('[data-typekey]')).forEach((btn) => {
       bindTap(btn, () => {
-        const t = btn.getAttribute("data-etype") || "";
-        try { globalSearch.value = t; } catch {}
-        try { if (searchWrap) searchWrap.classList.add("hasText"); } catch {}
-        openPage(() => renderSearch(t));
+        const k = String(btn.getAttribute("data-typekey") || "");
+        if (!k) return;
+        openPage(() => renderTypeList(k), { route: { page: "type", key: k } });
       });
     });
   } catch {}
