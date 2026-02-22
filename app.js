@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "252";
+const APP_BUILD = "256";
 
 // =====================
 // CSV ссылки (твои)
@@ -3825,7 +3825,7 @@ const groupsOrder = [
       ${
         grouped.length
           ? grouped
-              .map((g, i) => sectionHtml(g.title, g.items, groupKey) + (i < grouped.length - 1 ? "<hr>" : ""))
+              .map((g, i) => sectionHtml(g.title, g.items, g.key) + (i < grouped.length - 1 ? "<hr>" : ""))
               .join("")
           : `<div class="small">Пока нет товаров.</div>`
       }
