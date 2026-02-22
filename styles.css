@@ -1652,3 +1652,38 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
   background: rgba(125, 60, 255, .10);
   border: 1px solid rgba(125, 60, 255, .18);
 }
+
+
+/* =====================
+   Product arrows (Что-то тематическое)
+   ===================== */
+.prodHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.prodNavArrows{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+  padding-top:2px;
+}
+.navArrowBtn{
+  width:34px;
+  height:34px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(10,10,20,.28);
+  color:inherit;
+  font-size:22px;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 0 0 1px rgba(0,0,0,.06) inset;
+}
+.navArrowBtn:active{
+  transform:translateY(1px);
+}
