@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v240 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v233 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "242";
+const APP_BUILD = "243";
 
 // =====================
 // CSV ссылки (твои)
@@ -41,7 +41,7 @@ const CSV_REVIEWS_URL =
 // ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация",
 // просто увеличьте версию ниже. Тогда у всех клиенток статус "прочитано"
 // автоматически сбросится.
-const IMPORTANT_INFO_VERSION = "2026-02-01-5" // 2026-02-01-2";
+const IMPORTANT_INFO_VERSION = "2026-02-22-1" // 2026-02-01-2";
 
 // менеджерка (без @)
 const MANAGER_USERNAME = "LesPaw_manager";
@@ -2411,16 +2411,11 @@ function haptic(kind) {
 
 
 function getPhoneRule(countryId) {
-  const id = String(countryId || "ru");
+  // Доставка через Ozon/WB теперь только по России — телефон всегда РФ (+7).
   const RULES = {
-    ru: { cc: "+7",   ccDigits: "7",   nsn: 10, groups: [3, 3, 2, 2], example: "+7-999-123-45-67" },
-    kz: { cc: "+7",   ccDigits: "7",   nsn: 10, groups: [3, 3, 2, 2], example: "+7-777-123-45-67" },
-    by: { cc: "+375", ccDigits: "375", nsn: 9,  groups: [2, 3, 2, 2], example: "+375-29-123-45-67" },
-    am: { cc: "+374", ccDigits: "374", nsn: 8,  groups: [2, 3, 3],    example: "+374-77-123-456" },
-    kg: { cc: "+996", ccDigits: "996", nsn: 9,  groups: [3, 3, 3],    example: "+996-700-123-456" },
-    uz: { cc: "+998", ccDigits: "998", nsn: 9,  groups: [2, 3, 2, 2], example: "+998-90-123-45-67" },
+    ru: { cc: "+7", ccDigits: "7", nsn: 10, groups: [3, 3, 2, 2], example: "+7-999-123-45-67" },
   };
-  return RULES[id] || RULES.ru;
+  return RULES.ru;
 }
 
 function getPhonePlaceholder(countryId) {
@@ -2510,14 +2505,9 @@ function normalizePhoneDigitsForCountry(raw, countryId) {
 
   return "+" + rule.ccDigits + d;
 }
-// ===== Shipping countries (only where Ozon / Wildberries are used in our flow) =====
+// ===== Shipping country (Ozon / Wildberries теперь только по России) =====
 const SHIPPING_COUNTRIES = [
-  { id: "ru", name: "Россия",  code: "+7"   },
-  { id: "kz", name: "Казахстан", code: "+7" },
-  { id: "by", name: "Беларусь", code: "+375" },
-  { id: "am", name: "Армения",  code: "+374" },
-  { id: "kg", name: "Кыргызстан", code: "+996" },
-  { id: "uz", name: "Узбекистан", code: "+998" },
+  { id: "ru", name: "Россия", code: "+7" },
 ];
 
 function getCountryById(id) {
@@ -3607,16 +3597,6 @@ function renderTypeBrowsePage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
-      // set thematic item navigation context (within current group)
-      try {
-        const info = thematicDetailNavMap && thematicDetailNavMap[pid];
-        if (info && Array.isArray(info.ids) && info.ids.length) {
-          const idx = Math.max(0, info.ids.indexOf(String(pid)));
-          detailNavContext = { mode: 'thematic', groupKey: info.groupKey, ids: info.ids.slice(), idx };
-        } else {
-          detailNavContext = null;
-        }
-      } catch { detailNavContext = null; }
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3693,14 +3673,6 @@ function renderThematicPage() {
     .map((g) => ({ ...g, items: allRaw.filter((p) => typeGroupKey(p) === g.key) }))
     .filter((g) => g.items.length > 0);
 
-  // Prepare per-product nav context (within each group)
-  thematicDetailNavMap = {};
-  grouped.forEach((g) => {
-    const ids = g.items.map((p) => String(p.id));
-    ids.forEach((pid) => { thematicDetailNavMap[pid] = { groupKey: g.key, ids }; });
-  });
-
-
   view.innerHTML = `
     <div class="card">
       <div class="h2">Что-то тематическое <span class="inlineBadge">витрина</span></div>
@@ -3740,21 +3712,6 @@ function renderThematicPage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
-
-      // thematic item navigation context (within current group)
-      // IMPORTANT: do NOT mix with global pin_single swipe; this is isolated to the thematic vitrines.
-      try {
-        const info = thematicDetailNavMap && thematicDetailNavMap[pid];
-        if (info && Array.isArray(info.ids) && info.ids.length) {
-          const idx = Math.max(0, info.ids.indexOf(String(pid)));
-          detailNavContext = { mode: "thematic", groupKey: info.groupKey, ids: info.ids.slice(), idx };
-        } else {
-          detailNavContext = null;
-        }
-      } catch {
-        detailNavContext = null;
-      }
-
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3954,8 +3911,6 @@ function renderInfo() {
           <div class="infoTitle">Оплата и валюта</div>
           <ul class="infoList">
             <li>Цены в приложении указаны <b>в российских рублях</b>.</li>
-            <li>Для заказов из других стран итоговая сумма к оплате рассчитывается менеджеркой индивидуально.</li>
-            <li><b>Для заказов из других стран способ оплаты согласуется с менеджеркой индивидуально.</b></li>
           </ul>
         </div>
 </div>
@@ -3981,7 +3936,7 @@ function renderInfo() {
         <div class="infoSection">
           <div class="infoTitle">Ozon и Wildberries</div>
           <ul class="infoList">
-            <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>страну доставки</b>.</li>
+            <li>Доставка через Ozon/Wildberries возможна <b>только по России</b>.</li>
             <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>номер телефона</b>, на который зарегистрирован аккаунт получателя.</li>
             <li>Этот номер используется для оформления и получения заказа.</li>
           </ul>
@@ -3992,24 +3947,10 @@ function renderInfo() {
           <div class="infoTitle">Номер телефона</div>
           <ul class="infoList">
             <li>Номер телефона <b>обязателен</b>.</li>
-            <li>Указывается в <b>международном формате</b> с кодом страны.</li>
+            <li>Указывается в формате <b>+7</b> (Россия).</li>
             <li>Для Ozon/Wildberries номер должен совпадать с номером аккаунта получателя.</li>
           </ul>
         </div>
-
-        <div class="infoSection">
-          <div class="infoTitle">Страны доставки (Ozon / Wildberries)</div>
-          <ul class="infoList">
-            <li>Россия</li>
-            <li>Казахстан</li>
-            <li>Беларусь</li>
-            <li>Армения</li>
-            <li>Кыргызстан</li>
-            <li>Узбекистан</li>
-          </ul>
-          <div class="infoNote">Выбор страны доставки обязателен.</div>
-        </div>
-
         <div class="infoSection">
           <div class="infoTitle">Возврат и обмен</div>
           <ul class="infoList">
@@ -4705,52 +4646,6 @@ if (isPoster) {
     } catch {}
   }
 
-  
-// --- thematic next/prev navigation (within group) ---
-// If context exists but current product is not inside it, drop it to avoid "sticky" arrows outside thematic.
-try {
-  if (detailNavContext && detailNavContext.mode === "thematic") {
-    const ids = Array.isArray(detailNavContext.ids) ? detailNavContext.ids.map(String) : [];
-    if (!ids.includes(String(p.id))) detailNavContext = null;
-    else detailNavContext.idx = Math.max(0, ids.indexOf(String(p.id)));
-  }
-} catch { detailNavContext = null; }
-
-const hasThematicNav = !!(detailNavContext && detailNavContext.mode === "thematic" && Array.isArray(detailNavContext.ids) && detailNavContext.ids.length > 1);
-const thematicPrevId = (() => {
-  if (!hasThematicNav) return null;
-  const i = Number(detailNavContext.idx) || 0;
-  return (i > 0) ? String(detailNavContext.ids[i - 1]) : null;
-})();
-const thematicNextId = (() => {
-  if (!hasThematicNav) return null;
-  const i = Number(detailNavContext.idx) || 0;
-  return (i < detailNavContext.ids.length - 1) ? String(detailNavContext.ids[i + 1]) : null;
-})();
-
-function switchThematicProduct(nextId) {
-  if (!nextId) return;
-  try {
-    const ids = detailNavContext && Array.isArray(detailNavContext.ids) ? detailNavContext.ids.map(String) : [];
-    const idx = ids.indexOf(String(nextId));
-    if (idx >= 0) detailNavContext.idx = idx;
-  } catch {}
-
-  // Prefer "replace" navigation (no new history entry)
-  try {
-    if (typeof replaceCurrentPage === "function") {
-      replaceCurrentPage(() => renderProduct(String(nextId)), { scrollTop: true });
-      return;
-    }
-  } catch {}
-
-  // Fallback: switch render in place
-  currentRender = () => renderProduct(String(nextId));
-  syncNav();
-  try { currentRender(); } catch (err) { console.error(err); }
-  try { window.scrollTo(0, 0); } catch {}
-}
-
   function render(pulse = false) {
     const inFavNow = isFavId(p.id);
     const priceNow = calcPrice();
@@ -4762,20 +4657,14 @@ function switchThematicProduct(nextId) {
             <div class=\"h2\">${h(p.name)}</div>
             <div class=\"small\">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
           </div>
-          ${ (hasThematicNav) ? `
-            <div class=\"prodSwipeCtrls\" aria-label=\"Листать товары\">
-              <button class=\"prodSwipeBtn\" id=\"prodPrevItem\" type=\"button\" ${thematicPrevId ? "" : "disabled"} aria-label=\"Предыдущий товар\">‹</button>
-              <button class=\"prodSwipeBtn\" id=\"prodNextItem\" type=\"button\" ${thematicNextId ? "" : "disabled"} aria-label=\"Следующий товар\">›</button>
-            </div>
-          ` : `` }
-          ${ (!hasThematicNav && (isPinSingle && canSwipePinSingles(p.id))) ? `
+          ${ (isPinSingle && canSwipePinSingles(p.id)) ? `
             <div class=\"prodSwipeCtrls\" aria-label=\"Листать значки\">
               <button class=\"prodSwipeBtn\" id=\"prodPrev\" type=\"button\" aria-label=\"Предыдущий значок\">‹</button>
               <button class=\"prodSwipeBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий значок\">›</button>
             </div>
           ` : `` }
         </div>
-        ${ (isPinSingle && canSwipePinSingles(p.id) && !hasThematicNav && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
+        ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
@@ -4833,13 +4722,6 @@ function switchThematicProduct(nextId) {
     const btnCart = document.getElementById("btnCart");
     const btnExamples = document.getElementById("btnExamples");
 
-    // Thematic item nav (within current group)
-    const btnPrevItem = document.getElementById("prodPrevItem");
-    const btnNextItem = document.getElementById("prodNextItem");
-    if (btnPrevItem) bindTap(btnPrevItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicPrevId); });
-    if (btnNextItem) bindTap(btnNextItem, (e) => { try { e?.stopPropagation?.(); } catch {} switchThematicProduct(thematicNextId); });
-
-
     if (pulse) {
       haptic("select");
       pulsePriceUI();
@@ -4896,14 +4778,12 @@ function switchThematicProduct(nextId) {
         replaceCurrentPage(() => renderProduct(nid), { scrollTop: true });
       };
 
-// Pin-single swipe controls (global), only when not inside thematic nav
-const btnPrev = document.getElementById('prodPrev');
-const btnNext = document.getElementById('prodNext');
-if (!hasThematicNav) {
-  if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
-  if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
-}
-const hintEl = document.getElementById('pinSwipeHint');
+      const btnPrev = document.getElementById('prodPrev');
+      const btnNext = document.getElementById('prodNext');
+      if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
+      if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
+
+      const hintEl = document.getElementById('pinSwipeHint');
       if (hintEl) {
         try {
           setTimeout(() => { try { hintEl.classList.add('is-hide'); } catch {} }, 1600);
@@ -5021,7 +4901,6 @@ function renderFavorites() {
       const idx = Number(el.dataset.idx || 0);
       const fi = items[idx];
       try { clearPinSingleSwipeContext(); } catch {}
-    try { clearThematicNavContext(); } catch {}
       openPage(() => renderProduct(el.dataset.open, fi));
     });
   });
@@ -5221,11 +5100,10 @@ function renderCart() {
                 <div class="sp10"></div>
 
                 <div class="chips flexWrap">
-                  <button class="chip" data-typekey="sticker" type="button">Наклейки</button>
-                  <button class="chip" data-typekey="pin_single" type="button">Значки поштучно</button>
-                  <button class="chip" data-typekey="pin_set" type="button">Наборы значков</button>
-                  <button class="chip" data-typekey="poster" type="button">Постеры</button>
-                  <button class="chip" data-typekey="box" type="button">Боксы</button>
+                  <button class="chip" data-etype="Наклейки" type="button">Наклейки</button>
+                  <button class="chip" data-etype="Значки" type="button">Значки</button>
+                  <button class="chip" data-etype="Постеры" type="button">Постеры</button>
+                  <button class="chip" data-etype="Боксы" type="button">Боксы</button>
                 </div>
 
                 <div class="sp10"></div>
@@ -5310,7 +5188,6 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
     const ci = items[idx];
     if (!ci) return;
     try { clearPinSingleSwipeContext(); } catch {}
-    try { clearThematicNavContext(); } catch {}
     openPage(() => renderProduct(ci.id, ci));
   });
 });
@@ -5322,16 +5199,18 @@ const goCats = document.getElementById("goCatsFromEmptyCart");
     try { globalSearch?.focus?.(); } catch {}
   });
 
-  // Быстрые чипсы по типам (пустая корзина) — открываем типы отдельным экраном (по 20 + "Показать ещё")
+  // Быстрые чипсы по типам — просто подставляем в поиск (так не нужно плодить отдельные роуты)
   try {
-    Array.from(view.querySelectorAll("[data-typekey]")).forEach((btn) => {
+    Array.from(view.querySelectorAll('[data-etype]')).forEach((btn) => {
       bindTap(btn, () => {
-        const key = String(btn.getAttribute("data-typekey") || "").trim();
-        if (!key) return;
-        openTypeBrowse(key, typeTitleByKey(key));
+        const t = btn.getAttribute("data-etype") || "";
+        try { globalSearch.value = t; } catch {}
+        try { if (searchWrap) searchWrap.classList.add("hasText"); } catch {}
+        openPage(() => renderSearch(t));
       });
     });
   } catch {}
+
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
     bindTap(btnClear, () => {
@@ -5365,7 +5244,7 @@ const oldCheckout = loadJSON("lespaw_checkout_v1", null);
 let checkout = loadJSON(LS_CHECKOUT, {
   fio: oldCheckout?.name || "",
   phone: oldCheckout?.contact || "",
-  countryId: "ru", // only used for Ozon/Wildberries; otherwise forced to Russia
+  countryId: "ru", // фикс: отправка только по России
   pickupType: "yandex", // yandex | 5post | ozon | wildberries
   pickupAddress: (oldCheckout?.delivery || ""),
   comment: oldCheckout?.comment || "",
@@ -5464,7 +5343,7 @@ function buildOrderText() {
   const formatPlainValue = (s) => String(s || "").trim();
 
   const formatPhoneForOrder = (s) => {
-    const normalized = normalizePhoneE164(s, checkout.countryId || "ru");
+    const normalized = normalizePhoneE164(s, "ru");
     return normalized ? prettyPhone(normalized) : "";
   };
 
@@ -5475,8 +5354,7 @@ function buildOrderText() {
     wildberries: "Wildberries",
   }[checkout.pickupType] || "Яндекс");
 
-  const needsCountry = (checkout.pickupType === "ozon" || checkout.pickupType === "wildberries");
-  const countryName = getCountryById(checkout.countryId || "ru").name;
+  const needsCountry = false;
 
 
   // группируем товары по типам
@@ -5638,7 +5516,6 @@ if ((checkout.comment || "").trim()) {
   lines.push(`${LBL("ФИО")} ${checkout.fio || ""}`);
   lines.push(`${LBL("Телефон получателя")} ${formatPhoneForOrder(checkout.phone || "")}`);
   lines.push(`${LBL("Пункт выдачи")} ${pt}`);
-  if (needsCountry) lines.push(`${LBL("Страна доставки")} ${countryName}`);
   lines.push(`${LBL("Адрес пункта выдачи")} ${formatPlainValue(checkout.pickupAddress || "")}`);
 
   return lines.join("\n");
@@ -5664,12 +5541,9 @@ function renderCheckout() {
   const safeVal = (v) => String(v || "").replace(/"/g, "&quot;");
 
   const pickupType = checkout.pickupType || "yandex";
-  const requiresCountry = (pickupType === "ozon" || pickupType === "wildberries");
-  // Country is only needed for Ozon/WB; for other methods we keep Russia.
-  if (!checkout.countryId) checkout.countryId = "ru";
-  if (!requiresCountry) checkout.countryId = "ru";
-  const selectedCountry = getCountryById(checkout.countryId);
-  const phonePlaceholder = getPhonePlaceholder(selectedCountry.id);
+  const requiresCountry = false; // Ozon/Wildberries теперь только по России — выбор страны убран
+  checkout.countryId = "ru";
+  const phonePlaceholder = getPhonePlaceholder("ru");
 
 
   // Похожие товары в оформлении отключены (блок может быть включен позже осознанно).
@@ -5692,17 +5566,8 @@ function renderCheckout() {
       <div class="small"><b>Телефон получателя (обязательно)</b></div>
       <div class="small fieldHelp is-show mt6 opacity88">
         Номер должен быть тем, на который зарегистрирован аккаунт.
-        ${requiresCountry ? "Для Ozon/Wildberries обязательно укажи страну доставки." : ""}
+        
       </div>
-
-      ${requiresCountry ? `
-        <div class="sp10"></div>
-        <div class="small"><b>Страна доставки (обязательно)</b></div>
-        <select class="searchInput" id="cCountry">
-          ${SHIPPING_COUNTRIES.map((c) => `<option value="${c.id}" ${checkout.countryId === c.id ? "selected" : ""}>${c.name}</option>`).join("")}
-        </select>
-      ` : ``}
-
       <div class="sp10"></div>
       <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="${phonePlaceholder}" value="${safeVal(checkout.phone)}" aria-describedby="errPhone" aria-invalid="false">
 
@@ -5805,7 +5670,7 @@ function renderCheckout() {
 
   const cFio = document.getElementById("cFio");
   const cPhone = document.getElementById("cPhone");
-  const cCountry = document.getElementById("cCountry");
+  const cCountry = null;
   const cPickupAddress = document.getElementById("cPickupAddress");
   const cComment = document.getElementById("cComment");
 
@@ -5814,7 +5679,7 @@ function renderCheckout() {
   const errPickup = document.getElementById("errPickup");
 
   // phone mask context (RU by default; for Ozon/WB uses selected country)
-  const activeCountryIdForPhone = (checkout.pickupType === "ozon" || checkout.pickupType === "wildberries") ? (checkout.countryId || "ru") : "ru";
+  const activeCountryIdForPhone = "ru";
   if (cPhone) {
     cPhone.dataset.countryId = activeCountryIdForPhone;
     // format immediately (in case value was stored unformatted)
@@ -5848,7 +5713,7 @@ function renderCheckout() {
     saveCheckout({
       fio: cFio.value || "",
       phone: cPhone.value || "",
-      countryId: (document.getElementById("cCountry") ? (document.getElementById("cCountry").value || "ru") : (checkout.countryId || "ru")),
+      countryId: "ru",
       pickupType: pickupType || "yandex",
       pickupAddress: cPickupAddress.value || "",
       comment: cComment.value || "",
@@ -5895,9 +5760,7 @@ function renderCheckout() {
 
   const setPickupType = (t) => {
     checkout.pickupType = t;
-    // For Ozon/WB we keep (or ask) country; for others force Russia.
-    if (t !== "ozon" && t !== "wildberries") checkout.countryId = "ru";
-    if (!checkout.countryId) checkout.countryId = "ru";
+    checkout.countryId = "ru"; // фикс: отправка только по России
     saveCheckout(checkout);
     renderCheckout();
   };
@@ -5906,16 +5769,6 @@ function renderCheckout() {
   bindTap(pt5Post, () => setPickupType("5post"));
   bindTap(ptOzon, () => setPickupType("ozon"));
   bindTap(ptWB, () => setPickupType("wildberries"));
-
-  // Country selector (only visible for Ozon/WB)
-  if (cCountry) {
-    cCountry.addEventListener("change", () => {
-      checkout.countryId = cCountry.value || "ru";
-      saveCheckout(checkout);
-      renderCheckout(); // to update placeholder/hints
-    });
-  }
-
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
   bindTap(openInfoFromCheckout, () => openPage(renderInfo));
 
@@ -5976,8 +5829,7 @@ function renderCheckout() {
       setAriaInvalid(cPhone, true);
       ok = false;
     } else {
-      const countryId = (checkout.countryId || "ru");
-      const normalized = normalizePhoneE164(phone, countryId);
+      const normalized = normalizePhoneE164(phone, "ru");
 
       if (!isPhoneE164Like(normalized)) {
         cPhone?.classList.add("field-error");
@@ -5989,7 +5841,7 @@ function renderCheckout() {
         checkout.phone = normalized;
         saveCheckout(checkout);
         setAriaInvalid(cPhone, false);
-        try { const fmt = formatPhoneByCountry(normalized, checkout.shipCountry || checkout.countryId); if (cPhone && cPhone.value !== fmt) cPhone.value = fmt; } catch {}
+        try { const fmt = formatPhoneByCountry(normalized, "ru"); if (cPhone && cPhone.value !== fmt) cPhone.value = fmt; } catch {}
       }
     }
     if (!addr) {
