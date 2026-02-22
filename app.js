@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v233 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v245 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,7 +14,12 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "244";
+const APP_BUILD = "245";
+
+// ===== Thematic product detail navigation (arrows in product card) =====
+let __thematicDetailNav = null;
+// { ids: string[], index: number, groupKey: string }
+function __clearThematicDetailNav() { __thematicDetailNav = null; }
 
 // =====================
 // CSV ссылки (твои)
@@ -1153,62 +1158,6 @@ function nextPinSingleId(currentId, dir) {
     return arr[ni] || "";
   } catch { return ""; }
 }
-
-// =====================
-// Thematic product navigation (inside "Что-то тематическое" only)
-// =====================
-let __thematicDetailCtx = { ids: [], idx: -1, groupKey: "", source: "" };
-
-function setThematicDetailContext(groupKey, ids, currentId, sourceName = "thematic") {
-  try {
-    const arr = (ids || []).map((x) => String(x)).filter(Boolean);
-    const cid = String(currentId || "");
-    const i = arr.indexOf(cid);
-    __thematicDetailCtx = {
-      ids: arr,
-      idx: i,
-      groupKey: String(groupKey || ""),
-      source: String(sourceName || "thematic"),
-    };
-  } catch {
-    __thematicDetailCtx = { ids: [], idx: -1, groupKey: "", source: "" };
-  }
-}
-
-function clearThematicDetailContext() {
-  __thematicDetailCtx = { ids: [], idx: -1, groupKey: "", source: "" };
-}
-
-function canNavigateThematic(currentId, groupKey) {
-  try {
-    const cid = String(currentId || "");
-    const gk = String(groupKey || "");
-    return (
-      (__thematicDetailCtx?.source === "thematic") &&
-      (String(__thematicDetailCtx?.groupKey || "") === gk) &&
-      Array.isArray(__thematicDetailCtx?.ids) &&
-      __thematicDetailCtx.ids.length > 1 &&
-      __thematicDetailCtx.ids.indexOf(cid) !== -1
-    );
-  } catch {
-    return false;
-  }
-}
-
-function nextThematicId(currentId, dir) {
-  try {
-    const cid = String(currentId || "");
-    const arr = __thematicDetailCtx.ids || [];
-    const i = arr.indexOf(cid);
-    if (i === -1 || arr.length < 2) return null;
-    const d = Number(dir || 0) >= 0 ? 1 : -1;
-    const ni = (i + d + arr.length) % arr.length;
-    return arr[ni] || null;
-  } catch {
-    return null;
-  }
-}
-
 function replaceCurrentPage(renderFn, opts = {}) {
   if (typeof renderFn !== "function") return;
   currentRender = renderFn;
@@ -3629,7 +3578,7 @@ function renderTypeBrowsePage() {
       <div class="card">
         <div class="grid2">
           ${shown.map((p) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-gk="${g.key}">
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3663,14 +3612,6 @@ function renderTypeBrowsePage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
-      const gk = String(el.dataset.gk || "");
-      try {
-        // In thematic витрина we navigate between PRODUCTS (not photos)
-        // Keep context inside current thematic group (stickers / pin_set / ...)
-        setThematicDetailContext(gk, thematicGroupIds[gk] || [], pid, "thematic");
-        // avoid conflicting pin_single swipe context while using thematic arrows
-        clearPinSingleSwipeContext();
-      } catch {}
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3747,13 +3688,6 @@ function renderThematicPage() {
     .map((g) => ({ ...g, items: allRaw.filter((p) => typeGroupKey(p) === g.key) }))
     .filter((g) => g.items.length > 0);
 
-  const thematicGroupIds = {};
-  try {
-    (grouped || []).forEach((g) => {
-      thematicGroupIds[String(g.key || "")] = (g.items || []).map((p) => String(p.id || "")).filter(Boolean);
-    });
-  } catch {}
-
   view.innerHTML = `
     <div class="card">
       <div class="h2">Что-то тематическое <span class="inlineBadge">витрина</span></div>
@@ -3764,8 +3698,8 @@ function renderThematicPage() {
       <div class="card">
         <div class="h3">${h(g.title)}</div>
         <div class="grid2 mt12">
-          ${g.items.map((p) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}">
+          ${g.items.map((p, __i) => `
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-group="${escapeHTML(String(g.key||''))}" data-pos="${__i}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -4064,7 +3998,6 @@ function renderInfo() {
             <li>При длительном воздействии света печать со временем может терять насыщенность — это не считается браком.</li>
           </ul>
         </div>
-
         <div class="infoSection">
           <div class="infoTitle">Индивидуальные заказы и вопросы</div>
           <ul class="infoList">
@@ -4610,6 +4543,37 @@ function renderProduct(productId, prefill) {
   const p = getProductById(productId);
   if (!p) {
     view.innerHTML = `<div class="card"><div class="h2">Товар не найден</div></div>`;
+
+  // bind thematic nav arrows (only when present)
+  try {
+    const prevBtn = document.getElementById("thematicPrevBtn");
+    const nextBtn = document.getElementById("thematicNextBtn");
+    if (prevBtn) {
+      if (__prevId) {
+        bindTap(prevBtn, () => {
+          try { if (__thematicDetailNav) __thematicDetailNav.index = Math.max(0, __thematicDetailNav.index - 1); } catch {}
+          replaceCurrentPage(() => renderProduct(__prevId, prefill));
+        });
+      } else {
+        prevBtn.disabled = true;
+      }
+    }
+    if (nextBtn) {
+      if (__nextId) {
+        bindTap(nextBtn, () => {
+          try {
+            if (__thematicDetailNav && Array.isArray(__thematicDetailNav.ids)) {
+              __thematicDetailNav.index = Math.min(__thematicDetailNav.ids.length - 1, __thematicDetailNav.index + 1);
+            }
+          } catch {}
+          replaceCurrentPage(() => renderProduct(__nextId, prefill));
+        });
+      } else {
+        nextBtn.disabled = true;
+      }
+    }
+  } catch {}
+
     syncNav();
     syncBottomSpace();
     return;
@@ -4621,6 +4585,19 @@ function renderProduct(productId, prefill) {
   } catch {}
 const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
+
+
+  // Thematic detail arrows: enabled only when opened from "Что-то тематическое" group
+  const __pid = String(p.id);
+  const __hasThematicNav = !!(__thematicDetailNav && Array.isArray(__thematicDetailNav.ids) && __thematicDetailNav.ids.includes(__pid) && __thematicDetailNav.ids.length > 1);
+  if (!__hasThematicNav) {
+    // prevent arrows "sticking" when opening from other places
+    __clearThematicDetailNav();
+  } else {
+    __thematicDetailNav.index = Math.max(0, __thematicDetailNav.ids.indexOf(__pid));
+  }
+  const __prevId = (__hasThematicNav && __thematicDetailNav.index > 0) ? __thematicDetailNav.ids[__thematicDetailNav.index - 1] : "";
+  const __nextId = (__hasThematicNav && __thematicDetailNav.index < __thematicDetailNav.ids.length - 1) ? __thematicDetailNav.ids[__thematicDetailNav.index + 1] : "";
 
   const overlayDelta = Number(settings.overlay_price_delta) || 100;
   const holoDelta = Number(settings.holo_base_price_delta) || 100;
@@ -4749,24 +4726,24 @@ if (isPoster) {
 
     view.innerHTML = `
       <div class="card">
-        <div class=\"prodHead\">
+        <div class=\"prodHead\">${__hasThematicNav ? `
+          <div class=\"thematicNavTop\">
+            <button class=\"navArrow\" id=\"thematicPrevBtn\" ${__prevId ? '' : 'disabled'} aria-label=\"Предыдущий товар\">‹</button>
+            <button class=\"navArrow\" id=\"thematicNextBtn\" ${__nextId ? '' : 'disabled'} aria-label=\"Следующий товар\">›</button>
+          </div>
+        ` : ""}
           <div>
             <div class=\"h2\">${h(p.name)}</div>
             <div class=\"small\">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
           </div>
-          ${ (canNavigateThematic(p.id, groupKey)) ? `
-            <div class=\"prodSwipeCtrls\" aria-label=\"Листать товары\">
-              <button class=\"prodSwipeBtn\" id=\"themPrev\" type=\"button\" aria-label=\"Предыдущий товар\">‹</button>
-              <button class=\"prodSwipeBtn\" id=\"themNext\" type=\"button\" aria-label=\"Следующий товар\">›</button>
-            </div>
-          ` : ((isPinSingle && canSwipePinSingles(p.id)) ? `
+          ${ (isPinSingle && canSwipePinSingles(p.id)) ? `
             <div class=\"prodSwipeCtrls\" aria-label=\"Листать значки\">
               <button class=\"prodSwipeBtn\" id=\"prodPrev\" type=\"button\" aria-label=\"Предыдущий значок\">‹</button>
               <button class=\"prodSwipeBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий значок\">›</button>
             </div>
-          ` : ``) }
+          ` : `` }
         </div>
-        ${ (isPinSingle && canSwipePinSingles(p.id) && !canNavigateThematic(p.id, groupKey) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
+        ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
@@ -4884,23 +4861,6 @@ if (isPoster) {
       const btnNext = document.getElementById('prodNext');
       if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
       if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
-
-
-      // Thematic product navigation (only inside "Что-то тематическое")
-      const tPrev = document.getElementById('themPrev');
-      const tNext = document.getElementById('themNext');
-      const goThematicNeighbor = (dir) => {
-        const nid = nextThematicId(p.id, dir);
-        if (!nid) return;
-        try {
-          const arr = __thematicDetailCtx?.ids || [];
-          __thematicDetailCtx.idx = arr.indexOf(String(nid));
-        } catch {}
-        // Replace current product screen (do not grow back-stack)
-        replaceCurrentPage(() => renderProduct(String(nid)), { route: { page: "product", id: String(nid) } });
-      };
-      if (tPrev) bindTap(tPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goThematicNeighbor(-1); });
-      if (tNext) bindTap(tNext, (e) => { try { e?.stopPropagation?.(); } catch {} goThematicNeighbor(+1); });
 
       const hintEl = document.getElementById('pinSwipeHint');
       if (hintEl) {
@@ -5998,6 +5958,7 @@ function renderCheckout() {
     } else {
       setAriaInvalid(cPickupAddress, false);
     }
+
     // гейт: без открытия важной информации нельзя подтверждать
     if (!infoViewedThisSession) {
       rowAgreeInfo?.classList.add("is-error");
