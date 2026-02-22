@@ -3564,7 +3564,7 @@ function renderTypeBrowsePage() {
       <div class="card">
         <div class="grid2">
           ${shown.map((p) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${g.key}">
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${key}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
