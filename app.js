@@ -1,4 +1,4 @@
-// LesPaw Mini App — app.js v245 (hotfix: syntax + csv bg update + ux polish)
+// LesPaw Mini App — app.js v233 (hotfix: syntax + csv bg update + ux polish)
 // FIX: предыдущий app.js был обрезан в конце (SyntaxError), из-за этого JS не запускался и главный экран был пустой.
 //
 // Фичи:
@@ -14,12 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "245";
-
-// ===== Thematic product detail navigation (arrows in product card) =====
-let __thematicDetailNav = null;
-// { ids: string[], index: number, groupKey: string }
-function __clearThematicDetailNav() { __thematicDetailNav = null; }
+const APP_BUILD = "251";
 
 // =====================
 // CSV ссылки (твои)
@@ -733,6 +728,54 @@ function postRenderEnhance() {
 const navStack = [];
 let currentRender = null;
 
+
+// =====================
+// Thematic product detail navigation (prev/next within current group)
+// =====================
+let thematicDetailNav = null;
+/**
+ * @param {string[]} ids - ordered ids within the current thematic group
+ * @param {string} currentId
+ * @param {string} groupKey
+ */
+function setThematicDetailNav(ids, currentId, groupKey) {
+  try {
+    const list = (ids || []).map((x) => String(x)).filter(Boolean);
+    const cur = String(currentId || "");
+    thematicDetailNav = {
+      mode: "thematic",
+      groupKey: String(groupKey || ""),
+      ids: list,
+      currentId: cur,
+      ts: Date.now(),
+    };
+  } catch {
+    thematicDetailNav = null;
+  }
+}
+function clearThematicDetailNav() {
+  thematicDetailNav = null;
+}
+/**
+ * Returns prev/next ids for current product if context is valid.
+ * @param {string} currentId
+ */
+function getThematicDetailNav(currentId) {
+  try {
+    if (!thematicDetailNav || thematicDetailNav.mode !== "thematic") return null;
+    const ids = thematicDetailNav.ids || [];
+    const cur = String(currentId || "");
+    const idx = ids.indexOf(cur);
+    if (idx < 0) return null;
+    // keep currentId in sync
+    thematicDetailNav.currentId = cur;
+    const prevId = idx > 0 ? ids[idx - 1] : null;
+    const nextId = idx < ids.length - 1 ? ids[idx + 1] : null;
+    return { prevId, nextId, groupKey: thematicDetailNav.groupKey, size: ids.length, index: idx };
+  } catch {
+    return null;
+  }
+}
 // =====================
 // In-app image viewer (modal)
 // =====================
@@ -3509,6 +3552,8 @@ function renderFandomList(type) {
     </div>
   `;
 
+  const groupIdsMap = new Map(grouped.map((g) => [String(g.key), (g.items || []).map((p) => String(p.id))]));
+
   view.innerHTML = `
     <div class="card">
       <div class="h2">${type}</div>
@@ -3578,7 +3623,7 @@ function renderTypeBrowsePage() {
       <div class="card">
         <div class="grid2">
           ${shown.map((p) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}">
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-gkey="${g.key}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3612,6 +3657,9 @@ function renderTypeBrowsePage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
+            const gkey = String(el.dataset.gkey || "");
+      const ids = groupIdsMap.get(gkey);
+      if (ids && ids.length) setThematicDetailNav(ids, pid, gkey);
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3698,8 +3746,8 @@ function renderThematicPage() {
       <div class="card">
         <div class="h3">${h(g.title)}</div>
         <div class="grid2 mt12">
-          ${g.items.map((p, __i) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-group="${escapeHTML(String(g.key||''))}" data-pos="${__i}">
+          ${g.items.map((p) => `
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-gkey="${g.key}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3794,7 +3842,7 @@ const groupsOrder = [
     const cards = items
       .map(
         (p) => `
-          <div class="pcard" id="p_${p.id}" data-id="${p.id}">
+          <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-gkey="${g.key}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${h(p.name)}</div>
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3998,6 +4046,7 @@ function renderInfo() {
             <li>При длительном воздействии света печать со временем может терять насыщенность — это не считается браком.</li>
           </ul>
         </div>
+
         <div class="infoSection">
           <div class="infoTitle">Индивидуальные заказы и вопросы</div>
           <ul class="infoList">
@@ -4543,37 +4592,6 @@ function renderProduct(productId, prefill) {
   const p = getProductById(productId);
   if (!p) {
     view.innerHTML = `<div class="card"><div class="h2">Товар не найден</div></div>`;
-
-  // bind thematic nav arrows (only when present)
-  try {
-    const prevBtn = document.getElementById("thematicPrevBtn");
-    const nextBtn = document.getElementById("thematicNextBtn");
-    if (prevBtn) {
-      if (__prevId) {
-        bindTap(prevBtn, () => {
-          try { if (__thematicDetailNav) __thematicDetailNav.index = Math.max(0, __thematicDetailNav.index - 1); } catch {}
-          replaceCurrentPage(() => renderProduct(__prevId, prefill));
-        });
-      } else {
-        prevBtn.disabled = true;
-      }
-    }
-    if (nextBtn) {
-      if (__nextId) {
-        bindTap(nextBtn, () => {
-          try {
-            if (__thematicDetailNav && Array.isArray(__thematicDetailNav.ids)) {
-              __thematicDetailNav.index = Math.min(__thematicDetailNav.ids.length - 1, __thematicDetailNav.index + 1);
-            }
-          } catch {}
-          replaceCurrentPage(() => renderProduct(__nextId, prefill));
-        });
-      } else {
-        nextBtn.disabled = true;
-      }
-    }
-  } catch {}
-
     syncNav();
     syncBottomSpace();
     return;
@@ -4585,19 +4603,6 @@ function renderProduct(productId, prefill) {
   } catch {}
 const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
-
-
-  // Thematic detail arrows: enabled only when opened from "Что-то тематическое" group
-  const __pid = String(p.id);
-  const __hasThematicNav = !!(__thematicDetailNav && Array.isArray(__thematicDetailNav.ids) && __thematicDetailNav.ids.includes(__pid) && __thematicDetailNav.ids.length > 1);
-  if (!__hasThematicNav) {
-    // prevent arrows "sticking" when opening from other places
-    __clearThematicDetailNav();
-  } else {
-    __thematicDetailNav.index = Math.max(0, __thematicDetailNav.ids.indexOf(__pid));
-  }
-  const __prevId = (__hasThematicNav && __thematicDetailNav.index > 0) ? __thematicDetailNav.ids[__thematicDetailNav.index - 1] : "";
-  const __nextId = (__hasThematicNav && __thematicDetailNav.index < __thematicDetailNav.ids.length - 1) ? __thematicDetailNav.ids[__thematicDetailNav.index + 1] : "";
 
   const overlayDelta = Number(settings.overlay_price_delta) || 100;
   const holoDelta = Number(settings.holo_base_price_delta) || 100;
@@ -4616,6 +4621,11 @@ const fandom = getFandomById(p.fandom_id);
   const isPinSingle = groupKey === "pin_single";
   const isPinSet = groupKey === "pin_set";
   const isPoster = groupKey === "poster";
+
+  const thematicNav = getThematicDetailNav(p.id);
+  if (thematicDetailNav && !thematicNav) clearThematicDetailNav();
+  // In thematic mode we show item navigation arrows (prev/next product) instead of pin_single swipe.
+  const hasThematicNav = !!(thematicNav && (thematicNav.prevId || thematicNav.nextId));
 
   // --- defaults ---
   let selectedFilm = "film_glossy"; // default
@@ -4726,24 +4736,24 @@ if (isPoster) {
 
     view.innerHTML = `
       <div class="card">
-        <div class=\"prodHead\">${__hasThematicNav ? `
-          <div class=\"thematicNavTop\">
-            <button class=\"navArrow\" id=\"thematicPrevBtn\" ${__prevId ? '' : 'disabled'} aria-label=\"Предыдущий товар\">‹</button>
-            <button class=\"navArrow\" id=\"thematicNextBtn\" ${__nextId ? '' : 'disabled'} aria-label=\"Следующий товар\">›</button>
-          </div>
-        ` : ""}
+        <div class=\"prodHead\">
           <div>
             <div class=\"h2\">${h(p.name)}</div>
             <div class=\"small\">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
           </div>
-          ${ (isPinSingle && canSwipePinSingles(p.id)) ? `
+          ${ hasThematicNav ? `
+            <div class=\"prodSwipeCtrls\" aria-label=\"Листать товары\">
+              <button class=\"prodSwipeBtn\" id=\"prodItemPrev\" type=\"button\" aria-label=\"Предыдущий товар\" ${thematicNav?.prevId ? `` : `disabled`}>‹</button>
+              <button class=\"prodSwipeBtn\" id=\"prodItemNext\" type=\"button\" aria-label=\"Следующий товар\" ${thematicNav?.nextId ? `` : `disabled`}>›</button>
+            </div>
+          ` : ((isPinSingle && canSwipePinSingles(p.id)) ? `
             <div class=\"prodSwipeCtrls\" aria-label=\"Листать значки\">
               <button class=\"prodSwipeBtn\" id=\"prodPrev\" type=\"button\" aria-label=\"Предыдущий значок\">‹</button>
               <button class=\"prodSwipeBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий значок\">›</button>
             </div>
-          ` : `` }
+          ` : ``) }
         </div>
-        ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
+        ${ (!hasThematicNav && isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
@@ -4861,6 +4871,21 @@ if (isPoster) {
       const btnNext = document.getElementById('prodNext');
       if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
       if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
+
+      // Thematic item navigation (prev/next product within current thematic group)
+      if (hasThematicNav) {
+        const bPrev = document.getElementById('prodItemPrev');
+        const bNext = document.getElementById('prodItemNext');
+        const nav = getThematicDetailNav(p.id);
+        const go = (nid) => {
+          if (!nid) return;
+          try { hapticLight(); } catch {}
+          try { bPrev?.blur?.(); bNext?.blur?.(); } catch {}
+          replaceCurrentPage(() => renderProduct(String(nid)), { scrollTop: true });
+        };
+        if (bPrev) bindTap(bPrev, (e) => { try { e?.stopPropagation?.(); } catch {} go(nav?.prevId); });
+        if (bNext) bindTap(bNext, (e) => { try { e?.stopPropagation?.(); } catch {} go(nav?.nextId); });
+      }
 
       const hintEl = document.getElementById('pinSwipeHint');
       if (hintEl) {
