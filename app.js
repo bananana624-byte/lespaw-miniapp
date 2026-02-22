@@ -5633,7 +5633,6 @@ function renderCheckout() {
       <div class="small"><b>Телефон получателя (обязательно)</b></div>
       <div class="small fieldHelp is-show mt6 opacity88">
         Номер должен быть тем, на который зарегистрирован аккаунт.
-        ${requiresAccountPhone ? "Для Ozon/Wildberries обязательно укажи номер телефона аккаунта (Россия, +7)." : ""}
       </div>
 
       
