@@ -3947,7 +3947,7 @@ function renderInfo() {
           <div class="infoTitle">Доставка и пункты выдачи</div>
           <div class="infoNote">Мы отправляем заказы через выбранный при оформлении пункт выдачи.</div>
           <ul class="infoList">
-            <li>Пункты выдачи: <b>Яндекс / 5Post / Ozon / Wildberries</b></li>
+            <li>Пункты выдачи: <b>Яндекс / 5Post / Ozon / Wildberries / CDEK</b></li>
             <li>Срок хранения заказа в пункте выдачи — <b>6 дней</b> (может зависеть от выбранного сервиса).</li>
           </ul>
         </div>
@@ -5305,7 +5305,7 @@ let checkout = loadJSON(LS_CHECKOUT, {
   fio: oldCheckout?.name || "",
   phone: oldCheckout?.contact || "",
   countryId: "ru", // only used for Ozon/Wildberries; otherwise forced to Russia
-  pickupType: "yandex", // yandex | 5post | ozon | wildberries
+  pickupType: "yandex", // yandex | 5post | ozon | wildberries | CDEK
   pickupAddress: (oldCheckout?.delivery || ""),
   comment: oldCheckout?.comment || "",
 });
@@ -5412,6 +5412,7 @@ function buildOrderText() {
     "5post": "5Post",
     ozon: "Ozon",
     wildberries: "Wildberries",
+    CDEK: "CDEK",
   }[checkout.pickupType] || "Яндекс");
 
   const needsCountry = false; // Ozon/WB теперь только по России
@@ -5649,6 +5650,7 @@ function renderCheckout() {
         <button class="btn ${pickupType === "5post" ? "is-active" : ""}" id="pt5Post" type="button">5Post</button>
         <button class="btn ${pickupType === "ozon" ? "is-active" : ""}" id="ptOzon" type="button">Ozon</button>
         <button class="btn ${pickupType === "wildberries" ? "is-active" : ""}" id="ptWB" type="button">Wildberries</button>
+        <button class="btn ${pickupType === "CDEK" ? "is-active" : ""}" id="ptCDEK" type="button">CDEK</button>
       </div>
       <div class="sp10"></div>
 
@@ -5826,6 +5828,7 @@ function renderCheckout() {
   const pt5Post = document.getElementById("pt5Post");
   const ptOzon = document.getElementById("ptOzon");
   const ptWB = document.getElementById("ptWB");
+  const ptCDEK = document.getElementById("ptCDEK");
 
   const setPickupType = (t) => {
     checkout.pickupType = t;
@@ -5840,6 +5843,7 @@ function renderCheckout() {
   bindTap(pt5Post, () => setPickupType("5post"));
   bindTap(ptOzon, () => setPickupType("ozon"));
   bindTap(ptWB, () => setPickupType("wildberries"));
+  bindTap(ptCDEK, () => setPickupType("CDEK"));
 
   // Country selector (only visible for Ozon/WB)
   if (cCountry) {
