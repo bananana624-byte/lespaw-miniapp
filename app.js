@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "251";
+const APP_BUILD = "252";
 
 // =====================
 // CSV ссылки (твои)
@@ -41,7 +41,7 @@ const CSV_REVIEWS_URL =
 // ВАЖНО: когда вы меняете текст/условия во вкладке "Важная информация",
 // просто увеличьте версию ниже. Тогда у всех клиенток статус "прочитано"
 // автоматически сбросится.
-const IMPORTANT_INFO_VERSION = "2026-02-01-5" // 2026-02-01-2";
+const IMPORTANT_INFO_VERSION = "2026-02-22-1" // 2026-02-01-2";
 
 // менеджерка (без @)
 const MANAGER_USERNAME = "LesPaw_manager";
@@ -726,56 +726,12 @@ function postRenderEnhance() {
 // Navigation stack
 // =====================
 const navStack = [];
+
+// Контекст перелистывания товаров в полной карточке (только для "Что-то тематическое")
+let thematicDetailNav = null;
+
 let currentRender = null;
 
-
-// =====================
-// Thematic product detail navigation (prev/next within current group)
-// =====================
-let thematicDetailNav = null;
-/**
- * @param {string[]} ids - ordered ids within the current thematic group
- * @param {string} currentId
- * @param {string} groupKey
- */
-function setThematicDetailNav(ids, currentId, groupKey) {
-  try {
-    const list = (ids || []).map((x) => String(x)).filter(Boolean);
-    const cur = String(currentId || "");
-    thematicDetailNav = {
-      mode: "thematic",
-      groupKey: String(groupKey || ""),
-      ids: list,
-      currentId: cur,
-      ts: Date.now(),
-    };
-  } catch {
-    thematicDetailNav = null;
-  }
-}
-function clearThematicDetailNav() {
-  thematicDetailNav = null;
-}
-/**
- * Returns prev/next ids for current product if context is valid.
- * @param {string} currentId
- */
-function getThematicDetailNav(currentId) {
-  try {
-    if (!thematicDetailNav || thematicDetailNav.mode !== "thematic") return null;
-    const ids = thematicDetailNav.ids || [];
-    const cur = String(currentId || "");
-    const idx = ids.indexOf(cur);
-    if (idx < 0) return null;
-    // keep currentId in sync
-    thematicDetailNav.currentId = cur;
-    const prevId = idx > 0 ? ids[idx - 1] : null;
-    const nextId = idx < ids.length - 1 ? ids[idx + 1] : null;
-    return { prevId, nextId, groupKey: thematicDetailNav.groupKey, size: ids.length, index: idx };
-  } catch {
-    return null;
-  }
-}
 // =====================
 // In-app image viewer (modal)
 // =====================
@@ -2459,18 +2415,10 @@ function haptic(kind) {
 
 
 function getPhoneRule(countryId) {
-  const id = String(countryId || "ru");
-  const RULES = {
-    ru: { cc: "+7",   ccDigits: "7",   nsn: 10, groups: [3, 3, 2, 2], example: "+7-999-123-45-67" },
-    kz: { cc: "+7",   ccDigits: "7",   nsn: 10, groups: [3, 3, 2, 2], example: "+7-777-123-45-67" },
-    by: { cc: "+375", ccDigits: "375", nsn: 9,  groups: [2, 3, 2, 2], example: "+375-29-123-45-67" },
-    am: { cc: "+374", ccDigits: "374", nsn: 8,  groups: [2, 3, 3],    example: "+374-77-123-456" },
-    kg: { cc: "+996", ccDigits: "996", nsn: 9,  groups: [3, 3, 3],    example: "+996-700-123-456" },
-    uz: { cc: "+998", ccDigits: "998", nsn: 9,  groups: [2, 3, 2, 2], example: "+998-90-123-45-67" },
-  };
-  return RULES[id] || RULES.ru;
+  // Теперь доставка через Ozon / Wildberries — только по России
+  // поэтому телефон — только РФ (+7) и 10 цифр.
+  return { cc: "+7", ccDigits: "7", nsn: 10, groups: [3, 3, 2, 2], example: "+7-999-123-45-67" };
 }
-
 function getPhonePlaceholder(countryId) {
   return getPhoneRule(countryId).example;
 }
@@ -2560,12 +2508,7 @@ function normalizePhoneDigitsForCountry(raw, countryId) {
 }
 // ===== Shipping countries (only where Ozon / Wildberries are used in our flow) =====
 const SHIPPING_COUNTRIES = [
-  { id: "ru", name: "Россия",  code: "+7"   },
-  { id: "kz", name: "Казахстан", code: "+7" },
-  { id: "by", name: "Беларусь", code: "+375" },
-  { id: "am", name: "Армения",  code: "+374" },
-  { id: "kg", name: "Кыргызстан", code: "+996" },
-  { id: "uz", name: "Узбекистан", code: "+998" },
+  { id: "ru", name: "Россия", code: "+7" },
 ];
 
 function getCountryById(id) {
@@ -3552,8 +3495,6 @@ function renderFandomList(type) {
     </div>
   `;
 
-  const groupIdsMap = new Map(grouped.map((g) => [String(g.key), (g.items || []).map((p) => String(p.id))]));
-
   view.innerHTML = `
     <div class="card">
       <div class="h2">${type}</div>
@@ -3623,7 +3564,7 @@ function renderTypeBrowsePage() {
       <div class="card">
         <div class="grid2">
           ${shown.map((p) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-gkey="${g.key}">
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${g.key}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3657,9 +3598,12 @@ function renderTypeBrowsePage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
-            const gkey = String(el.dataset.gkey || "");
-      const ids = groupIdsMap.get(gkey);
-      if (ids && ids.length) setThematicDetailNav(ids, pid, gkey);
+      const gk = String(el.dataset.tgroup || "");
+      try {
+        const ids = (grouped.find((x) => x.key === gk)?.items || []).map((pp) => String(pp.id));
+        const idx = Math.max(0, ids.indexOf(String(pid)));
+        thematicDetailNav = { ids, index: idx, groupKey: gk };
+      } catch { thematicDetailNav = null; }
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3747,7 +3691,7 @@ function renderThematicPage() {
         <div class="h3">${h(g.title)}</div>
         <div class="grid2 mt12">
           ${g.items.map((p) => `
-            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-gkey="${g.key}">
+            <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${g.key}">
               ${cardThumbHTML(p)}
               <div class="pcardTitle">${h(p.name)}</div>
               ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3775,6 +3719,12 @@ function renderThematicPage() {
       const t = e?.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
       const pid = String(el.dataset.id || "");
+      const gk = String(el.dataset.tgroup || "");
+      try {
+        const ids = (grouped.find((x) => x.key === gk)?.items || []).map((pp) => String(pp.id));
+        const idx = Math.max(0, ids.indexOf(String(pid)));
+        thematicDetailNav = { ids, index: idx, groupKey: gk };
+      } catch { thematicDetailNav = null; }
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -3842,7 +3792,7 @@ const groupsOrder = [
     const cards = items
       .map(
         (p) => `
-          <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-gkey="${g.key}">
+          <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${g.key}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${h(p.name)}</div>
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3904,6 +3854,12 @@ const groupsOrder = [
       } catch { clearPinSingleSwipeContext(); }
 
       const pid = String(el.dataset.id || "");
+      const gk = String(el.dataset.tgroup || "");
+      try {
+        const ids = (grouped.find((x) => x.key === gk)?.items || []).map((pp) => String(pp.id));
+        const idx = Math.max(0, ids.indexOf(String(pid)));
+        thematicDetailNav = { ids, index: idx, groupKey: gk };
+      } catch { thematicDetailNav = null; }
       openPage(() => renderProduct(pid), { anchorId: String(el.id || `p_${pid}`) });
     });
   });
@@ -4001,9 +3957,9 @@ function renderInfo() {
         <div class="infoSection">
           <div class="infoTitle">Ozon и Wildberries</div>
           <ul class="infoList">
-            <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>страну доставки</b>.</li>
-            <li>Для Ozon/Wildberries <b>обязательно</b> укажи <b>номер телефона</b>, на который зарегистрирован аккаунт получателя.</li>
-            <li>Этот номер используется для оформления и получения заказа.</li>
+            <li>Доставка через <b>Ozon/Wildberries</b> возможна <b>только по России</b>.</li>
+            <li>Обязательно укажи <b>номер телефона аккаунта получателя</b> в Ozon/WB.</li>
+            <li>Телефон вводится в формате <b>+7</b> и 10 цифр.</li>
           </ul>
           <div class="infoNote">Если номер телефона не соответствует аккаунту получателя в выбранном ПВЗ, получение заказа может быть невозможно.</div>
         </div>
@@ -4011,23 +3967,13 @@ function renderInfo() {
         <div class="infoSection">
           <div class="infoTitle">Номер телефона</div>
           <ul class="infoList">
-            <li>Номер телефона <b>обязателен</b>.</li>
-            <li>Указывается в <b>международном формате</b> с кодом страны.</li>
+            <li>Номер телефона <b>обязателен</b> для оформления заказа.</li>
             <li>Для Ozon/Wildberries номер должен совпадать с номером аккаунта получателя.</li>
+            <li>Формат: <b>+7</b> и 10 цифр.</li>
           </ul>
         </div>
 
-        <div class="infoSection">
-          <div class="infoTitle">Страны доставки (Ozon / Wildberries)</div>
-          <ul class="infoList">
-            <li>Россия</li>
-            <li>Казахстан</li>
-            <li>Беларусь</li>
-            <li>Армения</li>
-            <li>Кыргызстан</li>
-            <li>Узбекистан</li>
-          </ul>
-          <div class="infoNote">Выбор страны доставки обязателен.</div>
+страны доставки обязателен.</div>
         </div>
 
         <div class="infoSection">
@@ -4590,6 +4536,12 @@ function renderProduct(productId, prefill) {
   try { setCurrentRoute({ page: "product", id: String(arguments[0] || "") }); } catch {}
   try {
   const p = getProductById(productId);
+  // Если открыли карточку не из "Что-то тематическое", контекст стрелок не используем
+  try {
+    if (!(thematicDetailNav && Array.isArray(thematicDetailNav.ids) && thematicDetailNav.ids.includes(String(productId)))) {
+      thematicDetailNav = null;
+    }
+  } catch { thematicDetailNav = null; }
   if (!p) {
     view.innerHTML = `<div class="card"><div class="h2">Товар не найден</div></div>`;
     syncNav();
@@ -4610,6 +4562,19 @@ const fandom = getFandomById(p.fandom_id);
   const groupKey = typeGroupKey(p); // sticker | pin_set | pin_single | poster | box | ...
   const baseKey = normalizeTypeKey(p?.product_type); // sticker | pin | poster | box | ...
   const isSticker = groupKey === "sticker";
+
+  // Товарные стрелки (только для раздела "Что-то тематическое")
+  const __pidStr = String(p.id);
+  const hasThematicNav = !!(
+    thematicDetailNav &&
+    Array.isArray(thematicDetailNav.ids) &&
+    thematicDetailNav.ids.length > 1 &&
+    thematicDetailNav.ids.includes(__pidStr)
+  );
+  if (hasThematicNav) {
+    try { thematicDetailNav.index = Math.max(0, thematicDetailNav.ids.indexOf(__pidStr)); } catch {}
+  }
+
   // Похожие товары: из этого же фандома и/или этого же типа
   const sameFandom = (products || []).filter((x) => String(x.fandom_id) === String(p.fandom_id) && String(x.id) !== String(p.id));
   const sameType = (products || []).filter((x) => typeGroupKey(x) === groupKey && String(x.id) !== String(p.id));
@@ -4621,11 +4586,6 @@ const fandom = getFandomById(p.fandom_id);
   const isPinSingle = groupKey === "pin_single";
   const isPinSet = groupKey === "pin_set";
   const isPoster = groupKey === "poster";
-
-  const thematicNav = getThematicDetailNav(p.id);
-  if (thematicDetailNav && !thematicNav) clearThematicDetailNav();
-  // In thematic mode we show item navigation arrows (prev/next product) instead of pin_single swipe.
-  const hasThematicNav = !!(thematicNav && (thematicNav.prevId || thematicNav.nextId));
 
   // --- defaults ---
   let selectedFilm = "film_glossy"; // default
@@ -4742,18 +4702,18 @@ if (isPoster) {
             <div class=\"small\">${fandom?.fandom_name ? `<b>${h(fandom.fandom_name)}</b> · ` : ""}${typeLabelDetailed(p.product_type)}</div>
           </div>
           ${ hasThematicNav ? `
-            <div class=\"prodSwipeCtrls\" aria-label=\"Листать товары\">
-              <button class=\"prodSwipeBtn\" id=\"prodItemPrev\" type=\"button\" aria-label=\"Предыдущий товар\" ${thematicNav?.prevId ? `` : `disabled`}>‹</button>
-              <button class=\"prodSwipeBtn\" id=\"prodItemNext\" type=\"button\" aria-label=\"Следующий товар\" ${thematicNav?.nextId ? `` : `disabled`}>›</button>
+            <div class=\"prodNavArrows\" aria-label=\"Перелистывание товаров\">
+              <button class=\"navArrowBtn\" id=\"prodPrev\" type=\"button\" aria-label=\"Предыдущий товар\">‹</button>
+              <button class=\"navArrowBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий товар\">›</button>
             </div>
-          ` : ((isPinSingle && canSwipePinSingles(p.id)) ? `
+          ` : (isPinSingle && canSwipePinSingles(p.id)) ? `
             <div class=\"prodSwipeCtrls\" aria-label=\"Листать значки\">
               <button class=\"prodSwipeBtn\" id=\"prodPrev\" type=\"button\" aria-label=\"Предыдущий значок\">‹</button>
               <button class=\"prodSwipeBtn\" id=\"prodNext\" type=\"button\" aria-label=\"Следующий значок\">›</button>
             </div>
-          ` : ``) }
+          ` : `` }
         </div>
-        ${ (!hasThematicNav && isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
+        ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
@@ -4830,6 +4790,24 @@ if (isPoster) {
         render();
       });
     }
+    if (hasThematicNav) {
+      const bPrev = document.getElementById("prodPrev");
+      const bNext = document.getElementById("prodNext");
+      const jump = (delta) => {
+        try {
+          const ids = thematicDetailNav?.ids || [];
+          if (!ids.length) return;
+          const idx = Number(thematicDetailNav?.index || 0);
+          const ni = (idx + delta + ids.length) % ids.length;
+          const nextId = String(ids[ni]);
+          thematicDetailNav.index = ni;
+          replaceCurrentPage(() => renderProduct(nextId), { scrollTop: true, route: { page: "product", id: nextId } });
+        } catch {}
+      };
+      if (bPrev) bindTap(bPrev, (e) => { try { e?.stopPropagation?.(); } catch {} jump(-1); });
+      if (bNext) bindTap(bNext, (e) => { try { e?.stopPropagation?.(); } catch {} jump(1); });
+    }
+
 
     // опции (делаем радиогруппы)
     view.querySelectorAll(".optPanel").forEach((panel) => {
@@ -4871,21 +4849,6 @@ if (isPoster) {
       const btnNext = document.getElementById('prodNext');
       if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
       if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
-
-      // Thematic item navigation (prev/next product within current thematic group)
-      if (hasThematicNav) {
-        const bPrev = document.getElementById('prodItemPrev');
-        const bNext = document.getElementById('prodItemNext');
-        const nav = getThematicDetailNav(p.id);
-        const go = (nid) => {
-          if (!nid) return;
-          try { hapticLight(); } catch {}
-          try { bPrev?.blur?.(); bNext?.blur?.(); } catch {}
-          replaceCurrentPage(() => renderProduct(String(nid)), { scrollTop: true });
-        };
-        if (bPrev) bindTap(bPrev, (e) => { try { e?.stopPropagation?.(); } catch {} go(nav?.prevId); });
-        if (bNext) bindTap(bNext, (e) => { try { e?.stopPropagation?.(); } catch {} go(nav?.nextId); });
-      }
 
       const hintEl = document.getElementById('pinSwipeHint');
       if (hintEl) {
@@ -5458,8 +5421,9 @@ function buildOrderText() {
     wildberries: "Wildberries",
   }[checkout.pickupType] || "Яндекс");
 
-  const needsCountry = (checkout.pickupType === "ozon" || checkout.pickupType === "wildberries");
-  const countryName = getCountryById(checkout.countryId || "ru").name;
+  const needsCountry = false; // Ozon/WB теперь только по России
+
+  const countryName = "Россия";
 
 
   // группируем товары по типам
@@ -5647,10 +5611,11 @@ function renderCheckout() {
   const safeVal = (v) => String(v || "").replace(/"/g, "&quot;");
 
   const pickupType = checkout.pickupType || "yandex";
-  const requiresCountry = (pickupType === "ozon" || pickupType === "wildberries");
+  const requiresCountry = false; // Ozon/WB теперь только по России — выбор страны не нужен
+  const requiresAccountPhone = (pickupType === "ozon" || pickupType === "wildberries");
   // Country is only needed for Ozon/WB; for other methods we keep Russia.
   if (!checkout.countryId) checkout.countryId = "ru";
-  if (!requiresCountry) checkout.countryId = "ru";
+  checkout.countryId = "ru";
   const selectedCountry = getCountryById(checkout.countryId);
   const phonePlaceholder = getPhonePlaceholder(selectedCountry.id);
 
@@ -5675,16 +5640,10 @@ function renderCheckout() {
       <div class="small"><b>Телефон получателя (обязательно)</b></div>
       <div class="small fieldHelp is-show mt6 opacity88">
         Номер должен быть тем, на который зарегистрирован аккаунт.
-        ${requiresCountry ? "Для Ozon/Wildberries обязательно укажи страну доставки." : ""}
+        ${requiresAccountPhone ? "Для Ozon/Wildberries обязательно укажи номер телефона аккаунта (Россия, +7)." : ""}
       </div>
 
-      ${requiresCountry ? `
-        <div class="sp10"></div>
-        <div class="small"><b>Страна доставки (обязательно)</b></div>
-        <select class="searchInput" id="cCountry">
-          ${SHIPPING_COUNTRIES.map((c) => `<option value="${c.id}" ${checkout.countryId === c.id ? "selected" : ""}>${c.name}</option>`).join("")}
-        </select>
-      ` : ``}
+      
 
       <div class="sp10"></div>
       <input class="searchInput" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="${phonePlaceholder}" value="${safeVal(checkout.phone)}" aria-describedby="errPhone" aria-invalid="false">
