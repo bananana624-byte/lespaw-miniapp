@@ -3788,11 +3788,11 @@ const groupsOrder = [
   const other = all.filter((p) => !knownKeys.has(typeGroupKey(p)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
-  const sectionHtml = (title, items) => {
+  const sectionHtml = (title, items, groupKey) => {
     const cards = items
       .map(
         (p) => `
-          <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${g.key}">
+          <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${groupKey}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${h(p.name)}</div>
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -3825,7 +3825,7 @@ const groupsOrder = [
       ${
         grouped.length
           ? grouped
-              .map((g, i) => sectionHtml(g.title, g.items) + (i < grouped.length - 1 ? "<hr>" : ""))
+              .map((g, i) => sectionHtml(g.title, g.items, groupKey) + (i < grouped.length - 1 ? "<hr>" : ""))
               .join("")
           : `<div class="small">Пока нет товаров.</div>`
       }
