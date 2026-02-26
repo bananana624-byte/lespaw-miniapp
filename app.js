@@ -3913,7 +3913,6 @@ function renderInfo() {
           <div class="infoTitle">Наклейки</div>
           <ul class="infoList">
             <li>Наклейки <b>вырезаны по белому контуру</b>.</li>
-            <li>Требуется самостоятельная вырезка.</li>
           </ul>
         </div>
 
