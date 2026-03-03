@@ -1581,6 +1581,7 @@ function getOptionDefs(overlayDelta, holoDelta) {
 
   const FILM_OPTIONS = [
     ["film_glossy", FILM_LABELS.film_glossy, 0],
+    ["film_matte", FILM_LABELS.film_matte, 0],
     ["film_holo", FILM_LABELS.film_holo, hd],
   ];
 
