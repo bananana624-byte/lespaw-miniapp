@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "256";
+const APP_BUILD = "260";
 
 // =====================
 // CSV ссылки (твои)
@@ -1555,7 +1555,7 @@ function isThematicTypeLabel(v) {
 }
 const FILM_LABELS = {
   film_glossy: "Стандартная глянцевая плёнка",
-  film_matte: "Матовая плёнка"
+  film_matte: "Матовая плёнка",
   film_holo: "Голографическая плёнка",
 };
 const STICKER_LAM_LABELS = {
@@ -1652,7 +1652,7 @@ const LAMINATION_EXAMPLES = [
   {
     id: "film_glossy",
     kind: "film",
-    title: "Глянцевая плёнка",
+    title: "Стандартная глянцевая плёнка",
     subtitle: "База (по умолчанию)",
     description:
       "Это стандартная глянцевая плёнка для наклеек, на которой печатаются все наклейки по умолчанию. " +
@@ -1661,15 +1661,15 @@ const LAMINATION_EXAMPLES = [
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
   },
   {
-  id: "film_matte",
-  kind: "film",
-  title: "Матовая плёнка",
-  subtitle: "Без бликов",
-  description:
-    "Плёнка с гладкой матовой поверхностью для наклеек, которая не отражает свет и не даёт бликов. " +
-    "Цвета выглядят спокойнее и естественнее, без глянцевого блеска. " +
-    "Подойдёт для тех, кто предпочитает аккуратный, неблестящий эффект.",
-  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/matt.jpg"],
+    id: "film_matte",
+    kind: "film",
+    title: "Матовая плёнка",
+    subtitle: "Без бликов",
+    description:
+      "Плёнка с гладкой матовой поверхностью для наклеек, которая не отражает свет и не даёт бликов. " +
+      "Цвета выглядят спокойнее и естественнее, без глянцевого блеска. " +
+      "Подойдёт для тех, кто предпочитает аккуратный, неблестящий эффект.",
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/matt.jpg"],
   },
   {
     id: "film_holo",
@@ -1684,34 +1684,36 @@ const LAMINATION_EXAMPLES = [
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"],
   },
 
-  // ===== ФОТОБУМАГА =====
-{
-  id: "photo_matte",
-  kind: "photo",
-  title: "Матовая фотобумага",
-  subtitle: "Без бликов",
-  description:
-    "Фотобумага для постеров с матовой поверхностью. Не отражает свет, цвета выглядят мягко и естественно.",
-  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/mat.jpg"],
-},
+  // ===== ФОТОБУМАГА (для постеров/фотопродукции) =====
   {
-  id: "photo_glossy",
-  kind: "photo",
-  title: "Глянцевая фотобумага",
-  subtitle: "Без бликов",
-  description:
-    "Фотобумага с ярким глянцевым покрытием. Даёт заметный блеск и чёткие отражения при освещении, цвета выглядят максимально насыщенными и контрастными.",
-  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/gl.jpg"],
-},
-{
-  id: "photo_satin",
-  kind: "photo",
-  title: "Сатиновая фотобумага",
-  subtitle: "Лёгкий шелковистый блеск",
-  description:
-    "Фотобумага для постеров с деликатным сатиновым покрытием. Даёт мягкий блеск без резких отражений, цвета выглядят более насыщенно.",
-  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/sat.jpg"],
-  ],
+    id: "photo_glossy",
+    kind: "photo",
+    title: "Глянцевая фотобумага",
+    subtitle: "Выраженный блеск",
+    description:
+      "Фотобумага с ярким глянцевым покрытием. " +
+      "Даёт насыщенные цвета и контраст, хорошо подчёркивает детали, но может бликовать при сильном свете.",
+    images: ["ССЫЛКА_НА_ФОТО_ГЛЯНЦЕВОЙ_БУМАГИ.jpg"],
+  },
+  {
+    id: "photo_satin",
+    kind: "photo",
+    title: "Сатиновая фотобумага",
+    subtitle: "Лёгкий шелковистый блеск",
+    description:
+      "Фотобумага с деликатным сатиновым покрытием. " +
+      "Даёт мягкий блеск без резких отражений, цвета выглядят более насыщенно.",
+    images: ["ССЫЛКА_НА_ФОТО_САТИНОВОЙ_БУМАГИ.jpg"],
+  },
+  {
+    id: "photo_matte",
+    kind: "photo",
+    title: "Матовая фотобумага",
+    subtitle: "Без бликов",
+    description:
+      "Фотобумага с матовым покрытием без выраженного блеска. " +
+      "Смотрится более мягко и спокойно, меньше бликует, приятно выглядит вблизи.",
+    images: ["ССЫЛКА_НА_ФОТО_МАТОВОЙ_БУМАГИ.jpg"],
   },
 
   // ===== ЛАМИНАЦИЯ (прозрачное покрытие сверху) =====
@@ -1778,6 +1780,7 @@ const LAMINATION_EXAMPLES = [
     ],
   },
 ];
+
 
 function truthy(v) {
   return String(v || "").trim().toUpperCase() === "TRUE";
@@ -2995,7 +2998,6 @@ function openExternal(url, opts = {}) {
       try { window.open(href, "_blank", "noopener,noreferrer"); } catch {}
     }
   };
-
   // Если домен неизвестен — аккуратно спрашиваем подтверждение
   if (!isAllowed) {
     const title = "Открыть внешнюю ссылку?";
@@ -4256,8 +4258,8 @@ function openExamples() {
 
 function renderLaminationExamples() {
   const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
-   const photos = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "photo");
-  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
+  const photos = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "photo");
+  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "lamination");
 
   const renderGrid = (items) => `
     <div class="grid2 exGrid">
@@ -5484,7 +5486,8 @@ function buildOrderText() {
     const k = String(ci?.film || "").trim() || String(ci?.base || "").trim();
     // совместимость: старое "holo" => film_holo
     if (k === "holo") return "film_holo";
-    if (k === "glossy" || k === "matte") return "film_glossy";
+    if (k === "glossy") return "film_glossy";
+    if (k === "matte") return "film_matte";
     return k;
   }
   function pickStickerLam(ci) {
@@ -5994,7 +5997,6 @@ function renderCheckout() {
       rowAgreeInfo?.classList.add("is-error");
       ok = false;
     }
-
     if (!confirmItems?.checked) {
       rowConfirmItems?.classList.add("is-error");
       ok = false;
