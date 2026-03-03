@@ -1622,6 +1622,7 @@ const POSTER_PACKS = [
 const POSTER_PAPERS = [
   ["glossy", "Глянцевая — выразительный блеск", 0],
   ["matte", "Матовая — мягкая цветопередача без бликов", 0],
+  ["satin", "Сатиновая — лёгкий шелковистый блеск", 0],
 ];
 const POSTER_PACK_LABELS = Object.fromEntries(POSTER_PACKS.map(x=>[x[0], x[1]]));
 const POSTER_PAPER_LABELS = Object.fromEntries(POSTER_PAPERS.map(x=>[x[0], x[1]]));
