@@ -1658,7 +1658,7 @@ const LAMINATION_EXAMPLES = [
       "Это стандартная глянцевая плёнка для наклеек, на которой печатаются все наклейки по умолчанию. " +
       "Даёт ровную поверхность, хорошую цветопередачу и насыщенные оттенки. " +
       "Если не указано иное — наклейка будет напечатана именно на этой плёнке.",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/glll.jpg"],
   },
   {
     id: "film_matte",
@@ -1681,7 +1681,7 @@ const LAMINATION_EXAMPLES = [
       "Важно: у плёнки сероватая основа, поэтому при печати цвета могут выглядеть немного тусклее и уходить в серый оттенок " +
       "(по сравнению с обычной глянцевой плёнкой). " +
       "Зато голографический эффект получается максимально «сочным».",
-    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologrr.jpg"],
   },
 
   // ===== ФОТОБУМАГА (для постеров/фотопродукции) =====
@@ -1693,7 +1693,7 @@ const LAMINATION_EXAMPLES = [
     description:
       "Фотобумага с ярким глянцевым покрытием. " +
       "Даёт насыщенные цвета и контраст, хорошо подчёркивает детали, но может бликовать при сильном свете.",
-    images: ["ССЫЛКА_НА_ФОТО_ГЛЯНЦЕВОЙ_БУМАГИ.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
   },
   {
     id: "photo_satin",
@@ -1703,7 +1703,7 @@ const LAMINATION_EXAMPLES = [
     description:
       "Фотобумага с деликатным сатиновым покрытием. " +
       "Даёт мягкий блеск без резких отражений, цвета выглядят более насыщенно.",
-    images: ["ССЫЛКА_НА_ФОТО_САТИНОВОЙ_БУМАГИ.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/sat.jpg"],
   },
   {
     id: "photo_matte",
@@ -1713,7 +1713,7 @@ const LAMINATION_EXAMPLES = [
     description:
       "Фотобумага с матовым покрытием без выраженного блеска. " +
       "Смотрится более мягко и спокойно, меньше бликует, приятно выглядит вблизи.",
-    images: ["ССЫЛКА_НА_ФОТО_МАТОВОЙ_БУМАГИ.jpg"],
+    images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/mat.jpg"],
   },
 
   // ===== ЛАМИНАЦИЯ (прозрачное покрытие сверху) =====
