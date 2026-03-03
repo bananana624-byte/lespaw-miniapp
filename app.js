@@ -4286,7 +4286,7 @@ function renderLaminationExamples() {
 
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Примеры ламинации и плёнки</div>
+      <div class="h2">Примеры ламинации и плёнки/бумаги</div>
 
       <hr>
       <div class="h3">Плёнка для наклеек</div>
