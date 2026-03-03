@@ -3334,7 +3334,7 @@ function renderHome() {
     </div>
 
     <div class="tile" id="tEx">
-      <div class="tileTitle">Примеры ламинации и пленки</div>
+      <div class="tileTitle">Примеры ламинации и пленки/бумаги</div>
       <div class="tileSub">Как выглядит</div>
     </div>
 
