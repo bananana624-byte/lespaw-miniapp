@@ -1555,6 +1555,7 @@ function isThematicTypeLabel(v) {
 }
 const FILM_LABELS = {
   film_glossy: "Стандартная глянцевая плёнка",
+  film_matte: "Матовая плёнка"
   film_holo: "Голографическая плёнка",
 };
 const STICKER_LAM_LABELS = {
@@ -1651,13 +1652,24 @@ const LAMINATION_EXAMPLES = [
   {
     id: "film_glossy",
     kind: "film",
-    title: "Стандартная глянцевая плёнка",
+    title: "Глянцевая плёнка",
     subtitle: "База (по умолчанию)",
     description:
-      "Это стандартная глянцевая плёнка, на которой печатаются все наклейки по умолчанию. " +
+      "Это стандартная глянцевая плёнка для наклеек, на которой печатаются все наклейки по умолчанию. " +
       "Даёт ровную поверхность, хорошую цветопередачу и насыщенные оттенки. " +
       "Если не указано иное — наклейка будет напечатана именно на этой плёнке.",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gl.jpg"],
+  },
+  {
+  id: "film_matte",
+  kind: "film",
+  title: "Матовая плёнка",
+  subtitle: "Без бликов",
+  description:
+    "Плёнка с гладкой матовой поверхностью для наклеек, которая не отражает свет и не даёт бликов. " +
+    "Цвета выглядят спокойнее и естественнее, без глянцевого блеска. " +
+    "Подойдёт для тех, кто предпочитает аккуратный, неблестящий эффект.",
+  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/matt.jpg"],
   },
   {
     id: "film_holo",
@@ -1665,11 +1677,41 @@ const LAMINATION_EXAMPLES = [
     title: "Голографическая плёнка",
     subtitle: "Яркая голография",
     description:
-      "Плёнка с выраженной голографической текстурой по всей поверхности — эффект заметный при любом освещении. " +
+      "Плёнка с выраженной голографической текстурой по всей поверхности для наклеек — эффект заметный при любом освещении. " +
       "Важно: у плёнки сероватая основа, поэтому при печати цвета могут выглядеть немного тусклее и уходить в серый оттенок " +
       "(по сравнению с обычной глянцевой плёнкой). " +
       "Зато голографический эффект получается максимально «сочным».",
     images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/main/lamination/gologr.jpg"],
+  },
+
+  // ===== ФОТОБУМАГА =====
+{
+  id: "photo_matte",
+  kind: "photo",
+  title: "Матовая фотобумага",
+  subtitle: "Без бликов",
+  description:
+    "Фотобумага для постеров с матовой поверхностью. Не отражает свет, цвета выглядят мягко и естественно.",
+  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/mat.jpg"],
+},
+  {
+  id: "photo_glossy",
+  kind: "photo",
+  title: "Глянцевая фотобумага",
+  subtitle: "Без бликов",
+  description:
+    "Фотобумага с ярким глянцевым покрытием. Даёт заметный блеск и чёткие отражения при освещении, цвета выглядят максимально насыщенными и контрастными.",
+  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/gl.jpg"],
+},
+{
+  id: "photo_satin",
+  kind: "photo",
+  title: "Сатиновая фотобумага",
+  subtitle: "Лёгкий шелковистый блеск",
+  description:
+    "Фотобумага для постеров с деликатным сатиновым покрытием. Даёт мягкий блеск без резких отражений, цвета выглядят более насыщенно.",
+  images: ["https://raw.githubusercontent.com/bananana624-byte/lespaw-miniapp/refs/heads/main/lamination/sat.jpg"],
+  ],
   },
 
   // ===== ЛАМИНАЦИЯ (прозрачное покрытие сверху) =====
@@ -4214,6 +4256,7 @@ function openExamples() {
 
 function renderLaminationExamples() {
   const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
+   const photos = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "photo");
   const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind !== "film");
 
   const renderGrid = (items) => `
@@ -4242,9 +4285,14 @@ function renderLaminationExamples() {
       <div class="h2">Примеры ламинации и плёнки</div>
 
       <hr>
-      <div class="h3">Плёнка</div>
+      <div class="h3">Плёнка для наклеек</div>
       <div class="small mt6">Основа наклейки: задаёт блеск, текстуру и «характер» сразу.</div>
       ${renderGrid(films)}
+
+     <hr>
+      <div class="h3">Фотобумага для постеров</div>
+      <div class="small mt6">Тип бумаги для печати постеров и фотопродукции.</div>
+      ${renderGrid(photos)}
 
       <hr>
       <div class="h3">Ламинация</div>
