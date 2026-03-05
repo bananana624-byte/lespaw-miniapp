@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "260";
+const APP_BUILD = "261";
 
 // =====================
 // CSV ссылки (твои)
@@ -1922,6 +1922,25 @@ function isPinSingleType(t) {
   return false;
 }
 
+
+function isStickerSetType(t) {
+  const s = String(t || "").trim().toLowerCase();
+  if (!s) return false;
+  // explicit keys
+  if (s === "sticker_set" || s === "stickerset" || s === "sticker-set" || s === "set_sticker") return true;
+  // russian hints
+  if (s.includes("набор") && s.includes("накле")) return true;
+  return false;
+}
+
+function isPosterSetType(t) {
+  const s = String(t || "").trim().toLowerCase();
+  if (!s) return false;
+  if (s === "poster_set" || s === "posterset" || s === "poster-set" || s === "set_poster") return true;
+  if (s.includes("набор") && s.includes("постер")) return true;
+  return false;
+}
+
 function typeGroupKey(p) {
   const base = normalizeTypeKey(p?.product_type);
   if (base === "pin") return isPinSingleType(p?.product_type) ? "pin_single" : "pin_set";
@@ -2006,6 +2025,10 @@ function normalizeTypeKey(t) {
   const s = String(t || "").trim().toLowerCase();
   if (!s) return "";
 
+  // sticker sets should still belong to stickers section
+  if (s === "sticker_set" || s === "stickerset" || s === "sticker-set" || s === "set_sticker" || (s.includes("набор") && s.includes("накле"))) return "sticker";
+
+
   // stickers
   if (
     s === "sticker" ||
@@ -2029,6 +2052,8 @@ function normalizeTypeKey(t) {
     return "pin";
 
   // posters
+  if (s === "poster_set" || s === "posterset" || s === "poster-set" || s === "set_poster" || (s.includes("набор") && s.includes("постер"))) return "poster";
+
   if (s === "poster" || s === "posters" || s.includes("постер")) return "poster";
 
   // boxes / envelopes
@@ -2234,6 +2259,13 @@ function addToCartById(id, opts){
   let poster_pack = String(opts?.poster_pack||"");
   let poster_paper = String(opts?.poster_paper||"");
   if (baseKey === "sticker") {
+    if (isStickerSetType(p?.product_type)) {
+      return [
+        "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
+        "📏 Характеристики\n• Размер одной наклейки: стандартная высота около 3,5 см, ширина как ляжет (размер указан без учета белой обводки)\n• Количество наклеек указано на превью товара",
+        "⚠️ Важно\n• Наклейки вырезаны по белому контуру.",
+      ].join("\n\n");
+    }
     if (!film) film = "film_glossy";
     if (!lamination) lamination = "none";
   }
@@ -2241,6 +2273,13 @@ function addToCartById(id, opts){
     if (!pin_lamination) pin_lamination = "pin_base";
   }
   if (baseKey === "poster") {
+    if (isPosterSetType(p?.product_type)) {
+      return [
+        "✨ О товаре\nНабор фотопостеров с аккуратной печатью и приятной цветопередачей✨",
+        "📌 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Количество постеров указано на превью товара",
+        "💬 Про ламинацию\nЕсли хочется заламинировать постеры, напишите менеджерке — подскажем, что подойдёт и согласуем стоимость, чтобы всё выглядело аккуратно.",
+      ].join("\n\n");
+    }
     if (!poster_pack) poster_pack = POSTER_PACKS?.[0]?.[0] || "p10x15_8";
     if (!poster_paper) poster_paper = POSTER_PAPERS?.[0]?.[0] || "glossy";
   }
@@ -2842,6 +2881,13 @@ function defaultFullByType(p) {
     ].join("\n\n");
   }
   if (baseKey === "sticker") {
+    if (isStickerSetType(p?.product_type)) {
+      return [
+        "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
+        "📏 Характеристики\n• Размер одной наклейки: стандартная высота около 3,5 см, ширина как ляжет (размер указан без учета белой обводки)\n• Количество наклеек указано на превью товара",
+        "⚠️ Важно\n• Наклейки вырезаны по белому контуру.",
+      ].join("\n\n");
+    }
     return [
       "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
       "📏 Характеристики\n• Размер листа: 18 × 26 см\n• Материал: глянцевая плёнка\n• Размер одной наклейки: стандартная высота около 3,5 см, ширина как ляжет (размер указан без учета белой обводки)",
@@ -2849,6 +2895,13 @@ function defaultFullByType(p) {
     ].join("\n\n");
   }
   if (baseKey === "poster") {
+    if (isPosterSetType(p?.product_type)) {
+      return [
+        "✨ О товаре\nНабор фотопостеров с аккуратной печатью и приятной цветопередачей✨",
+        "📌 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Количество постеров указано на превью товара",
+        "💬 Про ламинацию\nЕсли хочется заламинировать постеры, напишите менеджерке — подскажем, что подойдёт и согласуем стоимость, чтобы всё выглядело аккуратно.",
+      ].join("\n\n");
+    }
     return [
       "✨ О товаре\nНабор рандомных фотопостеров с аккуратной печатью и приятной цветопередачей.\nКаждый заказ собирается случайным образом, поэтому каждый набор получается уникальным ✨",
       "🎲 Важно\nФотопостеры в заказе подбираются случайным образом.\n\nМы не кладем повторы внутри одного заказа, но при повторных заказах в будущем возможны повторения изображений, так как подбор осуществляется заново.",
@@ -4601,6 +4654,7 @@ const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
   const overlayDelta = Number(settings.overlay_price_delta) || 100;
+  const stickerSetOverlayDelta = Number(settings.sticker_set_overlay_price_delta) || 500;
   const holoDelta = Number(settings.holo_base_price_delta) || 100;
 
   const groupKey = typeGroupKey(p); // sticker | pin_set | pin_single | poster | box | ...
@@ -4653,19 +4707,36 @@ if (isPoster) {
   if (pf.poster_paper) selectedPosterPaper = String(pf.poster_paper);
 }
 
+  // Sticker sets are always printed on the standard glossy film (no film choice)
+  if (isSticker && isStickerSetType(p?.product_type)) {
+    selectedFilm = "film_glossy";
+  }
+
+
+
+  const isStickerSet = isSticker && isStickerSetType(p?.product_type);
+  const isPosterSet = isPoster && isPosterSetType(p?.product_type);
 
   const { FILM_OPTIONS, STICKER_LAM_OPTIONS, PIN_LAM_OPTIONS } = getOptionDefs(overlayDelta, holoDelta);
+  const stickerSetOverlayDelta = Number(settings.sticker_set_overlay_price_delta) || 500;
+  const STICKER_LAM_OPTIONS_EFFECTIVE = isStickerSet
+    ? STICKER_LAM_OPTIONS.map(([k, l, _d]) => [k, l, k === "none" ? 0 : stickerSetOverlayDelta])
+    : STICKER_LAM_OPTIONS;
   const PIN_LAM_OPTIONS_EFFECTIVE = isPinSingle ? PIN_LAM_OPTIONS.map(([k,l,_d]) => [k,l,0]) : PIN_LAM_OPTIONS;
 
   function calcPrice() {
     let price = Number(p.price) || 0;
     if (isPoster) {
-      const base = Number(POSTER_PACK_PRICES[selectedPosterPack]) || Number(p.price) || 0;
-      price = base;
+      if (isPosterSet) {
+        price = Number(p.price) || 0;
+      } else {
+        const base = Number(POSTER_PACK_PRICES[selectedPosterPack]) || Number(p.price) || 0;
+        price = base;
+      }
     }
     if (isSticker) {
       const filmOpt = FILM_OPTIONS.find((x) => x[0] === selectedFilm);
-      const lamOpt = STICKER_LAM_OPTIONS.find((x) => x[0] === selectedStickerLam);
+      const lamOpt = STICKER_LAM_OPTIONS_EFFECTIVE.find((x) => x[0] === selectedStickerLam);
       price += Number(filmOpt?.[2] || 0);
       price += Number(lamOpt?.[2] || 0);
     }
@@ -4678,10 +4749,10 @@ if (isPoster) {
 
   function currentOpts() {
     return {
-      film: isSticker ? selectedFilm : "",
+      film: isSticker ? (isStickerSet ? "film_glossy" : selectedFilm) : "",
       lamination: isSticker ? selectedStickerLam : "",
       pin_lamination: isPin ? selectedPinLam : "",
-      poster_pack: isPoster ? selectedPosterPack : "",
+      poster_pack: isPoster ? (isPosterSet ? "" : selectedPosterPack) : "",
       poster_paper: isPoster ? selectedPosterPaper : "",
     };
   }
@@ -4769,9 +4840,10 @@ if (isPoster) {
           isPoster
             ? `
               <div class="sp10"></div>
-              ${renderOptionPanel("Варианты наборов", POSTER_PACKS, selectedPosterPack)}
+              ${!isPosterSet ? renderOptionPanel("Варианты наборов", POSTER_PACKS, selectedPosterPack) : ""}
               <div class="sp10"></div>
               ${renderOptionPanel("Бумага для печати", POSTER_PAPERS, selectedPosterPaper)}
+              ${isPosterSet ? `<div class="sp10"></div><button class="btn btnGhost" id="btnPaperExamples" type="button">Посмотреть примеры бумаги</button>` : ""}
             `
             : ""
         }
@@ -4781,9 +4853,9 @@ if (isPoster) {
         ${
           isSticker
             ? `
-              ${renderOptionPanel("Плёнка", FILM_OPTIONS, selectedFilm)}
+              ${!isStickerSet ? renderOptionPanel("Плёнка", FILM_OPTIONS, selectedFilm) : ""}
               <div class="sp10"></div>
-              ${renderOptionPanel("Ламинация", STICKER_LAM_OPTIONS, selectedStickerLam)}
+              ${renderOptionPanel("Ламинация", STICKER_LAM_OPTIONS_EFFECTIVE, selectedStickerLam)}
               <div class="sp10"></div>
               <button class="btn btnGhost" id="btnExamples" type="button">Посмотреть примеры плёнки и ламинации</button>
             `
@@ -4814,6 +4886,7 @@ if (isPoster) {
     const btnFav = document.getElementById("btnFav");
     const btnCart = document.getElementById("btnCart");
     const btnExamples = document.getElementById("btnExamples");
+    const btnPaperExamples = document.getElementById("btnPaperExamples");
 
     if (pulse) {
       haptic("select");
@@ -4873,6 +4946,9 @@ if (isPoster) {
 
     if (btnExamples) {
       bindTap(btnExamples, () => openExamples());
+    }
+    if (btnPaperExamples) {
+      bindTap(btnPaperExamples, () => openExamples());
     }
 
     const prodImgEl = document.getElementById('prodMainImg');
@@ -5113,16 +5189,20 @@ function calcItemUnitPrice(p, ci){
     const film = String(ci?.film||"") || "film_glossy";
     const lam = String(ci?.lamination||"") || "none";
     if (film === "film_holo") price += holoDelta;
-    if (lam !== "none") price += overlayDelta;
+    if (lam !== "none") price += (isStickerSetType(p?.product_type) ? stickerSetOverlayDelta : overlayDelta);
   }
   if (t === "pin") {
     const lam = String(ci?.pin_lamination||"") || "pin_base";
     if (lam !== "pin_base" && !isPinSingleType(p?.product_type)) price += overlayDelta;
   }
   if (t === "poster") {
-    const pack = String(ci?.poster_pack||"" ) || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
-    const base = Number(POSTER_PACK_PRICES[pack]) || Number(p?.price) || 0;
-    price = base;
+    if (isPosterSetType(p?.product_type)) {
+      price = Number(p?.price) || 0;
+    } else {
+      const pack = String(ci?.poster_pack||"" ) || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+      const base = Number(POSTER_PACK_PRICES[pack]) || Number(p?.price) || 0;
+      price = base;
+    }
   }
   return price;
 }
@@ -5140,9 +5220,11 @@ function optionPairsFor(ci, p) {
     const lam = String(ci?.pin_lamination || "") || "pin_base";
     if (lam !== "pin_base") out.push({ k: "Ламинация", v: PIN_LAM_LABELS[lam] || lam });
   } else if (t === "poster") {
-    const pack = String(ci?.poster_pack||"") || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
     const paper = String(ci?.poster_paper||"") || POSTER_PAPERS?.[0]?.[0] || "glossy";
-    out.push({ k: "Набор", v: `${POSTER_PACK_LABELS[pack] || pack} — ${money(Number(POSTER_PACK_PRICES[pack]) || Number(p?.price)||0)}` });
+    if (!isPosterSetType(p?.product_type)) {
+      const pack = String(ci?.poster_pack||"" ) || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
+      out.push({ k: "Набор", v: `${POSTER_PACK_LABELS[pack] || pack} — ${money(Number(POSTER_PACK_PRICES[pack]) || Number(p?.price)||0)}` });
+    }
     out.push({ k: "Бумага", v: POSTER_PAPER_LABELS[paper] || paper });
   }
   return out;
@@ -5516,6 +5598,13 @@ function buildOrderText() {
     const qty = Number(ci.qty) || 1;
     let unitPrice = Number(p.price) || 0;
   if (baseKey === "sticker") {
+    if (isStickerSetType(p?.product_type)) {
+      return [
+        "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
+        "📏 Характеристики\n• Размер одной наклейки: стандартная высота около 3,5 см, ширина как ляжет (размер указан без учета белой обводки)\n• Количество наклеек указано на превью товара",
+        "⚠️ Важно\n• Наклейки вырезаны по белому контуру.",
+      ].join("\n\n");
+    }
       const filmKey = pickStickerFilm(ci);
       const lamKey = pickStickerLam(ci);
 
@@ -5535,6 +5624,13 @@ function buildOrderText() {
       // (цена не меняется)
     }
   if (baseKey === "poster") {
+    if (isPosterSetType(p?.product_type)) {
+      return [
+        "✨ О товаре\nНабор фотопостеров с аккуратной печатью и приятной цветопередачей✨",
+        "📌 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Количество постеров указано на превью товара",
+        "💬 Про ламинацию\nЕсли хочется заламинировать постеры, напишите менеджерке — подскажем, что подойдёт и согласуем стоимость, чтобы всё выглядело аккуратно.",
+      ].join("\n\n");
+    }
       const pack = String(ci?.poster_pack||"").trim() || POSTER_PACKS?.[0]?.[0] || "p10x15_8";
       const base = Number(POSTER_PACK_PRICES[pack]) || Number(p.price) || 0;
       unitPrice = base;
