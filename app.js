@@ -4707,10 +4707,7 @@ if (isPoster) {
   if (pf.poster_paper) selectedPosterPaper = String(pf.poster_paper);
 }
 
-  // Sticker sets are always printed on the standard glossy film (no film choice)
-  if (isSticker && isStickerSetType(p?.product_type)) {
-    selectedFilm = "film_glossy";
-  }
+
 
 
 
