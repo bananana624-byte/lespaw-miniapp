@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "261";
+const APP_BUILD = "264";
 
 // =====================
 // CSV ссылки (твои)
@@ -4718,7 +4718,6 @@ if (isPoster) {
   const isPosterSet = isPoster && isPosterSetType(p?.product_type);
 
   const { FILM_OPTIONS, STICKER_LAM_OPTIONS, PIN_LAM_OPTIONS } = getOptionDefs(overlayDelta, holoDelta);
-  const stickerSetOverlayDelta = Number(settings.sticker_set_overlay_price_delta) || 500;
   const STICKER_LAM_OPTIONS_EFFECTIVE = isStickerSet
     ? STICKER_LAM_OPTIONS.map(([k, l, _d]) => [k, l, k === "none" ? 0 : stickerSetOverlayDelta])
     : STICKER_LAM_OPTIONS;
