@@ -4712,6 +4712,10 @@ if (isPoster) {
   const STICKER_LAM_OPTIONS_EFFECTIVE = isStickerSet
     ? (STICKER_LAM_OPTIONS || []).map(([k,l,d]) => [k,l,(k && k !== "none") ? 500 : 0])
     : STICKER_LAM_OPTIONS;
+    
+    const FILM_OPTIONS_EFFECTIVE = isStickerSet
+    ? (FILM_OPTIONS || []).map(([k, l, d]) => [k, l, k === "film_holo" ? 500 : d])
+    : FILM_OPTIONS;
 
   const PIN_LAM_OPTIONS_EFFECTIVE = isPinSingle ? PIN_LAM_OPTIONS.map(([k,l,_d]) => [k,l,0]) : PIN_LAM_OPTIONS;
 
@@ -4722,7 +4726,7 @@ if (isPoster) {
       price = base;
     }
     if (isSticker) {
-      const filmOpt = FILM_OPTIONS.find((x) => x[0] === selectedFilm);
+      const filmOpt = FILM_OPTIONS_EFFECTIVE.find((x) => x[0] === selectedFilm);
       const lamOpt = STICKER_LAM_OPTIONS_EFFECTIVE.find((x) => x[0] === selectedStickerLam);
       price += Number(filmOpt?.[2] || 0);
       price += Number(lamOpt?.[2] || 0);
@@ -4841,7 +4845,7 @@ if (isPoster) {
         ${
           isSticker
             ? `
-              ${renderOptionPanel("Плёнка", FILM_OPTIONS, selectedFilm)}
+              ${renderOptionPanel("Плёнка", FILM_OPTIONS_EFFECTIVE, selectedFilm)}
               <div class="sp10"></div>
               ${renderOptionPanel("Ламинация", STICKER_LAM_OPTIONS_EFFECTIVE, selectedStickerLam)}
               <div class="sp10"></div>
