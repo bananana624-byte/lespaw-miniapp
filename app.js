@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "265";
+const APP_BUILD = "267";
 
 // =====================
 // CSV ссылки (твои)
@@ -1998,7 +1998,6 @@ function sanitizeReviews(arr) {
   return out;
 }
 
-
 // Нормализуем тип товара из CSV (в таблице могут быть как ключи sticker/pin,
 // так и русские подписи вроде "Наклейки", "Набор значков" и т.п.)
 function normalizeTypeKey(t) {
@@ -2839,25 +2838,23 @@ function defaultFullByType(p) {
   const baseKey = typeKey;
   const nm = String(p?.name || "").toLowerCase();
 
-    // ===== Custom descriptions for SET types =====
-  const rawType = String(p?.product_type || "").trim();
+  // ===== Custom descriptions for SET types =====
+  const rawType = String(p?.product_type || "").trim().toLowerCase();
 
-  // Sticker sets
   if (rawType === "sticker_set") {
     return [
-      "✨ О товаре\nЯркие наклейки.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
+      "✨ О товаре\nЯркие наклейки на глянцевой плёнке с чёткой печатью.\nПодойдут для декора ноутбуков, планшетов, ежедневников и других гладких поверхностей.",
       "📏 Характеристики\n• Размер одной наклейки: стандартная высота около 3,5 см, ширина как ляжет (размер указан без учета белой обводки)\n• Количество наклеек указано на превью товара",
       "⚠️ Важно\n• Наклейки вырезаны по белому контуру.",
-    ].join(\"\\n\\n\");
+    ].join("\n\n");
   }
 
-  // Poster sets
   if (rawType === "poster_set") {
     return [
       "✨ О товаре\nНабор фотопостеров с аккуратной печатью и приятной цветопередачей✨",
-      "📏 Характеристики\n• Тип: фотопостеры\n• Печать: струйная\n• Количество постеров указано на превью товара",
-      "💡 Ламинация\nЕсли хотите добавить ламинацию к постерам, напишите менеджерке — подскажем по вариантам и стоимости под ваш заказ.",
-    ].join(\"\\n\\n\");
+      "📏 Характеристики\n• Тип: фотопостеры\n• Печать: качественная струйная\n• Количество постеров указано на превью товара",
+      "💡 Ламинация\nЕсли захотите добавить ламинацию на постеры, напишите менеджерке — она подскажет доступные варианты и стоимость именно под ваш заказ.",
+    ].join("\n\n");
   }
   // ===== /Custom descriptions for SET types =====
 
@@ -4290,14 +4287,19 @@ function renderReviews() {
 // =====================
 // Примеры ламинации / пленки (внутри приложения)
 // =====================
-function openExamples() {
-  openPage(renderLaminationExamples);
+function openExamples(kinds, title) {
+  openPage(() => renderLaminationExamples(kinds, title));
 }
 
-function renderLaminationExamples() {
-  const films = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
-  const photos = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "photo");
-  const laminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "lamination");
+function renderLaminationExamples(kinds, title) {
+  const wantedKinds = Array.isArray(kinds) && kinds.length ? new Set(kinds.map((x) => String(x || "").trim())) : null;
+  const allFilms = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "film");
+  const allPhotos = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "photo");
+  const allLaminations = LAMINATION_EXAMPLES.filter((ex) => ex.kind === "lamination");
+
+  const films = wantedKinds ? allFilms.filter((ex) => wantedKinds.has(ex.kind)) : allFilms;
+  const photos = wantedKinds ? allPhotos.filter((ex) => wantedKinds.has(ex.kind)) : allPhotos;
+  const laminations = wantedKinds ? allLaminations.filter((ex) => wantedKinds.has(ex.kind)) : allLaminations;
 
   const renderGrid = (items) => `
     <div class="grid2 exGrid">
@@ -4320,24 +4322,36 @@ function renderLaminationExamples() {
     </div>
   `;
 
-  view.innerHTML = `
-    <div class="card">
-      <div class="h2">Примеры ламинации и плёнки/бумаги</div>
-
+  const sections = [];
+  if (films.length) {
+    sections.push(`
       <hr>
       <div class="h3">Плёнка для наклеек</div>
-      <div class="small mt6">Основа наклейки: задаёт блеск, текстуру и «характер» сразу.</div>
+      <div class="small mt6">Основа наклейки: задаёт блеск, текстуру и характер сразу.</div>
       ${renderGrid(films)}
-
-     <hr>
+    `);
+  }
+  if (photos.length) {
+    sections.push(`
+      <hr>
       <div class="h3">Фотобумага для постеров</div>
       <div class="small mt6">Тип бумаги для печати постеров и фотопродукции.</div>
       ${renderGrid(photos)}
-
+    `);
+  }
+  if (laminations.length) {
+    sections.push(`
       <hr>
       <div class="h3">Ламинация</div>
       <div class="small mt6">Прозрачное покрытие сверху — добавляет эффект и защищает поверхность.</div>
       ${renderGrid(laminations)}
+    `);
+  }
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="h2">${h(title || "Примеры плёнки, бумаги и ламинации")}</div>
+      ${sections.length ? sections.join("") : `<div class="small">Пока нет примеров для этого типа товара.</div>`}
     </div>
   `;
 
@@ -4666,8 +4680,9 @@ const fandom = getFandomById(p.fandom_id);
   const isPinSingle = groupKey === "pin_single";
   const isPinSet = groupKey === "pin_set";
   const isPoster = groupKey === "poster";
-  const isStickerSet = isSticker && isStickerSetType(p?.product_type);
-  const isPosterSet = isPoster && isPosterSetType(p?.product_type);
+  const rawType = String(p?.product_type || "").trim().toLowerCase();
+  const isStickerSet = rawType === "sticker_set";
+  const isPosterSet = rawType === "poster_set";
 
 
   // --- defaults ---
@@ -4815,6 +4830,8 @@ if (isPoster) {
               ${!isPosterSet ? renderOptionPanel("Варианты наборов", POSTER_PACKS, selectedPosterPack) : ""}
               <div class="sp10"></div>
               ${renderOptionPanel("Бумага для печати", POSTER_PAPERS, selectedPosterPaper)}
+              <div class="sp10"></div>
+              <button class="btn btnGhost" id="btnExamplesPoster" type="button">Посмотреть примеры бумаги</button>
             `
             : ""
         }
@@ -4857,6 +4874,7 @@ if (isPoster) {
     const btnFav = document.getElementById("btnFav");
     const btnCart = document.getElementById("btnCart");
     const btnExamples = document.getElementById("btnExamples");
+    const btnExamplesPoster = document.getElementById("btnExamplesPoster");
 
     if (pulse) {
       haptic("select");
@@ -4915,7 +4933,14 @@ if (isPoster) {
     });
 
     if (btnExamples) {
-      bindTap(btnExamples, () => openExamples());
+      bindTap(btnExamples, () => {
+        if (isSticker) openExamples(["film", "lamination"], "Примеры плёнки и ламинации");
+        else if (isPin) openExamples(["lamination"], "Примеры ламинации");
+        else openExamples();
+      });
+    }
+    if (btnExamplesPoster) {
+      bindTap(btnExamplesPoster, () => openExamples(["photo"], "Примеры бумаги"));
     }
 
     const prodImgEl = document.getElementById('prodMainImg');
