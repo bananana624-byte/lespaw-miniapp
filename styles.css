@@ -1836,3 +1836,22 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .qtyBtn:active{transform:scale(.96);box-shadow:0 0 0 3px rgba(125,60,255,.14);}
 .qtyPill{min-width:42px;height:38px;padding:0 12px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(255,255,255,.78), rgba(255,255,255,.56));color:#0b0b12;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);}
 @media (prefers-reduced-motion: reduce){.pcard, .item, .emptyState, .emptyBox, .cartSummary, .toastEnter, .undoBarEnter, .is-pop{animation:none !important;}}
+
+
+/* v273 — onboarding / recent / hints */
+.onboardCard{ position:relative; overflow:hidden; padding:20px 16px 18px; }
+.onboardGlow{ position:absolute; inset:-40% auto auto -20%; width:260px; height:260px; border-radius:999px; background:radial-gradient(circle, rgba(190,120,255,.28) 0%, rgba(190,120,255,0) 72%); pointer-events:none; }
+.onboardBadge{ position:relative; display:inline-flex; align-items:center; gap:8px; padding:7px 12px; border-radius:999px; background:rgba(125,60,255,.1); border:1px solid rgba(125,60,255,.18); font-size:12px; font-weight:900; letter-spacing:.4px; text-transform:uppercase; color:#7c2dff; }
+.onboardTitle{ position:relative; margin-top:12px; }
+.onboardLead{ position:relative; margin-top:6px; }
+.onboardSteps{ position:relative; margin-top:14px; display:grid; gap:10px; }
+.onboardStep{ display:flex; align-items:flex-start; gap:10px; padding:12px; border-radius:16px; background:rgba(0,0,0,.04); border:1px solid rgba(0,0,0,.1); color:#0b0b12; font-weight:700; line-height:1.35; }
+.onboardNum{ flex:0 0 auto; width:24px; height:24px; border-radius:999px; display:grid; place-items:center; background:linear-gradient(180deg, rgba(125,60,255,.95), rgba(91,32,224,.95)); color:#fff; font-size:12px; font-weight:1000; }
+.recentSection{ margin-top:2px; }
+.recentChip{ background:rgba(125,60,255,.14); }
+.recentGrid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+@media (max-width:360px){ .recentGrid{ grid-template-columns:1fr; } }
+.prodImgWrap{ position:relative; }
+.zoomBadge{ position:absolute; right:10px; bottom:10px; padding:7px 10px; border-radius:999px; font-size:12px; font-weight:900; color:#fff; background:rgba(11,11,18,.7); backdrop-filter:blur(8px); box-shadow:0 10px 24px rgba(0,0,0,.22); pointer-events:none; }
+.imgHint,.swipeHint{ margin-top:10px; padding:11px 12px; border-radius:14px; background:rgba(125,60,255,.1); border:1px solid rgba(125,60,255,.18); color:#51208f; font-size:13px; font-weight:800; line-height:1.35; transition:opacity .24s ease, transform .24s ease; }
+.imgHint.is-hide,.swipeHint.is-hide{ opacity:0; transform:translateY(-4px); }
