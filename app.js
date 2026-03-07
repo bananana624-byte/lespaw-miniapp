@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "269";
+const APP_BUILD = "270";
 
 // =====================
 // CSV ссылки (твои)
@@ -665,23 +665,6 @@ function showUndoBar(text, onUndo) {
   __undoTimer = setTimeout(() => hideUndoBar(), 4200);
 }
 
-function confirmDestructive(title, message, onConfirm) {
-  const text = String(title || "Подтвердить действие") + (message ? `
-${String(message)}` : "");
-  if (tg?.showConfirm) {
-    try {
-      tg.showConfirm(text, (ok) => {
-        try { if (ok) onConfirm && onConfirm(); } catch {}
-      });
-      return;
-    } catch {}
-  }
-  try {
-    if (window.confirm(text)) onConfirm && onConfirm();
-  } catch {
-    try { onConfirm && onConfirm(); } catch {}
-  }
-}
 
 
 // =====================
@@ -753,6 +736,36 @@ let currentRender = null;
 // In-app image viewer (modal)
 // =====================
 let __imgViewerEl = null;
+let __infoEntrySource = "";
+function openInfoPage(fromCheckout = false) {
+  try { __infoEntrySource = fromCheckout ? "checkout" : ""; } catch {}
+  openPage(renderInfo);
+}
+function viewerImagesField(p) {
+  return (
+    p?.image ||
+    p?.image_url ||
+    p?.photo ||
+    p?.img ||
+    p?.pin_image ||
+    p?.pin_photo ||
+    p?.pin_photo_url ||
+    p?.images ||
+    p?.cover ||
+    p?.cover_url ||
+    p?.thumb ||
+    p?.thumb_url ||
+    p?.preview ||
+    p?.preview_url ||
+    ""
+  );
+}
+function productViewerImages(p) {
+  const list = splitList(viewerImagesField(p)).filter(Boolean);
+  if (list.length) return list;
+  const fallback = firstImageUrl(p);
+  return fallback ? [fallback] : [];
+}
 function openImageViewer(urls, startIndex = 0) {
   try {
     const list = (urls || []).map(String).filter(Boolean);
@@ -817,55 +830,39 @@ function openImageViewer(urls, startIndex = 0) {
       // zoom/pan inside viewer (pinch + double-tap + desktop wheel/drag)
       try {
         const panEl = __imgViewerEl.querySelector("#imgViewerPan");
-        const viewerImgEl = __imgViewerEl.querySelector(".imgViewerImg");
+        const imgNode = __imgViewerEl.querySelector(".imgViewerImg");
         const zoomRange = __imgViewerEl.querySelector(".imgViewerZoomRange");
         const zoomInBtn = __imgViewerEl.querySelector("[data-zoom-in]");
         const zoomOutBtn = __imgViewerEl.querySelector("[data-zoom-out]");
-        const zi = { scale: 1, tx: 0, ty: 0, min: 1, max: 4, lastTap: 0, drag: null, pinch: null, baseW: 0, baseH: 0 };
-        const stageRect = () => {
-          try { return __imgViewerEl.querySelector(".imgViewerStage")?.getBoundingClientRect?.() || null; } catch { return null; }
-        };
-        const syncImageBaseSize = () => {
-          try {
-            if (!viewerImgEl) return;
-            const rectS = stageRect();
-            const nw = Number(viewerImgEl.naturalWidth || 0);
-            const nh = Number(viewerImgEl.naturalHeight || 0);
-            if (!rectS || !nw || !nh) {
-              zi.baseW = 0;
-              zi.baseH = 0;
-              viewerImgEl.style.width = "";
-              viewerImgEl.style.height = "";
-              return;
-            }
-            const ratio = Math.min(rectS.width / nw, rectS.height / nh, 1);
-            zi.baseW = Math.max(1, Math.round(nw * ratio));
-            zi.baseH = Math.max(1, Math.round(nh * ratio));
-            viewerImgEl.style.width = `${zi.baseW}px`;
-            viewerImgEl.style.height = `${zi.baseH}px`;
-          } catch {}
-        };
+        const zi = { scale: 1, tx: 0, ty: 0, min: 1, max: 4, lastTap: 0, drag: null, pinch: null };
         const apply = () => {
-          if (!panEl || !viewerImgEl) return;
+          if (!panEl || !imgNode) return;
           const s = Math.max(zi.min, Math.min(zi.scale, zi.max));
           zi.scale = s;
           panEl.style.transform = `translate3d(${zi.tx}px, ${zi.ty}px, 0)`;
-          viewerImgEl.style.transform = `scale(${s})`;
+          imgNode.style.transform = `scale(${s})`;
           __imgViewerEl.classList.toggle("isZoomed", s > 1.001);
           try { if (zoomRange) zoomRange.value = String(s); } catch {}
         };
         const reset = () => {
-          zi.scale = 1; zi.tx = 0; zi.ty = 0; zi.drag = null; zi.pinch = null;
-          syncImageBaseSize();
+          zi.scale = 1;
+          zi.tx = 0;
+          zi.ty = 0;
+          zi.drag = null;
+          zi.pinch = null;
+          if (imgNode) imgNode.style.transform = "scale(1)";
+          if (panEl) panEl.style.transform = "translate3d(0px, 0px, 0)";
           apply();
         };
 
         const clampPan = () => {
           try {
-            const rectS = stageRect();
-            if (!rectS) return;
-            const baseW = Number(zi.baseW || viewerImgEl?.clientWidth || 0);
-            const baseH = Number(zi.baseH || viewerImgEl?.clientHeight || 0);
+            if (!panEl || !imgNode) return;
+            const stage = __imgViewerEl.querySelector(".imgViewerStage");
+            if (!stage) return;
+            const rectS = stage.getBoundingClientRect();
+            const baseW = Math.max(1, Number(imgNode.offsetWidth || 0));
+            const baseH = Math.max(1, Number(imgNode.offsetHeight || 0));
             const scaledW = baseW * zi.scale;
             const scaledH = baseH * zi.scale;
             const overflowX = Math.max(0, (scaledW - rectS.width) / 2);
@@ -989,23 +986,6 @@ function openImageViewer(urls, startIndex = 0) {
           stage.addEventListener("pointercancel", () => { zi.drag = null; }, { passive: true });
         }
 
-        if (viewerImgEl) {
-          viewerImgEl.addEventListener("load", () => {
-            try { reset(); } catch {}
-          });
-          if (viewerImgEl.complete && viewerImgEl.naturalWidth > 0) {
-            try { syncImageBaseSize(); apply(); } catch {}
-          }
-        }
-        window.addEventListener("resize", () => {
-          try {
-            if (!__imgViewerEl || __imgViewerEl.style.display !== "block") return;
-            syncImageBaseSize();
-            clampPan();
-            apply();
-          } catch {}
-        }, { passive: true });
-
         // Zoom controls (range + +/-)
         const setScale = (s) => {
           zi.scale = Math.max(zi.min, Math.min(zi.max, Number(s || 1)));
@@ -1027,6 +1007,14 @@ function openImageViewer(urls, startIndex = 0) {
     }
 
     const imgEl = __imgViewerEl.querySelector(".imgViewerImg");
+    if (imgEl) {
+      imgEl.draggable = false;
+      imgEl.onload = () => {
+        try {
+          __imgViewerEl && __imgViewerEl.__zoomReset && __imgViewerEl.__zoomReset();
+        } catch {}
+      };
+    }
     const dotsEl = __imgViewerEl.querySelector(".imgViewerDots");
     const prevBtn = __imgViewerEl.querySelector("[data-prev]");
     const nextBtn = __imgViewerEl.querySelector("[data-next]");
@@ -1039,7 +1027,10 @@ function openImageViewer(urls, startIndex = 0) {
 
     const render = () => {
       try { __imgViewerEl && __imgViewerEl.__zoomReset && __imgViewerEl.__zoomReset(); } catch {}
-      if (imgEl) imgEl.src = safeImgUrl(list[idx]);
+      if (imgEl) {
+        imgEl.removeAttribute("srcset");
+        imgEl.src = safeImgUrl(list[idx]);
+      }
       if (prevBtn) prevBtn.style.display = (list.length > 1 ? "flex" : "none");
       if (nextBtn) nextBtn.style.display = (list.length > 1 ? "flex" : "none");
       renderDots();
@@ -3497,7 +3488,7 @@ function renderHome() {
   bindTap(document.getElementById("tEx"), () => openExamples());
   bindTap(document.getElementById("tRev"), () => openPage(renderReviews));
   
-bindTap(document.getElementById("tInfo"), () => openPage(renderInfo));
+bindTap(document.getElementById("tInfo"), () => openInfoPage(false));
 
   // Новинки: тап по карточке открывает товар
   view.querySelectorAll("#newCarousel [data-id]").forEach((el) => {
@@ -4045,97 +4036,180 @@ function renderInfo() {
   infoViewedThisSession = true;
   try { localStorage.setItem(LS_INFO_VIEWED, IMPORTANT_INFO_VERSION); } catch {}
   cloudSet(CS_INFO_VIEWED, JSON.stringify({ v: IMPORTANT_INFO_VERSION })).catch(() => {});
+
+  const showCheckoutCta = (__infoEntrySource === "checkout");
+  const ctaHtml = showCheckoutCta ? `
+      <div class="infoCtaCard">
+        <div class="infoCtaTitle">Всё прочитано ✨</div>
+        <div class="infoCtaText small">Можно вернуться к оформлению и поставить галочку, что ты ознакомилась с важной информацией.</div>
+        <div class="sp10"></div>
+        <button class="btn is-active" id="btnBackToCheckout" type="button">Вернуться к оформлению</button>
+      </div>
+  ` : ``;
+
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Важная информация</div>
-      <div class="small infoLead">Пожалуйста, ознакомься с этой информацией перед оформлением заказа.</div>
+      <div class="infoHero">
+        <div class="infoHeroBadge">Перед заказом</div>
+        <div class="h2">Важная информация</div>
+        <div class="small infoLead">Здесь всё самое нужное про оформление заказа, покрытие, оплату, доставку и важные условия — чтобы потом не было неприятных сюрпризов.</div>
+      </div>
 
       <div class="infoStack">
-        <div class="infoSection">
-          <div class="infoTitle">Наклейки</div>
+        <div class="infoSection infoSectionAccent">
+          <div class="infoTitleRow">
+            <div class="infoIcon">✦</div>
+            <div class="infoTitleWrap">
+              <div class="infoTitle">Наклейки</div>
+              <div class="infoKicker">Что важно знать о формате</div>
+            </div>
+          </div>
           <ul class="infoList">
             <li>Наклейки <b>вырезаны по белому контуру</b>.</li>
           </ul>
         </div>
 
         <div class="infoSection">
-          <div class="infoTitle">Оплата и оформление заказа</div>
+          <div class="infoTitleRow">
+            <div class="infoIcon">🛍️</div>
+            <div class="infoTitleWrap">
+              <div class="infoTitle">Оплата и оформление заказа</div>
+              <div class="infoKicker">Как проходит оформление</div>
+            </div>
+          </div>
           <ul class="infoList">
             <li>После оформления заказа ты отправляешь заявку менеджерке.</li>
             <li>Менеджерка проверяет состав заказа, варианты покрытия и доставку.</li>
             <li>После проверки ты получаешь сообщение с <b>итоговой суммой оплаты, включая доставку</b>.</li>
             <li><b>Оплата производится только после этого сообщения.</b></li>
           </ul>
-        
-        <div class="infoSection">
-          <div class="infoTitle">Оплата и валюта</div>
-          <ul class="infoList">
-            <li>Цены в приложении указаны <b>в российских рублях</b>.</li>
-          </ul>
-        </div>
-</div>
-
-        <div class="infoSection">
-          <div class="infoTitle">Сроки изготовления и доставки</div>
-          <ul class="infoList">
-            <li>Сборка заказа: <b>4–7 дней</b> (зависит от объёма заказа и от загруженности).</li>
-            <li>Доставка: <b>от 7 дней</b> (зависит от расстояния между городами; более точный срок можно уточнить у менеджерки).</li>
-          </ul>
-          <div class="infoNote">Сроки могут немного меняться в периоды повышенной нагрузки.</div>
+          <div class="infoPillNote">Доставка рассчитывается отдельно и добавляется к итоговой сумме после проверки заказа.</div>
         </div>
 
+        <div class="infoGrid2">
+          <div class="infoSection">
+            <div class="infoTitleRow">
+              <div class="infoIcon">₽</div>
+              <div class="infoTitleWrap">
+                <div class="infoTitle">Оплата и валюта</div>
+                <div class="infoKicker">Цены в приложении</div>
+              </div>
+            </div>
+            <ul class="infoList">
+              <li>Цены в приложении указаны <b>в российских рублях</b>.</li>
+            </ul>
+          </div>
+
+          <div class="infoSection">
+            <div class="infoTitleRow">
+              <div class="infoIcon">⏳</div>
+              <div class="infoTitleWrap">
+                <div class="infoTitle">Сроки изготовления и доставки</div>
+                <div class="infoKicker">По времени</div>
+              </div>
+            </div>
+            <ul class="infoList">
+              <li>Сборка заказа: <b>4–7 дней</b> (зависит от объёма заказа и загруженности).</li>
+              <li>Доставка: <b>от 7 дней</b> (зависит от расстояния между городами; более точный срок можно уточнить у менеджерки).</li>
+            </ul>
+            <div class="infoNote">В периоды повышенной нагрузки сроки могут немного меняться.</div>
+          </div>
+        </div>
+
         <div class="infoSection">
-          <div class="infoTitle">Доставка и пункты выдачи</div>
-          <div class="infoNote">Мы отправляем заказы через выбранный при оформлении пункт выдачи.</div>
+          <div class="infoTitleRow">
+            <div class="infoIcon">📦</div>
+            <div class="infoTitleWrap">
+              <div class="infoTitle">Доставка и пункты выдачи</div>
+              <div class="infoKicker">Куда отправляем</div>
+            </div>
+          </div>
+          <div class="infoPillNote">Мы отправляем заказы через выбранный при оформлении пункт выдачи.</div>
           <ul class="infoList">
-            <li>Пункты выдачи: <b>Яндекс / 5Post / Ozon / Wildberries / CDEK</b></li>
+            <li>Пункты выдачи: <b>Яндекс / 5Post / Ozon / Wildberries / CDEK</b>.</li>
             <li>Срок хранения заказа в пункте выдачи — <b>6 дней</b> (может зависеть от выбранного сервиса).</li>
           </ul>
         </div>
 
-        <div class="infoSection">
-          <div class="infoTitle">Ozon и Wildberries</div>
-          <ul class="infoList">
-            <li>Доставка через <b>Ozon/Wildberries</b> возможна <b>только по России</b>.</li>
-            <li>Обязательно укажи <b>номер телефона аккаунта получателя</b> в Ozon/WB.</li>
-          </ul>
-          <div class="infoNote">Если номер телефона не соответствует аккаунту получателя в выбранном ПВЗ, получение заказа может быть невозможно.</div>
+        <div class="infoGrid2">
+          <div class="infoSection">
+            <div class="infoTitleRow">
+              <div class="infoIcon">📱</div>
+              <div class="infoTitleWrap">
+                <div class="infoTitle">Ozon и Wildberries</div>
+                <div class="infoKicker">Для этих ПВЗ</div>
+              </div>
+            </div>
+            <ul class="infoList">
+              <li>Доставка через <b>Ozon/Wildberries</b> возможна <b>только по России</b>.</li>
+              <li>Обязательно укажи <b>номер телефона аккаунта получателя</b> в Ozon/WB.</li>
+            </ul>
+            <div class="infoWarn">Если номер телефона не совпадает с номером аккаунта получателя в выбранном ПВЗ, получить заказ может не получиться.</div>
+          </div>
+
+          <div class="infoSection">
+            <div class="infoTitleRow">
+              <div class="infoIcon">☎️</div>
+              <div class="infoTitleWrap">
+                <div class="infoTitle">Номер телефона</div>
+                <div class="infoKicker">Обязательное поле</div>
+              </div>
+            </div>
+            <ul class="infoList">
+              <li>Номер телефона <b>обязателен</b> для оформления заказа.</li>
+              <li>Для Ozon/Wildberries номер должен совпадать с номером аккаунта получателя.</li>
+            </ul>
+          </div>
         </div>
 
         <div class="infoSection">
-          <div class="infoTitle">Номер телефона</div>
-          <ul class="infoList">
-            <li>Номер телефона <b>обязателен</b> для оформления заказа.</li>
-            <li>Для Ozon/Wildberries номер должен совпадать с номером аккаунта получателя.</li>
-          </ul>
-        </div>
-
-        <div class="infoSection">
-          <div class="infoTitle">Возврат и обмен</div>
-          <ul class="infoList">
-            <li>Все изделия изготавливаются <b>под заказ</b>, стандартный возврат не предусмотрен.</li>
-            <li>Если возникнут вопросы по качеству — мы обязательно обсудим ситуацию и постараемся найти решение.</li>
-          </ul>
-        </div>
-
-        <div class="infoSection">
-          <div class="infoTitle">Печать и внешний вид изделий</div>
+          <div class="infoTitleRow">
+            <div class="infoIcon">🖨️</div>
+            <div class="infoTitleWrap">
+              <div class="infoTitle">Печать и внешний вид изделий</div>
+              <div class="infoKicker">Про цвет и материалы</div>
+            </div>
+          </div>
           <ul class="infoList">
             <li>Печать выполняется <b>струйным способом</b>.</li>
             <li>Цвета на экране и вживую могут немного отличаться.</li>
             <li>При длительном воздействии света печать со временем может терять насыщенность — это не считается браком.</li>
           </ul>
+          <div class="infoNote">Это нормальная особенность печатной продукции, а не ошибка заказа.</div>
         </div>
 
-        <div class="infoSection">
-          <div class="infoTitle">Индивидуальные заказы и вопросы</div>
-          <ul class="infoList">
-            <li>Если ты ищешь товары с фандомом, которого нет в ассортименте, мы можем сделать их <b>под заказ</b>.</li>
-            <li>По любым вопросам можно написать менеджерке.</li>
-          </ul>
-          <button class="btn btnInline" id="btnManager">Написать менеджерке</button>
+        <div class="infoGrid2">
+          <div class="infoSection">
+            <div class="infoTitleRow">
+              <div class="infoIcon">↩️</div>
+              <div class="infoTitleWrap">
+                <div class="infoTitle">Возврат и обмен</div>
+                <div class="infoKicker">Если что-то пошло не так</div>
+              </div>
+            </div>
+            <ul class="infoList">
+              <li>Все изделия изготавливаются <b>под заказ</b>, стандартный возврат не предусмотрен.</li>
+              <li>Если возникнут вопросы по качеству — мы обязательно обсудим ситуацию и постараемся найти решение.</li>
+            </ul>
+          </div>
 
+          <div class="infoSection">
+            <div class="infoTitleRow">
+              <div class="infoIcon">💌</div>
+              <div class="infoTitleWrap">
+                <div class="infoTitle">Индивидуальные заказы и вопросы</div>
+                <div class="infoKicker">Если не нашла нужный фандом</div>
+              </div>
+            </div>
+            <ul class="infoList">
+              <li>Если ты ищешь товары с фандомом, которого нет в ассортименте, мы можем сделать их <b>под заказ</b>.</li>
+              <li>По любым вопросам можно написать менеджерке.</li>
+            </ul>
+            <button class="btn btnInline infoLinkBtn" id="btnManager">Написать менеджерке</button>
+          </div>
         </div>
+
+        ${ctaHtml}
       </div>
 
       <div class="row">
@@ -4148,11 +4222,14 @@ function renderInfo() {
   bindTap(document.getElementById("btnMain"), () => tg?.openTelegramLink(MAIN_CHANNEL_URL));
   bindTap(document.getElementById("btnSuggest"), () => tg?.openTelegramLink(SUGGEST_URL));
   bindTap(document.getElementById("btnManager"), () => tg?.openTelegramLink(`https://t.me/${MANAGER_USERNAME}`));
+  bindTap(document.getElementById("btnBackToCheckout"), () => {
+    try { __infoEntrySource = ""; } catch {}
+    goBack();
+  });
 
   syncNav();
   syncBottomSpace();
 }
-
 function renderReviews() {
   // Фильтры на уровне экрана (не сохраняем в storage — просто UX)
   let mode = (lastReviewsMode || "all"); // all | photos | 5
@@ -4998,6 +5075,7 @@ if (isPoster) {
         });
       });
     });
+
     if (btnExamples) {
       bindTap(btnExamples, () => {
         if (isSticker) openExamples(["film", "lamination"], "Примеры плёнки и ламинации");
@@ -5011,7 +5089,7 @@ if (isPoster) {
 
     const prodImgEl = document.getElementById('prodMainImg');
     if (prodImgEl && img) {
-      bindTap(prodImgEl, () => openImageViewer([img], 0));
+      bindTap(prodImgEl, () => openImageViewer(productViewerImages(p), 0));
     }
 
     // Swipe between PRODUCTS (only for pin_single)
@@ -5327,33 +5405,36 @@ function renderCart() {
                       <div class="miniRow">
                         ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
-                          <div class="miniTopRow">
-                            <div class="title">${h(p.name)}</div>
-                            <button class="iconBtn iconBtnDanger miniRemoveBtn" data-remove-item="${idx}" type="button" aria-label="Удалить товар из корзины" title="Удалить">✕</button>
-                          </div>
+                          <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
                           ${optionPairsHTML(pairs)}
                         </div>
                       </div>
 
-                      <div class="miniIndentRow mt12">
-                        <div class="qtyControl" aria-label="Количество товара">
-                          <button class="btn qtyBtn" data-dec="${idx}" type="button" aria-label="Уменьшить количество">−</button>
-                          <div class="small minw34 taCenter qtyValue"><b>${Number(ci.qty) || 1}</b></div>
-                          <button class="btn qtyBtn" data-inc="${idx}" type="button" aria-label="Увеличить количество">+</button>
-                        </div>
+                      <div class="row miniIndentRow row miniIndentRow mt12 aiCenter">
+                        <button class="btn" data-dec="${idx}">−</button>
+                        <div class="small small minw34 taCenter"><b>${Number(ci.qty) || 1}</b></div>
+                        <button class="btn" data-inc="${idx}">+</button>
                       </div>
                     </div>
                   `;
                 })
                 .join("")
             : `
-              <div class="emptyBox emptyBoxSoft emptyBoxCart">
-                <div class="emptyIcon" aria-hidden="true">🛒</div>
-                <div class="emptyTitle">Корзина пока пустая ✨</div>
-                <div class="small mt6">Посмотри каталог и выбери то, что тебе понравится.</div>
-                <div class="sp12"></div>
-                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в каталог</button>
+              <div class="emptyBox">
+                <div class="small">Корзина пока пустая ✨</div>
+                <div class="sp10"></div>
+
+                <div class="chips flexWrap">
+                  <button class="chip" data-etype="Наклейки" type="button">Наклейки</button>
+                  <button class="chip" data-etype="Значки" type="button">Значки</button>
+                  <button class="chip" data-etype="Постеры" type="button">Постеры</button>
+                  <button class="chip" data-etype="Боксы" type="button">Боксы</button>
+                </div>
+
+                <div class="sp10"></div>
+                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в категории</button>
+                <button class="btn" id="focusSearchFromEmptyCart" type="button">Открыть поиск</button>
               </div>
             `
         }
@@ -5375,28 +5456,6 @@ function renderCart() {
     </div>
   `;
 
-  const removeCartItem = (i, mode = "single") => {
-    const next = [...cart];
-    const removed = next[i] ? { ...next[i] } : null;
-    if (!removed) return;
-    next.splice(i, 1);
-    setCart(next);
-    try {
-      const rp = getProductById(String(removed?.id || ""));
-      gaRemoveFromCart(rp, removed || {}, Number(removed?.qty) || 1);
-    } catch {}
-    showUndoBar(mode === "single" ? "Позиция удалена из корзины" : "Товар удалён из корзины", () => {
-      const restored = [...cart];
-      const idx = Math.min(Math.max(i, 0), restored.length);
-      restored.splice(idx, 0, removed);
-      setCart(restored);
-      toast("Возвращено в корзину", "good");
-      renderCart();
-    });
-    haptic("select");
-    renderCart();
-  };
-
   view.querySelectorAll("[data-inc]").forEach((b) => {
     bindTap(b, () => {
       const i = Number(b.dataset.inc);
@@ -5417,63 +5476,73 @@ function renderCart() {
 
       const q = (Number(next[i]?.qty) || 1) - 1;
       if (q <= 0) {
-        removeCartItem(i, "single");
-        return;
+        next.splice(i, 1);
+        setCart(next);
+
+        if (removed) {
+          showUndoBar("Позиция удалена из корзины", () => {
+            const restored = [...cart];
+            const idx = Math.min(Math.max(i, 0), restored.length);
+            restored.splice(idx, 0, removed);
+            setCart(restored);
+            toast("Возвращено в корзину", "good");
+            renderCart();
+          });
+        }
+      } else {
+        next[i].qty = q;
+        setCart(next);
       }
 
-      next[i].qty = q;
-      setCart(next);
       try {
         const rp = getProductById(String(removed?.id || ""));
         gaRemoveFromCart(rp, removed || {}, 1);
       } catch {}
+
       haptic("select");
       renderCart();
     });
   });
 
-  view.querySelectorAll("[data-remove-item]").forEach((b) => {
-    bindTap(b, () => {
-      const i = Number(b.dataset.removeItem);
-      removeCartItem(i, "delete");
-    });
+  
+// Открытие карточки товара по тапу на позицию (кроме кнопок)
+view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
+  bindTap(el, (e) => {
+    const t = e.target;
+    if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+    const idx = Number(el.dataset.idx || 0);
+    const ci = items[idx];
+    if (!ci) return;
+    try { clearPinSingleSwipeContext(); } catch {}
+    openPage(() => renderProduct(ci.id, ci));
   });
+});
 
-  // Открытие карточки товара по тапу на позицию (кроме кнопок)
-  view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
-    bindTap(el, (e) => {
-      const t = e.target;
-      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-      const idx = Number(el.dataset.idx || 0);
-      const ci = items[idx];
-      if (!ci) return;
-      try { clearPinSingleSwipeContext(); } catch {}
-      openPage(() => renderProduct(ci.id, ci));
-    });
-  });
-
-  const goCats = document.getElementById("goCatsFromEmptyCart");
+const goCats = document.getElementById("goCatsFromEmptyCart");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
+  const focusSearch = document.getElementById("focusSearchFromEmptyCart");
+  if (focusSearch) bindTap(focusSearch, () => {
+    try { globalSearch?.focus?.(); } catch {}
+  });
+
+  // Быстрые чипсы по типам — просто подставляем в поиск (так не нужно плодить отдельные роуты)
+  try {
+    Array.from(view.querySelectorAll('[data-etype]')).forEach((btn) => {
+      bindTap(btn, () => {
+        const t = btn.getAttribute("data-etype") || "";
+        try { globalSearch.value = t; } catch {}
+        try { if (searchWrap) searchWrap.classList.add("hasText"); } catch {}
+        openPage(() => renderSearch(t));
+      });
+    });
+  } catch {}
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
     bindTap(btnClear, () => {
-      const prev = [...cart];
-      if (!prev.length) return;
-      confirmDestructive(
-        "Очистить корзину?",
-        "Все товары будут удалены, но действие можно будет отменить.",
-        () => {
-          setCart([]);
-          showUndoBar("Корзина очищена", () => {
-            setCart(prev);
-            toast("Корзина восстановлена", "good");
-            renderCart();
-          });
-          haptic("warning");
-          renderCart();
-        }
-      );
+      setCart([]);
+      toast("Корзина очищена", "warn");
+      renderCart();
     });
   }
 
@@ -5789,13 +5858,9 @@ function renderCheckout() {
     view.innerHTML = `
       <div class="card">
         <div class="h2">Оформление</div>
-        <div class="emptyBox emptyBoxSoft emptyBoxCheckout mt12">
-          <div class="emptyIcon" aria-hidden="true">📦</div>
-          <div class="emptyTitle">Пока нечего оформлять</div>
-          <div class="small mt6">Сначала добавь в корзину то, что тебе понравится, а потом вернись сюда.</div>
-          <div class="sp12"></div>
-          <button class="btn is-active" id="goHome">Перейти в каталог</button>
-        </div>
+        <div class="small">Корзина пустая — нечего оформлять.</div>
+        <hr>
+        <button class="btn is-active" id="goHome">На главную</button>
       </div>
     `;
     bindTap(document.getElementById("goHome"), () => resetToHome());
@@ -6057,7 +6122,7 @@ function renderCheckout() {
   }
 
   const openInfoFromCheckout = document.getElementById("openInfoFromCheckout");
-  bindTap(openInfoFromCheckout, () => openPage(renderInfo));
+  bindTap(openInfoFromCheckout, () => openInfoPage(true));
 
   const btnSend = document.getElementById("btnSend");
   const agreeInfo = document.getElementById("agreeInfo");
@@ -6079,7 +6144,7 @@ function renderCheckout() {
       toast("Сначала открой «Важную информацию» 💜", "warn");
       rowAgreeInfo?.classList.add("is-error");
       // удобно: сразу ведём на вкладку
-      setTimeout(() => openPage(renderInfo), 150);
+      setTimeout(() => openInfoPage(true), 150);
     }
   }, { passive: false });
 
