@@ -1811,3 +1811,91 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .navArrowBtn:active{
   transform:translateY(1px);
 }
+
+
+/* ===== UI polish v271 ===== */
+.toastEnter{animation: lpToastIn .18s ease-out;}
+.undoBarEnter{animation: lpUndoIn .2s ease-out;}
+.is-pop{animation: lpPop .22s ease-out;}
+.appearUp{animation: lpAppearUp .22s ease-out;}
+
+@keyframes lpToastIn{
+  0%{opacity:0; transform:translateX(-50%) translateY(8px) scale(.98);}
+  100%{opacity:1; transform:translateX(-50%) translateY(0) scale(1);}
+}
+@keyframes lpUndoIn{
+  0%{opacity:0; transform:translateY(10px) scale(.985);}
+  100%{opacity:1; transform:translateY(0) scale(1);}
+}
+@keyframes lpPop{
+  0%{transform:scale(1);}
+  45%{transform:scale(1.08);}
+  100%{transform:scale(1);}
+}
+@keyframes lpAppearUp{
+  0%{opacity:0; transform:translateY(8px);}
+  100%{opacity:1; transform:translateY(0);}
+}
+
+.emptyBoxHero, .emptyStateRich{
+  background:linear-gradient(180deg, rgba(125,60,255,.08), rgba(0,0,0,.04));
+  border-color:rgba(125,60,255,.18);
+  box-shadow:0 12px 30px rgba(125,60,255,.08);
+}
+.emptyBoxHero .emptyTitle, .emptyStateRich .emptyTitle{
+  font-size:20px;
+  font-weight:900;
+  color:#0b0b12;
+  letter-spacing:.2px;
+}
+.emptyBoxHero .emptyText, .emptyStateRich .emptyText{
+  max-width:520px;
+}
+
+.pcard, .item, .emptyState, .emptyBox, .cartSummary{
+  animation: lpAppearUp .2s ease-out;
+}
+
+.iconBtn, .prodFav, .navBtn, .btn, .catBtn, .tile, .newNavBtn{
+  transition: transform .12s ease, box-shadow .18s ease, filter .18s ease, background .18s ease;
+}
+.iconBtn:active, .prodFav:active, .navBtn:active, .catBtn:active, .newNavBtn:active{
+  transform: scale(.96);
+}
+
+.cartSummary{
+  position:relative;
+  background:linear-gradient(180deg, rgba(125,60,255,.12), rgba(0,0,0,.08));
+  border-color:rgba(125,60,255,.18);
+  box-shadow:0 14px 34px rgba(125,60,255,.10);
+}
+.cartSummary::before{
+  content:"";
+  position:absolute;
+  left:12px;
+  right:12px;
+  top:0;
+  height:1px;
+  background:linear-gradient(90deg, rgba(125,60,255,0), rgba(125,60,255,.35), rgba(125,60,255,0));
+}
+.cartSummaryLabel{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.9px;
+  color:rgba(11,11,18,.6);
+  font-weight:900;
+  margin-bottom:2px;
+}
+.cartSummarySum{
+  font-size:22px;
+  line-height:1.05;
+}
+.cartSummaryActions .btn.is-active{
+  box-shadow:0 0 0 3px rgba(125,60,255,.18), 0 0 22px rgba(190,120,255,.22);
+}
+
+.homeSection .pcard, .newCard{animation:none;}
+
+@media (prefers-reduced-motion: reduce){
+  .pcard, .item, .emptyState, .emptyBox, .cartSummary, .toastEnter, .undoBarEnter, .is-pop{animation:none !important;}
+}
