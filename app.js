@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "268";
+const APP_BUILD = "269";
 
 // =====================
 // CSV ссылки (твои)
@@ -665,6 +665,23 @@ function showUndoBar(text, onUndo) {
   __undoTimer = setTimeout(() => hideUndoBar(), 4200);
 }
 
+function confirmDestructive(title, message, onConfirm) {
+  const text = String(title || "Подтвердить действие") + (message ? `
+${String(message)}` : "");
+  if (tg?.showConfirm) {
+    try {
+      tg.showConfirm(text, (ok) => {
+        try { if (ok) onConfirm && onConfirm(); } catch {}
+      });
+      return;
+    } catch {}
+  }
+  try {
+    if (window.confirm(text)) onConfirm && onConfirm();
+  } catch {
+    try { onConfirm && onConfirm(); } catch {}
+  }
+}
 
 
 // =====================
@@ -738,9 +755,9 @@ let currentRender = null;
 let __imgViewerEl = null;
 function openImageViewer(urls, startIndex = 0) {
   try {
-    const list = (urls || []).map((u) => safeImgUrl(u)).filter(Boolean);
+    const list = (urls || []).map(String).filter(Boolean);
     if (!list.length) return;
-    let idx = Math.max(0, Math.min(startIndex | 0, list.length - 1));
+    let idx = Math.max(0, Math.min(Number(startIndex || 0), list.length - 1));
 
     if (!__imgViewerEl) {
       __imgViewerEl = document.createElement("div");
@@ -766,19 +783,19 @@ function openImageViewer(urls, startIndex = 0) {
       `;
       document.body.appendChild(__imgViewerEl);
 
+      // close
       __imgViewerEl.addEventListener("click", (e) => {
         const t = e.target;
         if (!t) return;
         if (t.closest && t.closest("[data-close]")) closeImageViewer();
       });
 
+      // swipe inside viewer
       let sx = 0, sy = 0, moved = false;
       __imgViewerEl.addEventListener("touchstart", (e) => {
         const p0 = e.touches && e.touches[0];
         if (!p0) return;
-        sx = p0.clientX;
-        sy = p0.clientY;
-        moved = false;
+        sx = p0.clientX; sy = p0.clientY; moved = false;
       }, { passive: true });
       __imgViewerEl.addEventListener("touchmove", () => { moved = true; }, { passive: true });
       __imgViewerEl.addEventListener("touchend", (e) => {
@@ -797,38 +814,60 @@ function openImageViewer(urls, startIndex = 0) {
         } catch {}
       }, { passive: true });
 
+      // zoom/pan inside viewer (pinch + double-tap + desktop wheel/drag)
       try {
         const panEl = __imgViewerEl.querySelector("#imgViewerPan");
-        const imgEl = __imgViewerEl.querySelector(".imgViewerImg");
-        const stage = __imgViewerEl.querySelector(".imgViewerStage");
+        const viewerImgEl = __imgViewerEl.querySelector(".imgViewerImg");
         const zoomRange = __imgViewerEl.querySelector(".imgViewerZoomRange");
         const zoomInBtn = __imgViewerEl.querySelector("[data-zoom-in]");
         const zoomOutBtn = __imgViewerEl.querySelector("[data-zoom-out]");
-        const zi = { scale: 1, tx: 0, ty: 0, min: 1, max: 4, lastTap: 0, drag: null, pinch: null };
-
-        const renderedSize = () => {
-          const w = Number(imgEl?.clientWidth || 0);
-          const h = Number(imgEl?.clientHeight || 0);
-          return { w, h };
+        const zi = { scale: 1, tx: 0, ty: 0, min: 1, max: 4, lastTap: 0, drag: null, pinch: null, baseW: 0, baseH: 0 };
+        const stageRect = () => {
+          try { return __imgViewerEl.querySelector(".imgViewerStage")?.getBoundingClientRect?.() || null; } catch { return null; }
         };
-
+        const syncImageBaseSize = () => {
+          try {
+            if (!viewerImgEl) return;
+            const rectS = stageRect();
+            const nw = Number(viewerImgEl.naturalWidth || 0);
+            const nh = Number(viewerImgEl.naturalHeight || 0);
+            if (!rectS || !nw || !nh) {
+              zi.baseW = 0;
+              zi.baseH = 0;
+              viewerImgEl.style.width = "";
+              viewerImgEl.style.height = "";
+              return;
+            }
+            const ratio = Math.min(rectS.width / nw, rectS.height / nh, 1);
+            zi.baseW = Math.max(1, Math.round(nw * ratio));
+            zi.baseH = Math.max(1, Math.round(nh * ratio));
+            viewerImgEl.style.width = `${zi.baseW}px`;
+            viewerImgEl.style.height = `${zi.baseH}px`;
+          } catch {}
+        };
         const apply = () => {
-          if (!panEl || !imgEl) return;
+          if (!panEl || !viewerImgEl) return;
           const s = Math.max(zi.min, Math.min(zi.scale, zi.max));
           zi.scale = s;
           panEl.style.transform = `translate3d(${zi.tx}px, ${zi.ty}px, 0)`;
-          imgEl.style.transform = `translateZ(0) scale(${s})`;
+          viewerImgEl.style.transform = `scale(${s})`;
           __imgViewerEl.classList.toggle("isZoomed", s > 1.001);
           try { if (zoomRange) zoomRange.value = String(s); } catch {}
+        };
+        const reset = () => {
+          zi.scale = 1; zi.tx = 0; zi.ty = 0; zi.drag = null; zi.pinch = null;
+          syncImageBaseSize();
+          apply();
         };
 
         const clampPan = () => {
           try {
-            if (!stage || !imgEl) return;
-            const rectS = stage.getBoundingClientRect();
-            const { w, h } = renderedSize();
-            const scaledW = w * zi.scale;
-            const scaledH = h * zi.scale;
+            const rectS = stageRect();
+            if (!rectS) return;
+            const baseW = Number(zi.baseW || viewerImgEl?.clientWidth || 0);
+            const baseH = Number(zi.baseH || viewerImgEl?.clientHeight || 0);
+            const scaledW = baseW * zi.scale;
+            const scaledH = baseH * zi.scale;
             const overflowX = Math.max(0, (scaledW - rectS.width) / 2);
             const overflowY = Math.max(0, (scaledH - rectS.height) / 2);
             zi.tx = Math.max(-overflowX, Math.min(overflowX, zi.tx));
@@ -836,35 +875,25 @@ function openImageViewer(urls, startIndex = 0) {
           } catch {}
         };
 
-        const reset = () => {
-          zi.scale = 1;
-          zi.tx = 0;
-          zi.ty = 0;
-          zi.drag = null;
-          zi.pinch = null;
-          clampPan();
-          apply();
-        };
-
         const dist = (t0, t1) => {
-          const dx = t1.clientX - t0.clientX;
-          const dy = t1.clientY - t0.clientY;
-          return Math.sqrt(dx * dx + dy * dy);
+          const dx = (t1.clientX - t0.clientX);
+          const dy = (t1.clientY - t0.clientY);
+          return Math.sqrt(dx*dx + dy*dy);
         };
+        const mid = (t0, t1) => ({ x: (t0.clientX + t1.clientX)/2, y: (t0.clientY + t1.clientY)/2 });
 
         const onTouchStart = (e) => {
           try {
             if (!e || !e.touches) return;
             if (e.touches.length === 2) {
               const t0 = e.touches[0], t1 = e.touches[1];
-              zi.pinch = { d: dist(t0, t1), s: zi.scale };
+              zi.pinch = { d: dist(t0, t1), s: zi.scale, m: mid(t0, t1) };
             } else if (e.touches.length === 1) {
               const t = e.touches[0];
               zi.drag = { x: t.clientX, y: t.clientY, tx: zi.tx, ty: zi.ty };
             }
           } catch {}
         };
-
         const onTouchMove = (e) => {
           try {
             if (!e || !e.touches) return;
@@ -874,6 +903,7 @@ function openImageViewer(urls, startIndex = 0) {
               const d = dist(t0, t1);
               const ratio = d / (zi.pinch.d || d || 1);
               zi.scale = Math.max(zi.min, Math.min(zi.max, (zi.pinch.s || 1) * ratio));
+              apply();
               clampPan();
               apply();
               return;
@@ -890,36 +920,34 @@ function openImageViewer(urls, startIndex = 0) {
             }
           } catch {}
         };
+        const onTouchEnd = () => { zi.drag = null; zi.pinch = null; };
 
-        const onTouchEnd = () => {
-          zi.drag = null;
-          zi.pinch = null;
-        };
-
-        const onTap = () => {
+        // Double-tap to zoom
+        const onTap = (e) => {
           try {
             const now = Date.now();
             const dt = now - (zi.lastTap || 0);
             zi.lastTap = now;
             if (dt > 0 && dt < 280) {
+              // toggle zoom
               if (zi.scale > 1.001) reset();
               else {
-                zi.scale = 2.2;
-                zi.tx = 0;
-                zi.ty = 0;
-                clampPan();
+                zi.scale = 2.4;
+                zi.tx = 0; zi.ty = 0;
                 apply();
               }
             }
           } catch {}
         };
 
+        const stage = __imgViewerEl.querySelector(".imgViewerStage");
         if (stage) {
           stage.addEventListener("touchstart", onTouchStart, { passive: true });
           stage.addEventListener("touchmove", onTouchMove, { passive: false });
           stage.addEventListener("touchend", onTouchEnd, { passive: true });
           stage.addEventListener("click", onTap, { passive: true });
 
+          // Desktop: mouse wheel zoom
           stage.addEventListener("wheel", (e) => {
             try {
               if (!__imgViewerEl || __imgViewerEl.style.display !== "block") return;
@@ -934,6 +962,7 @@ function openImageViewer(urls, startIndex = 0) {
             } catch {}
           }, { passive: false });
 
+          // Desktop: drag to pan when zoomed
           stage.addEventListener("pointerdown", (e) => {
             try {
               if (!e) return;
@@ -960,16 +989,30 @@ function openImageViewer(urls, startIndex = 0) {
           stage.addEventListener("pointercancel", () => { zi.drag = null; }, { passive: true });
         }
 
+        if (viewerImgEl) {
+          viewerImgEl.addEventListener("load", () => {
+            try { reset(); } catch {}
+          });
+          if (viewerImgEl.complete && viewerImgEl.naturalWidth > 0) {
+            try { syncImageBaseSize(); apply(); } catch {}
+          }
+        }
+        window.addEventListener("resize", () => {
+          try {
+            if (!__imgViewerEl || __imgViewerEl.style.display !== "block") return;
+            syncImageBaseSize();
+            clampPan();
+            apply();
+          } catch {}
+        }, { passive: true });
+
+        // Zoom controls (range + +/-)
         const setScale = (s) => {
           zi.scale = Math.max(zi.min, Math.min(zi.max, Number(s || 1)));
-          if (zi.scale <= 1.001) {
-            zi.tx = 0;
-            zi.ty = 0;
-          }
+          if (zi.scale <= 1.001) { zi.tx = 0; zi.ty = 0; }
           clampPan();
           apply();
         };
-
         if (zoomRange) {
           zoomRange.addEventListener("input", () => {
             try { setScale(Number(zoomRange.value || "1")); } catch {}
@@ -977,15 +1020,8 @@ function openImageViewer(urls, startIndex = 0) {
         }
         if (zoomInBtn) bindTap(zoomInBtn, () => setScale(zi.scale + 0.25));
         if (zoomOutBtn) bindTap(zoomOutBtn, () => setScale(zi.scale - 0.25));
-        if (imgEl) {
-          imgEl.addEventListener("load", () => {
-            try {
-              if (!__imgViewerEl || __imgViewerEl.style.display !== "block") return;
-              reset();
-            } catch {}
-          }, { passive: true });
-        }
 
+        // expose for render() so we can reset zoom when switching images
         __imgViewerEl.__zoomReset = reset;
       } catch {}
     }
@@ -997,21 +1033,15 @@ function openImageViewer(urls, startIndex = 0) {
 
     const renderDots = () => {
       if (!dotsEl) return;
-      if (list.length <= 1) {
-        dotsEl.innerHTML = "";
-        return;
-      }
-      dotsEl.innerHTML = list.map((_, i) => `<span class="imgViewerDot ${i === idx ? "is-active" : ""}"></span>`).join("");
+      if (list.length <= 1) { dotsEl.innerHTML = ""; return; }
+      dotsEl.innerHTML = list.map((_, i) => `<span class="imgViewerDot ${i===idx?"is-active":""}"></span>`).join("");
     };
 
     const render = () => {
       try { __imgViewerEl && __imgViewerEl.__zoomReset && __imgViewerEl.__zoomReset(); } catch {}
-      if (imgEl) {
-        imgEl.style.transform = "translateZ(0) scale(1)";
-        imgEl.src = list[idx];
-      }
-      if (prevBtn) prevBtn.style.display = list.length > 1 ? "flex" : "none";
-      if (nextBtn) nextBtn.style.display = list.length > 1 ? "flex" : "none";
+      if (imgEl) imgEl.src = safeImgUrl(list[idx]);
+      if (prevBtn) prevBtn.style.display = (list.length > 1 ? "flex" : "none");
+      if (nextBtn) nextBtn.style.display = (list.length > 1 ? "flex" : "none");
       renderDots();
     };
 
@@ -4968,7 +4998,6 @@ if (isPoster) {
         });
       });
     });
-
     if (btnExamples) {
       bindTap(btnExamples, () => {
         if (isSticker) openExamples(["film", "lamination"], "Примеры плёнки и ламинации");
@@ -4982,10 +5011,7 @@ if (isPoster) {
 
     const prodImgEl = document.getElementById('prodMainImg');
     if (prodImgEl && img) {
-      bindTap(prodImgEl, () => {
-        const viewerImgs = splitList(imagesField(p)).filter(Boolean);
-        openImageViewer(viewerImgs.length ? viewerImgs : [img], 0);
-      });
+      bindTap(prodImgEl, () => openImageViewer([img], 0));
     }
 
     // Swipe between PRODUCTS (only for pin_single)
@@ -5301,28 +5327,33 @@ function renderCart() {
                       <div class="miniRow">
                         ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
-                          <div class="title">${h(p.name)}</div>
+                          <div class="miniTopRow">
+                            <div class="title">${h(p.name)}</div>
+                            <button class="iconBtn iconBtnDanger miniRemoveBtn" data-remove-item="${idx}" type="button" aria-label="Удалить товар из корзины" title="Удалить">✕</button>
+                          </div>
                           <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
                           ${optionPairsHTML(pairs)}
                         </div>
                       </div>
 
-                      <div class="row miniIndentRow row miniIndentRow mt12 aiCenter cartQtyRow">
-                        <button class="btn cartQtyBtn" data-dec="${idx}" type="button" aria-label="Уменьшить количество">−</button>
-                        <div class="cartQtyBadge" aria-label="Количество"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn cartQtyBtn" data-inc="${idx}" type="button" aria-label="Увеличить количество">+</button>
+                      <div class="miniIndentRow mt12">
+                        <div class="qtyControl" aria-label="Количество товара">
+                          <button class="btn qtyBtn" data-dec="${idx}" type="button" aria-label="Уменьшить количество">−</button>
+                          <div class="small minw34 taCenter qtyValue"><b>${Number(ci.qty) || 1}</b></div>
+                          <button class="btn qtyBtn" data-inc="${idx}" type="button" aria-label="Увеличить количество">+</button>
+                        </div>
                       </div>
                     </div>
                   `;
                 })
                 .join("")
             : `
-              <div class="emptyBox emptyBoxCart">
-                <div class="emptyStateIcon" aria-hidden="true">🛒</div>
-                <div class="emptyStateTitle">Корзина пока пустая ✨</div>
-                <div class="emptyStateText">Посмотри каталог и выбери то, что тебе понравится.</div>
+              <div class="emptyBox emptyBoxSoft emptyBoxCart">
+                <div class="emptyIcon" aria-hidden="true">🛒</div>
+                <div class="emptyTitle">Корзина пока пустая ✨</div>
+                <div class="small mt6">Посмотри каталог и выбери то, что тебе понравится.</div>
                 <div class="sp12"></div>
-                <button class="btn is-active emptyStateBtn" id="goCatsFromEmptyCart" type="button">Перейти в каталог</button>
+                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в каталог</button>
               </div>
             `
         }
@@ -5344,6 +5375,28 @@ function renderCart() {
     </div>
   `;
 
+  const removeCartItem = (i, mode = "single") => {
+    const next = [...cart];
+    const removed = next[i] ? { ...next[i] } : null;
+    if (!removed) return;
+    next.splice(i, 1);
+    setCart(next);
+    try {
+      const rp = getProductById(String(removed?.id || ""));
+      gaRemoveFromCart(rp, removed || {}, Number(removed?.qty) || 1);
+    } catch {}
+    showUndoBar(mode === "single" ? "Позиция удалена из корзины" : "Товар удалён из корзины", () => {
+      const restored = [...cart];
+      const idx = Math.min(Math.max(i, 0), restored.length);
+      restored.splice(idx, 0, removed);
+      setCart(restored);
+      toast("Возвращено в корзину", "good");
+      renderCart();
+    });
+    haptic("select");
+    renderCart();
+  };
+
   view.querySelectorAll("[data-inc]").forEach((b) => {
     bindTap(b, () => {
       const i = Number(b.dataset.inc);
@@ -5364,66 +5417,63 @@ function renderCart() {
 
       const q = (Number(next[i]?.qty) || 1) - 1;
       if (q <= 0) {
-        next.splice(i, 1);
-        setCart(next);
-
-        if (removed) {
-          showUndoBar("Позиция удалена из корзины", () => {
-            const restored = [...cart];
-            const idx = Math.min(Math.max(i, 0), restored.length);
-            restored.splice(idx, 0, removed);
-            setCart(restored);
-            toast("Возвращено в корзину", "good");
-            renderCart();
-          });
-        }
-      } else {
-        next[i].qty = q;
-        setCart(next);
+        removeCartItem(i, "single");
+        return;
       }
 
+      next[i].qty = q;
+      setCart(next);
       try {
         const rp = getProductById(String(removed?.id || ""));
         gaRemoveFromCart(rp, removed || {}, 1);
       } catch {}
-
       haptic("select");
       renderCart();
     });
   });
 
-  
-// Открытие карточки товара по тапу на позицию (кроме кнопок)
-view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
-  bindTap(el, (e) => {
-    const t = e.target;
-    if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-    const idx = Number(el.dataset.idx || 0);
-    const ci = items[idx];
-    if (!ci) return;
-    try { clearPinSingleSwipeContext(); } catch {}
-    openPage(() => renderProduct(ci.id, ci));
+  view.querySelectorAll("[data-remove-item]").forEach((b) => {
+    bindTap(b, () => {
+      const i = Number(b.dataset.removeItem);
+      removeCartItem(i, "delete");
+    });
   });
-});
 
-const goCats = document.getElementById("goCatsFromEmptyCart");
+  // Открытие карточки товара по тапу на позицию (кроме кнопок)
+  view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      const idx = Number(el.dataset.idx || 0);
+      const ci = items[idx];
+      if (!ci) return;
+      try { clearPinSingleSwipeContext(); } catch {}
+      openPage(() => renderProduct(ci.id, ci));
+    });
+  });
+
+  const goCats = document.getElementById("goCatsFromEmptyCart");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
     bindTap(btnClear, () => {
-      const prev = [...(cart || [])];
+      const prev = [...cart];
       if (!prev.length) return;
-      setCart([]);
-      toast("Корзина очищена", "warn");
-      haptic("light");
-      renderCart();
-      showUndoBar("Корзина очищена", () => {
-        setCart(prev);
-        renderCart();
-        toast("Возвращено в корзину", "good");
-        haptic("success");
-      });
+      confirmDestructive(
+        "Очистить корзину?",
+        "Все товары будут удалены, но действие можно будет отменить.",
+        () => {
+          setCart([]);
+          showUndoBar("Корзина очищена", () => {
+            setCart(prev);
+            toast("Корзина восстановлена", "good");
+            renderCart();
+          });
+          haptic("warning");
+          renderCart();
+        }
+      );
     });
   }
 
@@ -5739,9 +5789,13 @@ function renderCheckout() {
     view.innerHTML = `
       <div class="card">
         <div class="h2">Оформление</div>
-        <div class="small">Корзина пустая — нечего оформлять.</div>
-        <hr>
-        <button class="btn is-active" id="goHome">На главную</button>
+        <div class="emptyBox emptyBoxSoft emptyBoxCheckout mt12">
+          <div class="emptyIcon" aria-hidden="true">📦</div>
+          <div class="emptyTitle">Пока нечего оформлять</div>
+          <div class="small mt6">Сначала добавь в корзину то, что тебе понравится, а потом вернись сюда.</div>
+          <div class="sp12"></div>
+          <button class="btn is-active" id="goHome">Перейти в каталог</button>
+        </div>
       </div>
     `;
     bindTap(document.getElementById("goHome"), () => resetToHome());
