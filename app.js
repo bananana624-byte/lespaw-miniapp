@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "267";
+const APP_BUILD = "268";
 
 // =====================
 // CSV ссылки (твои)
@@ -738,9 +738,9 @@ let currentRender = null;
 let __imgViewerEl = null;
 function openImageViewer(urls, startIndex = 0) {
   try {
-    const list = (urls || []).map(String).filter(Boolean);
+    const list = (urls || []).map((u) => safeImgUrl(u)).filter(Boolean);
     if (!list.length) return;
-    let idx = Math.max(0, Math.min(Number(startIndex || 0), list.length - 1));
+    let idx = Math.max(0, Math.min(startIndex | 0, list.length - 1));
 
     if (!__imgViewerEl) {
       __imgViewerEl = document.createElement("div");
@@ -766,19 +766,19 @@ function openImageViewer(urls, startIndex = 0) {
       `;
       document.body.appendChild(__imgViewerEl);
 
-      // close
       __imgViewerEl.addEventListener("click", (e) => {
         const t = e.target;
         if (!t) return;
         if (t.closest && t.closest("[data-close]")) closeImageViewer();
       });
 
-      // swipe inside viewer
       let sx = 0, sy = 0, moved = false;
       __imgViewerEl.addEventListener("touchstart", (e) => {
         const p0 = e.touches && e.touches[0];
         if (!p0) return;
-        sx = p0.clientX; sy = p0.clientY; moved = false;
+        sx = p0.clientX;
+        sy = p0.clientY;
+        moved = false;
       }, { passive: true });
       __imgViewerEl.addEventListener("touchmove", () => { moved = true; }, { passive: true });
       __imgViewerEl.addEventListener("touchend", (e) => {
@@ -797,57 +797,74 @@ function openImageViewer(urls, startIndex = 0) {
         } catch {}
       }, { passive: true });
 
-      // zoom/pan inside viewer (pinch + double-tap + desktop wheel/drag)
       try {
         const panEl = __imgViewerEl.querySelector("#imgViewerPan");
+        const imgEl = __imgViewerEl.querySelector(".imgViewerImg");
+        const stage = __imgViewerEl.querySelector(".imgViewerStage");
         const zoomRange = __imgViewerEl.querySelector(".imgViewerZoomRange");
         const zoomInBtn = __imgViewerEl.querySelector("[data-zoom-in]");
         const zoomOutBtn = __imgViewerEl.querySelector("[data-zoom-out]");
         const zi = { scale: 1, tx: 0, ty: 0, min: 1, max: 4, lastTap: 0, drag: null, pinch: null };
+
+        const renderedSize = () => {
+          const w = Number(imgEl?.clientWidth || 0);
+          const h = Number(imgEl?.clientHeight || 0);
+          return { w, h };
+        };
+
         const apply = () => {
-          if (!panEl) return;
+          if (!panEl || !imgEl) return;
           const s = Math.max(zi.min, Math.min(zi.scale, zi.max));
           zi.scale = s;
-          panEl.style.transform = `translate3d(${zi.tx}px, ${zi.ty}px, 0) scale(${s})`;
+          panEl.style.transform = `translate3d(${zi.tx}px, ${zi.ty}px, 0)`;
+          imgEl.style.transform = `translateZ(0) scale(${s})`;
           __imgViewerEl.classList.toggle("isZoomed", s > 1.001);
           try { if (zoomRange) zoomRange.value = String(s); } catch {}
         };
-        const reset = () => { zi.scale = 1; zi.tx = 0; zi.ty = 0; zi.drag = null; zi.pinch = null; apply(); };
 
         const clampPan = () => {
           try {
-            if (!panEl) return;
-            const stage = __imgViewerEl.querySelector(".imgViewerStage");
-            if (!stage) return;
+            if (!stage || !imgEl) return;
             const rectS = stage.getBoundingClientRect();
-            const rectP = panEl.getBoundingClientRect();
-            // When zoomed, allow panning within bounds
-            const overflowX = Math.max(0, (rectP.width - rectS.width) / 2);
-            const overflowY = Math.max(0, (rectP.height - rectS.height) / 2);
+            const { w, h } = renderedSize();
+            const scaledW = w * zi.scale;
+            const scaledH = h * zi.scale;
+            const overflowX = Math.max(0, (scaledW - rectS.width) / 2);
+            const overflowY = Math.max(0, (scaledH - rectS.height) / 2);
             zi.tx = Math.max(-overflowX, Math.min(overflowX, zi.tx));
             zi.ty = Math.max(-overflowY, Math.min(overflowY, zi.ty));
           } catch {}
         };
 
-        const dist = (t0, t1) => {
-          const dx = (t1.clientX - t0.clientX);
-          const dy = (t1.clientY - t0.clientY);
-          return Math.sqrt(dx*dx + dy*dy);
+        const reset = () => {
+          zi.scale = 1;
+          zi.tx = 0;
+          zi.ty = 0;
+          zi.drag = null;
+          zi.pinch = null;
+          clampPan();
+          apply();
         };
-        const mid = (t0, t1) => ({ x: (t0.clientX + t1.clientX)/2, y: (t0.clientY + t1.clientY)/2 });
+
+        const dist = (t0, t1) => {
+          const dx = t1.clientX - t0.clientX;
+          const dy = t1.clientY - t0.clientY;
+          return Math.sqrt(dx * dx + dy * dy);
+        };
 
         const onTouchStart = (e) => {
           try {
             if (!e || !e.touches) return;
             if (e.touches.length === 2) {
               const t0 = e.touches[0], t1 = e.touches[1];
-              zi.pinch = { d: dist(t0, t1), s: zi.scale, m: mid(t0, t1) };
+              zi.pinch = { d: dist(t0, t1), s: zi.scale };
             } else if (e.touches.length === 1) {
               const t = e.touches[0];
               zi.drag = { x: t.clientX, y: t.clientY, tx: zi.tx, ty: zi.ty };
             }
           } catch {}
         };
+
         const onTouchMove = (e) => {
           try {
             if (!e || !e.touches) return;
@@ -857,7 +874,6 @@ function openImageViewer(urls, startIndex = 0) {
               const d = dist(t0, t1);
               const ratio = d / (zi.pinch.d || d || 1);
               zi.scale = Math.max(zi.min, Math.min(zi.max, (zi.pinch.s || 1) * ratio));
-              apply();
               clampPan();
               apply();
               return;
@@ -874,34 +890,36 @@ function openImageViewer(urls, startIndex = 0) {
             }
           } catch {}
         };
-        const onTouchEnd = () => { zi.drag = null; zi.pinch = null; };
 
-        // Double-tap to zoom
-        const onTap = (e) => {
+        const onTouchEnd = () => {
+          zi.drag = null;
+          zi.pinch = null;
+        };
+
+        const onTap = () => {
           try {
             const now = Date.now();
             const dt = now - (zi.lastTap || 0);
             zi.lastTap = now;
             if (dt > 0 && dt < 280) {
-              // toggle zoom
               if (zi.scale > 1.001) reset();
               else {
-                zi.scale = 2.4;
-                zi.tx = 0; zi.ty = 0;
+                zi.scale = 2.2;
+                zi.tx = 0;
+                zi.ty = 0;
+                clampPan();
                 apply();
               }
             }
           } catch {}
         };
 
-        const stage = __imgViewerEl.querySelector(".imgViewerStage");
         if (stage) {
           stage.addEventListener("touchstart", onTouchStart, { passive: true });
           stage.addEventListener("touchmove", onTouchMove, { passive: false });
           stage.addEventListener("touchend", onTouchEnd, { passive: true });
           stage.addEventListener("click", onTap, { passive: true });
 
-          // Desktop: mouse wheel zoom
           stage.addEventListener("wheel", (e) => {
             try {
               if (!__imgViewerEl || __imgViewerEl.style.display !== "block") return;
@@ -916,7 +934,6 @@ function openImageViewer(urls, startIndex = 0) {
             } catch {}
           }, { passive: false });
 
-          // Desktop: drag to pan when zoomed
           stage.addEventListener("pointerdown", (e) => {
             try {
               if (!e) return;
@@ -943,13 +960,16 @@ function openImageViewer(urls, startIndex = 0) {
           stage.addEventListener("pointercancel", () => { zi.drag = null; }, { passive: true });
         }
 
-        // Zoom controls (range + +/-)
         const setScale = (s) => {
           zi.scale = Math.max(zi.min, Math.min(zi.max, Number(s || 1)));
-          if (zi.scale <= 1.001) { zi.tx = 0; zi.ty = 0; }
+          if (zi.scale <= 1.001) {
+            zi.tx = 0;
+            zi.ty = 0;
+          }
           clampPan();
           apply();
         };
+
         if (zoomRange) {
           zoomRange.addEventListener("input", () => {
             try { setScale(Number(zoomRange.value || "1")); } catch {}
@@ -957,8 +977,15 @@ function openImageViewer(urls, startIndex = 0) {
         }
         if (zoomInBtn) bindTap(zoomInBtn, () => setScale(zi.scale + 0.25));
         if (zoomOutBtn) bindTap(zoomOutBtn, () => setScale(zi.scale - 0.25));
+        if (imgEl) {
+          imgEl.addEventListener("load", () => {
+            try {
+              if (!__imgViewerEl || __imgViewerEl.style.display !== "block") return;
+              reset();
+            } catch {}
+          }, { passive: true });
+        }
 
-        // expose for render() so we can reset zoom when switching images
         __imgViewerEl.__zoomReset = reset;
       } catch {}
     }
@@ -970,15 +997,21 @@ function openImageViewer(urls, startIndex = 0) {
 
     const renderDots = () => {
       if (!dotsEl) return;
-      if (list.length <= 1) { dotsEl.innerHTML = ""; return; }
-      dotsEl.innerHTML = list.map((_, i) => `<span class="imgViewerDot ${i===idx?"is-active":""}"></span>`).join("");
+      if (list.length <= 1) {
+        dotsEl.innerHTML = "";
+        return;
+      }
+      dotsEl.innerHTML = list.map((_, i) => `<span class="imgViewerDot ${i === idx ? "is-active" : ""}"></span>`).join("");
     };
 
     const render = () => {
       try { __imgViewerEl && __imgViewerEl.__zoomReset && __imgViewerEl.__zoomReset(); } catch {}
-      if (imgEl) imgEl.src = safeImgUrl(list[idx]);
-      if (prevBtn) prevBtn.style.display = (list.length > 1 ? "flex" : "none");
-      if (nextBtn) nextBtn.style.display = (list.length > 1 ? "flex" : "none");
+      if (imgEl) {
+        imgEl.style.transform = "translateZ(0) scale(1)";
+        imgEl.src = list[idx];
+      }
+      if (prevBtn) prevBtn.style.display = list.length > 1 ? "flex" : "none";
+      if (nextBtn) nextBtn.style.display = list.length > 1 ? "flex" : "none";
       renderDots();
     };
 
@@ -4949,7 +4982,10 @@ if (isPoster) {
 
     const prodImgEl = document.getElementById('prodMainImg');
     if (prodImgEl && img) {
-      bindTap(prodImgEl, () => openImageViewer([img], 0));
+      bindTap(prodImgEl, () => {
+        const viewerImgs = splitList(imagesField(p)).filter(Boolean);
+        openImageViewer(viewerImgs.length ? viewerImgs : [img], 0);
+      });
     }
 
     // Swipe between PRODUCTS (only for pin_single)
@@ -5271,30 +5307,22 @@ function renderCart() {
                         </div>
                       </div>
 
-                      <div class="row miniIndentRow row miniIndentRow mt12 aiCenter">
-                        <button class="btn" data-dec="${idx}">−</button>
-                        <div class="small small minw34 taCenter"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" data-inc="${idx}">+</button>
+                      <div class="row miniIndentRow row miniIndentRow mt12 aiCenter cartQtyRow">
+                        <button class="btn cartQtyBtn" data-dec="${idx}" type="button" aria-label="Уменьшить количество">−</button>
+                        <div class="cartQtyBadge" aria-label="Количество"><b>${Number(ci.qty) || 1}</b></div>
+                        <button class="btn cartQtyBtn" data-inc="${idx}" type="button" aria-label="Увеличить количество">+</button>
                       </div>
                     </div>
                   `;
                 })
                 .join("")
             : `
-              <div class="emptyBox">
-                <div class="small">Корзина пока пустая ✨</div>
-                <div class="sp10"></div>
-
-                <div class="chips flexWrap">
-                  <button class="chip" data-etype="Наклейки" type="button">Наклейки</button>
-                  <button class="chip" data-etype="Значки" type="button">Значки</button>
-                  <button class="chip" data-etype="Постеры" type="button">Постеры</button>
-                  <button class="chip" data-etype="Боксы" type="button">Боксы</button>
-                </div>
-
-                <div class="sp10"></div>
-                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в категории</button>
-                <button class="btn" id="focusSearchFromEmptyCart" type="button">Открыть поиск</button>
+              <div class="emptyBox emptyBoxCart">
+                <div class="emptyStateIcon" aria-hidden="true">🛒</div>
+                <div class="emptyStateTitle">Корзина пока пустая ✨</div>
+                <div class="emptyStateText">Посмотри каталог и выбери то, что тебе понравится.</div>
+                <div class="sp12"></div>
+                <button class="btn is-active emptyStateBtn" id="goCatsFromEmptyCart" type="button">Перейти в каталог</button>
               </div>
             `
         }
@@ -5380,29 +5408,22 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
 
 const goCats = document.getElementById("goCatsFromEmptyCart");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
-  const focusSearch = document.getElementById("focusSearchFromEmptyCart");
-  if (focusSearch) bindTap(focusSearch, () => {
-    try { globalSearch?.focus?.(); } catch {}
-  });
-
-  // Быстрые чипсы по типам — просто подставляем в поиск (так не нужно плодить отдельные роуты)
-  try {
-    Array.from(view.querySelectorAll('[data-etype]')).forEach((btn) => {
-      bindTap(btn, () => {
-        const t = btn.getAttribute("data-etype") || "";
-        try { globalSearch.value = t; } catch {}
-        try { if (searchWrap) searchWrap.classList.add("hasText"); } catch {}
-        openPage(() => renderSearch(t));
-      });
-    });
-  } catch {}
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
     bindTap(btnClear, () => {
+      const prev = [...(cart || [])];
+      if (!prev.length) return;
       setCart([]);
       toast("Корзина очищена", "warn");
+      haptic("light");
       renderCart();
+      showUndoBar("Корзина очищена", () => {
+        setCart(prev);
+        renderCart();
+        toast("Возвращено в корзину", "good");
+        haptic("success");
+      });
     });
   }
 
