@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "270";
+const APP_BUILD = "271";
 
 // =====================
 // CSV ссылки (твои)
@@ -621,7 +621,7 @@ let __toastEl = null;
 function toast(msg, kind = "") {
   try { __toastEl?.remove?.(); } catch {}
   const el = document.createElement("div");
-  el.className = `toast ${kind}`.trim();
+  el.className = `toast toastEnter ${kind}`.trim();
   el.textContent = msg;
   el.setAttribute("role", "status");
   el.setAttribute("aria-live", "polite");
@@ -648,7 +648,7 @@ function hideUndoBar() {
 function showUndoBar(text, onUndo) {
   try { hideUndoBar(); } catch {}
   const el = document.createElement("div");
-  el.className = "undoBar";
+  el.className = "undoBar undoBarEnter";
   el.innerHTML = `
     <div class="undoText">${escapeHTML(String(text || ""))}</div>
     <button class="undoBtn" type="button" aria-label="Отменить действие">Отменить</button>
@@ -2175,6 +2175,7 @@ function toggleFavVariant(id, opts){
     gaEvent("remove_from_wishlist", { item_id: String(id).trim() });
     gaEvent("remove_from_favorite", { item_id: String(id).trim() });
     toast("Убрано из избранного", "warn");
+    try { pulseFavBadge(); } catch {}
     haptic("light");
   } else {
     const next = [...(fav||[])];
@@ -2190,6 +2191,7 @@ function toggleFavVariant(id, opts){
     gaEvent("add_to_wishlist", { item_id: String(id).trim() });
     gaEvent("add_to_favorite", { item_id: String(id).trim() });
     toast("Добавлено в избранное", "ok");
+    try { pulseFavBadge(); } catch {}
     haptic("success");
   }
   updateBadges();
@@ -2256,6 +2258,7 @@ function toggleFavAny(id, optsForAdd){
   if (isFavId(sid)){
     removeFavAllVariants(sid);
     toast("Убрано из избранного", "warn");
+    try { pulseFavBadge(); } catch {}
     haptic("light");
     updateBadges();
     return false;
@@ -2276,6 +2279,7 @@ function toggleFavAny(id, optsForAdd){
   gaEvent("add_to_wishlist", { item_id: sid });
   gaEvent("add_to_favorite", { item_id: sid });
   toast("Добавлено в избранное", "ok");
+  try { pulseFavBadge(); } catch {}
   haptic("success");
   updateBadges();
   return true;
@@ -2347,6 +2351,20 @@ function pulseBadge(el) {
     el.classList.add("is-pulse");
     setTimeout(() => { try { el.classList.remove("is-pulse"); } catch {} }, 650);
   } catch {}
+}
+
+function pulseElement(el, cls = "is-pop", ms = 260) {
+  try {
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(() => { try { el.classList.remove(cls); } catch {} }, ms);
+  } catch {}
+}
+
+function pulseFavBadge() {
+  try { pulseBadge(favCount); } catch {}
 }
 
 let __pruningState = false;
@@ -3416,8 +3434,8 @@ init(); } catch (e) {
 function renderHome() {
   view.innerHTML = `
     <div class="tile" id="tCat">
-      <div class="tileTitle">Категории</div>
-      <div class="tileSub">Выбор фандома по типу</div>
+      <div class="tileTitle">Каталог</div>
+      <div class="tileSub">Фандомы и товары</div>
     </div>
 
     <div class="tile" id="tEx">
@@ -3572,8 +3590,8 @@ syncNav();
 function renderFandomTypes() {
   view.innerHTML = `
     <div class="card">
-      <div class="h2">Категории</div>
-      <div class="small">Выбери категорию</div>
+      <div class="h2">Каталог</div>
+      <div class="small">Выбери раздел каталога</div>
       <hr>
 
       <div class="catGrid">
@@ -3716,7 +3734,7 @@ function renderTypeBrowsePage() {
 
         ${(end < all.length) ? `
           <div class="mt12" style="display:flex; justify-content:center;">
-            <button class="btn" id="typeShowMore" type="button">Показать ещё</button>
+            <button class="btn" id="typeShowMore" type="button">Показать ещё товары</button>
           </div>
         ` : ``}
       </div>
@@ -3759,6 +3777,7 @@ function renderTypeBrowsePage() {
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
       addToCartById(id);
+      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
     });
   });
@@ -3882,6 +3901,7 @@ function renderThematicPage() {
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
       addToCartById(id);
+      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
       // лёгкое обновление бейджей
       syncNav();
@@ -4019,6 +4039,7 @@ const groupsOrder = [
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
       addToCartById(id);
+      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
     });
   });
@@ -4321,7 +4342,7 @@ function renderReviews() {
 
     const moreBtn =
       (mode === "all" ? reviewsVisibleCount < all.length : reviewsVisibleCount < all.filter((r) => (mode === "photos" ? !!r.photo_url : (Number(r.rating) || 0) >= 5)).length)
-        ? `<button class="btn" id="revMore">Показать ещё</button>`
+        ? `<button class="btn" id="revMore">Показать ещё товары</button>`
         : `
           <div class="emptyState">
             <div class="emptyTitle">${(Array.isArray(reviews) && reviews.length) ? "Ничего не найдено по фильтру" : "Отзывов пока нет"}</div>
@@ -4637,8 +4658,8 @@ const groupsOrder = [
     <div class="card">
       <div class="h2">Поиск: “${h(q)}”</div>
       ${shortQuery ? `
-        <div class="emptyState">
-          <div class="emptyTitle">Введи минимум 3 символа</div>
+        <div class="emptyState emptyStateRich">
+          <div class="emptyTitle">Введите хотя бы 3 символа</div>
           <div class="emptyText small">Так поиск будет точнее и не будет лагать на больших списках.</div>
           <div class="chips mt12">
             <button class="chip" data-type="sticker" type="button">Наклейки</button>
@@ -4650,9 +4671,12 @@ const groupsOrder = [
         </div>
       ` : ``}
       ${(!fHits.length && !rawPHits.length) ? `
-        <div class="emptyState">
-          <div class="emptyTitle">Ничего не найдено</div>
+        <div class="emptyState emptyStateRich">
+          <div class="emptyTitle">Ничего не нашлось</div>
           <div class="emptyText small">Попробуй другое слово или проверь раскладку. Можно искать по фандому, названию товара или ключевым словам.</div>
+          <div class="row mt12">
+            <button class="btn is-active" id="searchGoCatalog" type="button">Открыть каталог</button>
+          </div>
         </div>
       ` : ``}
 
@@ -4670,7 +4694,7 @@ const groupsOrder = [
         `
                 )
                 .join("")
-            : `<div class="small">Ничего не найдено</div>`
+            : `<div class="small opacity85">Пока ничего не найдено</div>`
         }
       </div>
 
@@ -4680,12 +4704,15 @@ const groupsOrder = [
       ${
         grouped.length
           ? grouped.map((g) => sectionHtml(g.title, g.items)).join("")
-          : `<div class="small">Ничего не найдено</div>`
+          : `<div class="small opacity85">Пока ничего не найдено</div>`
       }
     </div>
   `;
 
   view.querySelectorAll("[data-fid]").forEach((el) => (bindTap(el, () => openPage(() => renderFandomPage(el.dataset.fid)))));
+
+  const searchGoCatalog = document.getElementById("searchGoCatalog");
+  if (searchGoCatalog) bindTap(searchGoCatalog, () => openPage(renderFandomTypes));
 
   // открыть карточку товара по тапу на карточку
   view.querySelectorAll(".pcard[data-id]").forEach((el) => {
@@ -4704,6 +4731,7 @@ const groupsOrder = [
       toggleFav(id);
       view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
         x.classList.toggle("is-active", isFavId(id));
+        pulseElement(x, "is-pop", 240);
         const g = x.querySelector(".heartGlyph");
         if (g) g.textContent = isFavId(id) ? "♥" : "♡";
       });
@@ -4732,6 +4760,7 @@ const groupsOrder = [
       e.stopPropagation();
       const id = String(b.dataset.add || "");
       addToCartById(id);
+      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
     });
   });
@@ -5209,7 +5238,7 @@ function renderFavorites() {
                 <div class="small">Избранное пока пустое ✨</div>
                 <div class="small mt6">Выбери что-то, что тебе понравится — и нажми сердечко.</div>
                 <div class="sp10"></div>
-                <button class="btn is-active" id="goCatsFromEmptyFav" type="button">Перейти в категории</button>
+                <button class="btn is-active" id="goCatsFromEmptyFav" type="button">Перейти в каталог</button>
               </div>
             `
         }
@@ -5433,7 +5462,7 @@ function renderCart() {
                 </div>
 
                 <div class="sp10"></div>
-                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в категории</button>
+                <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в каталог</button>
                 <button class="btn" id="focusSearchFromEmptyCart" type="button">Открыть поиск</button>
               </div>
             `
@@ -5443,7 +5472,8 @@ function renderCart() {
         <hr>
         <div class="cartSummary">
           <div class="cartSummaryLeft">
-            <div class="cartSummarySum">Итого: <b>${money(calcCartTotal())}</b></div>
+            <div class="cartSummaryLabel">Итого</div>
+            <div class="cartSummarySum"><b>${money(calcCartTotal())}</b></div>
             <div class="cartSummaryNote small">Без учёта доставки — она рассчитывается менеджеркой индивидуально.</div>
           </div>
           <div class="cartSummaryActions">
@@ -5520,29 +5550,21 @@ view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
 
 const goCats = document.getElementById("goCatsFromEmptyCart");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
-  const focusSearch = document.getElementById("focusSearchFromEmptyCart");
-  if (focusSearch) bindTap(focusSearch, () => {
-    try { globalSearch?.focus?.(); } catch {}
-  });
-
-  // Быстрые чипсы по типам — просто подставляем в поиск (так не нужно плодить отдельные роуты)
-  try {
-    Array.from(view.querySelectorAll('[data-etype]')).forEach((btn) => {
-      bindTap(btn, () => {
-        const t = btn.getAttribute("data-etype") || "";
-        try { globalSearch.value = t; } catch {}
-        try { if (searchWrap) searchWrap.classList.add("hasText"); } catch {}
-        openPage(() => renderSearch(t));
-      });
-    });
-  } catch {}
 
   const btnClear = document.getElementById("btnClear");
   if (btnClear) {
     bindTap(btnClear, () => {
+      const prev = [...(cart || [])];
+      if (!prev.length) return;
       setCart([]);
       toast("Корзина очищена", "warn");
       renderCart();
+      showUndoBar("Корзина очищена", () => {
+        setCart(prev);
+        renderCart();
+        toast("Возвращено в корзину", "ok");
+        haptic("success");
+      });
     });
   }
 
@@ -5858,9 +5880,12 @@ function renderCheckout() {
     view.innerHTML = `
       <div class="card">
         <div class="h2">Оформление</div>
-        <div class="small">Корзина пустая — нечего оформлять.</div>
-        <hr>
-        <button class="btn is-active" id="goHome">На главную</button>
+        <div class="emptyBox emptyBoxHero mt10">
+          <div class="emptyTitle">Пока нечего оформлять ✨</div>
+          <div class="emptyText small">Сначала добавь товары в корзину, а потом возвращайся к оформлению заказа.</div>
+          <div class="sp12"></div>
+          <button class="btn is-active" id="goHome" type="button">Перейти в каталог</button>
+        </div>
       </div>
     `;
     bindTap(document.getElementById("goHome"), () => resetToHome());
