@@ -1072,58 +1072,18 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 
 /* Indent rows under thumb (Cart qty row) */
 .miniIndentRow{ margin-left: calc(56px + 12px); }
-.emptyBoxCart{
-  text-align:center;
-  padding:18px 16px;
-  background: linear-gradient(180deg, rgba(125,60,255,.10), rgba(255,255,255,.06));
-  border:1px solid rgba(255,255,255,.18);
-  box-shadow:0 12px 28px rgba(0,0,0,.10);
-}
-.emptyStateIcon{
-  width:56px;
-  height:56px;
-  margin:0 auto 10px auto;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:18px;
-  border:1px solid rgba(255,255,255,.18);
-  background:rgba(255,255,255,.10);
-  font-size:26px;
-}
-.emptyStateTitle{
-  font-weight:900;
-  font-size:16px;
-  line-height:1.2;
-}
-.emptyStateText{
-  margin-top:8px;
-  opacity:.9;
-  line-height:1.35;
-}
-.emptyStateBtn{
-  min-width:220px;
-}
-.cartQtyRow{
-  gap:8px;
-}
-.cartQtyBtn{
-  min-width:42px;
-  height:42px;
-  padding:0 12px;
-}
-.cartQtyBadge{
-  min-width:42px;
-  height:42px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:0 12px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.18);
-  background:rgba(255,255,255,.08);
-  box-shadow:0 8px 20px rgba(0,0,0,.08);
-}
+.miniTopRow{ display:flex; align-items:flex-start; gap:10px; }
+.miniTopRow .title{ flex:1; min-width:0; }
+.qtyControl{ display:inline-flex; align-items:center; gap:8px; padding:6px; border-radius:16px; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.035); }
+.qtyBtn{ min-width:40px; padding:10px 12px; }
+.qtyValue{ font-size:14px; font-weight:900; }
+.iconBtnDanger{ border-color:rgba(255,92,122,.22); background:rgba(255,92,122,.08); color:#c92855; }
+.iconBtnDanger:active{ transform:scale(.98); }
+.miniRemoveBtn{ width:34px; height:34px; border-radius:12px; flex:0 0 auto; }
+.emptyBoxSoft{ text-align:center; padding:18px 16px; background:linear-gradient(180deg, rgba(190,120,255,.08), rgba(0,0,0,.03)); border:1px solid rgba(125,60,255,.14); box-shadow:0 12px 34px rgba(125,60,255,.08); }
+.emptyIcon{ font-size:26px; line-height:1; margin-bottom:10px; }
+.emptyTitle{ font-weight:1000; font-size:16px; line-height:1.25; color:#0b0b12; }
+.emptyBoxCart .btn, .emptyBoxCheckout .btn{ min-width:220px; max-width:100%; }
 
 .optKey{ font-weight:1000; color:#0b0b12; }
 
@@ -1588,7 +1548,7 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .imgViewer.isZoomed .imgViewerNav{ opacity:.25; }
 .imgViewer.isZoomed .imgViewerDots{ opacity:.35; }
 
-.imgViewerImg{ max-width:100%; max-height:100%; object-fit:contain; border-radius:18px; box-shadow:0 20px 70px rgba(0,0,0,.45); transform-origin:center center; backface-visibility:hidden; image-rendering:auto; }
+.imgViewerImg{ max-width:100%; max-height:100%; object-fit:contain; border-radius:18px; box-shadow:0 20px 70px rgba(0,0,0,.45); transform-origin:center center; image-rendering:auto; backface-visibility:hidden; will-change:transform; }
 .imgViewerClose{ position:absolute; top:14px; right:14px; width:42px; height:42px; border-radius:14px; border:1px solid rgba(255,255,255,.16); background:rgba(20,20,20,.35); color:rgba(255,255,255,.92); font-size:26px; line-height:1; z-index:60; }
 .imgViewerNav{ position:absolute; top:50%; transform:translateY(-50%); width:42px; height:42px; border-radius:14px; border:1px solid rgba(255,255,255,.14); background:rgba(20,20,20,.25); color:rgba(255,255,255,.92); font-size:26px; display:flex; align-items:center; justify-content:center; z-index:55; }
 .imgViewerPrev{ left:12px; }
