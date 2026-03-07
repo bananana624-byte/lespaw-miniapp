@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "272";
+const APP_BUILD = "273";
 
 // =====================
 // CSV ссылки (твои)
@@ -364,7 +364,12 @@ const LS_FAV = "lespaw_fav_v41";
 
 // Гейт важной информации (для оформления)
 const LS_INFO_VIEWED = "lespaw_info_viewed_v1";
-// Плашка-онбординг на главной (можно скрыть)
+const LS_ONBOARDING_SEEN = "lespaw_onboarding_seen_v1";
+const LS_RECENT_VIEWED = "lespaw_recent_viewed_v1";
+const LS_SWIPE_HINT_SEEN = "lespaw_swipe_hint_seen_v1";
+const LS_ZOOM_HINT_SEEN = "lespaw_zoom_hint_seen_v1";
+const LS_LATEST_SNAPSHOT = "lespaw_latest_snapshot_v1";
+const LS_HOME_NEW_TOAST = "lespaw_home_new_toast_v1";
 // Флаг: ознакомилась ли пользователька с "Важной информацией"
 let infoViewed = false;
 try {
@@ -393,6 +398,84 @@ function loadJSON(key, fallback) {
 function saveJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+function loadBool(key, fallback = false) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return !!fallback;
+    if (raw === "1" || raw === "true") return true;
+    if (raw === "0" || raw === "false") return false;
+    return !!JSON.parse(raw);
+  } catch {
+    return !!fallback;
+  }
+}
+function saveBool(key, value) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {}
+}
+function loadArray(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+function saveArray(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(Array.isArray(value) ? value : []));
+  } catch {}
+}
+function isOnboardingSeen() {
+  return loadBool(LS_ONBOARDING_SEEN, false);
+}
+function markOnboardingSeen() {
+  saveBool(LS_ONBOARDING_SEEN, true);
+}
+function getRecentViewedIds(limit = 12) {
+  return loadArray(LS_RECENT_VIEWED).map((x) => String(x || "")).filter(Boolean).slice(0, limit);
+}
+function pushRecentViewed(id, limit = 12) {
+  try {
+    const sid = String(id || "").trim();
+    if (!sid) return;
+    const next = [sid, ...getRecentViewedIds(limit).filter((x) => x !== sid)].slice(0, limit);
+    saveArray(LS_RECENT_VIEWED, next);
+  } catch {}
+}
+function consumePendingHomeToast() {
+  try {
+    const raw = localStorage.getItem(LS_HOME_NEW_TOAST);
+    if (!raw) return null;
+    localStorage.removeItem(LS_HOME_NEW_TOAST);
+    const obj = JSON.parse(raw);
+    if (!obj || !obj.message) return null;
+    return obj;
+  } catch {
+    return null;
+  }
+}
+function queuePendingHomeToast(message, count = 0) {
+  try {
+    localStorage.setItem(LS_HOME_NEW_TOAST, JSON.stringify({ message: String(message || ""), count: Number(count || 0), ts: Date.now() }));
+  } catch {}
+}
+function rememberLatestSnapshotAndMaybeQueueToast() {
+  try {
+    const latestIds = (products || []).slice(-28).map((p) => String(p?.id || "")).filter(Boolean);
+    if (!latestIds.length) return;
+    const prev = loadArray(LS_LATEST_SNAPSHOT).map((x) => String(x || "")).filter(Boolean);
+    if (prev.length) {
+      const unseen = latestIds.filter((id) => !prev.includes(id));
+      if (unseen.length) {
+        const msg = unseen.length === 1 ? "✨ Появился новый товар" : `✨ Появились новые товары: ${unseen.length}`;
+        queuePendingHomeToast(msg, unseen.length);
+      }
+    }
+    saveArray(LS_LATEST_SNAPSHOT, latestIds);
   } catch {}
 }
 
@@ -3315,6 +3398,7 @@ async function init() {
 
     fandoms = sanitizeFandoms(fFresh || []);
     products = sanitizeProducts(pFresh || []);
+    try { rememberLatestSnapshotAndMaybeQueueToast(); } catch {}
     // after catalog refresh we can safely prune state against real product ids
     updateBadges();
 
@@ -3414,6 +3498,47 @@ init(); } catch (e) {
 // HOME (плитки)
 // =====================
 function renderHome() {
+  if (!isOnboardingSeen()) {
+    view.innerHTML = `
+      <div class="card onboardCard">
+        <div class="onboardGlow"></div>
+        <div class="onboardBadge">LesPaw ✦ Добро пожаловать</div>
+        <div class="h2 onboardTitle">Фандомная атрибутика в одном месте</div>
+        <div class="small onboardLead">Здесь можно посмотреть ассортимент, открыть карточки товаров, собрать корзину и сразу отправить заказ менеджерке через Telegram.</div>
+
+        <div class="onboardSteps">
+          <div class="onboardStep"><span class="onboardNum">1</span><span>Открой каталог и выбери нужный фандом</span></div>
+          <div class="onboardStep"><span class="onboardNum">2</span><span>Добавь товары в корзину или избранное</span></div>
+          <div class="onboardStep"><span class="onboardNum">3</span><span>Перед заказом загляни во вкладку с важной информацией</span></div>
+        </div>
+
+        <div class="row mt12">
+          <button class="btn is-active" id="onboardStart" type="button">Открыть каталог</button>
+          <button class="btn" id="onboardInfo" type="button">Важная информация</button>
+        </div>
+      </div>
+    `;
+    bindTap(document.getElementById("onboardStart"), () => {
+      markOnboardingSeen();
+      openPage(renderFandomTypes);
+    });
+    bindTap(document.getElementById("onboardInfo"), () => {
+      markOnboardingSeen();
+      openInfoPage(false);
+    });
+    syncNav();
+    syncBottomSpace();
+    return;
+  }
+
+  const latest = (products || []).slice(-28).reverse();
+  const pages = [];
+  for (let i = 0; i < latest.length; i += 4) pages.push(latest.slice(i, i + 4));
+  const recentItems = getRecentViewedIds(12)
+    .map((id) => getProductById(id))
+    .filter(Boolean)
+    .slice(0, 6);
+
   view.innerHTML = `
     <div class="tile" id="tCat">
       <div class="tileTitle">Каталог</div>
@@ -3435,72 +3560,77 @@ function renderHome() {
       <div class="tileSub">Оплата, сроки, доставка</div>
     </div>
 
+    <div class="homeSection newSection">
+      <div class="newHeader">
+        <div class="newTitleRow">
+          <div class="newTitle">Новинки</div>
+          <div class="newChip">NEW</div>
+        </div>
+        <div class="newSub">Последние добавленные товары</div>
+      </div>
+      <div class="newDivider"></div>
 
-<div class="homeSection newSection">
-  <div class="newHeader">
-    <div class="newTitleRow">
-      <div class="newTitle">Новинки</div>
-      <div class="newChip">NEW</div>
-    </div>
-    <div class="newSub">Последние добавленные товары</div>
-  </div>
-  <div class="newDivider"></div>
+      <div class="newWrap">
+        <div class="newCarousel" id="newCarousel" aria-label="Новинки">
+          ${pages.map((page) => `
+            <div class="newPage">
+              ${page.map((p) => `
+                <div class="pcard pcardMini newCard" data-id="${p.id}">
+                  ${cardThumbHTML(p)}
+                  <div class="pcardTitle">${h(p.name)}</div>
+                  ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+                  <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+                </div>
+              `).join("")}
+            </div>
+          `).join("")}
+        </div>
 
-  <div class="newWrap">
-    <div class="newCarousel" id="newCarousel" aria-label="Новинки">
-      ${
-        (() => {
-          const latest = (products || []).slice(-28).reverse();
-          const pages = [];
-          for (let i = 0; i < latest.length; i += 4) pages.push(latest.slice(i, i + 4));
-          return pages
-            .map((page) => `
-              <div class="newPage">
-                ${page
-                  .map(
-                    (p) => `
-                  <div class="pcard pcardMini newCard" data-id="${p.id}">
-                    ${cardThumbHTML(p)}
-                    <div class="pcardTitle">${h(p.name)}</div>
-                    ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
-                    <div class="pcardPrice">${moneyDisplay(p.price)}</div>
-                  </div>
-                `
-                  )
-                  .join("")}
-              </div>
-            `)
-            .join("");
-        })()
-      }
+        <div class="newControls" aria-label="Навигация новинок">
+          <button class="newNavBtn" id="newPrev" type="button" aria-label="Предыдущие">‹</button>
+          <div class="newDots" id="newDots" aria-hidden="true"></div>
+          <button class="newNavBtn" id="newNext" type="button" aria-label="Следующие">›</button>
+        </div>
+      </div>
     </div>
 
-    <div class="newControls" aria-label="Навигация новинок">
-      <button class="newNavBtn" id="newPrev" type="button" aria-label="Предыдущие">‹</button>
-      <div class="newDots" id="newDots" aria-hidden="true"></div>
-      <button class="newNavBtn" id="newNext" type="button" aria-label="Следующие">›</button>
-    </div>
-  </div>
-</div>
+    ${recentItems.length ? `
+      <div class="homeSection recentSection">
+        <div class="newHeader">
+          <div class="newTitleRow">
+            <div class="newTitle">Недавно смотрели</div>
+            <div class="newChip recentChip">RECENT</div>
+          </div>
+          <div class="newSub">Чтобы быстро вернуться к просмотренным товарам</div>
+        </div>
+        <div class="newDivider"></div>
+        <div class="recentGrid">
+          ${recentItems.map((p) => `
+            <div class="pcard pcardMini recentCard" data-id="${p.id}">
+              ${cardThumbHTML(p)}
+              <div class="pcardTitle">${h(p.name)}</div>
+              ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
+              <div class="pcardPrice">${moneyDisplay(p.price)}</div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    ` : ``}
   `;
 
   bindTap(document.getElementById("tCat"), () => openPage(renderFandomTypes));
   bindTap(document.getElementById("tEx"), () => openExamples());
   bindTap(document.getElementById("tRev"), () => openPage(renderReviews));
-  
-bindTap(document.getElementById("tInfo"), () => openInfoPage(false));
+  bindTap(document.getElementById("tInfo"), () => openInfoPage(false));
 
-  // Новинки: тап по карточке открывает товар
-  view.querySelectorAll("#newCarousel [data-id]").forEach((el) => {
+  view.querySelectorAll("#newCarousel [data-id], .recentGrid [data-id]").forEach((el) => {
     bindTap(el, () => openPage(() => renderProduct(el.dataset.id)));
   });
 
-  // Новинки: кнопки + точки (чтобы было понятно на телефоне)
   const nc = document.getElementById("newCarousel");
   const prevBtn = document.getElementById("newPrev");
   const nextBtn = document.getElementById("newNext");
   const dots = document.getElementById("newDots");
-
   const pageCount = (() => {
     if (!nc) return 0;
     const n = nc.querySelectorAll(".newPage").length;
@@ -3513,19 +3643,14 @@ bindTap(document.getElementById("tInfo"), () => openInfoPage(false));
       dots.innerHTML = "";
       return;
     }
-    dots.innerHTML = new Array(pageCount)
-      .fill(0)
-      .map((_, i) => `<span class="newDot" data-i="${i}"></span>`)
-      .join("");
+    dots.innerHTML = new Array(pageCount).fill(0).map((_, i) => `<span class="newDot" data-i="${i}"></span>`).join("");
   };
-
   const getActivePage = () => {
     if (!nc || !pageCount) return 0;
     const w = nc.getBoundingClientRect().width || nc.clientWidth || 1;
     const x = nc.scrollLeft || 0;
     return Math.max(0, Math.min(pageCount - 1, Math.round(x / w)));
   };
-
   const setActiveDot = () => {
     if (!dots || !pageCount) return;
     const a = getActivePage();
@@ -3533,40 +3658,32 @@ bindTap(document.getElementById("tInfo"), () => openInfoPage(false));
     if (prevBtn) prevBtn.disabled = a <= 0;
     if (nextBtn) nextBtn.disabled = a >= pageCount - 1;
   };
-
   const scrollToPage = (i) => {
     if (!nc) return;
-    const w = nc.getBoundingClientRect().width || nc.clientWidth || 0;
-    if (!w) return;
-    nc.scrollTo({ left: i * w, behavior: "smooth" });
+    const page = Math.max(0, Math.min(pageCount - 1, i));
+    const w = nc.getBoundingClientRect().width || nc.clientWidth || 1;
+    nc.scrollTo({ left: page * w, behavior: "smooth" });
+    setTimeout(setActiveDot, 180);
   };
-
-  const scrollByPage = (dir) => scrollToPage(getActivePage() + dir);
 
   renderDots();
   setActiveDot();
+  if (prevBtn) bindTap(prevBtn, () => scrollToPage(getActivePage() - 1));
+  if (nextBtn) bindTap(nextBtn, () => scrollToPage(getActivePage() + 1));
+  if (dots) dots.querySelectorAll(".newDot[data-i]").forEach((d) => bindTap(d, () => scrollToPage(Number(d.dataset.i || 0))));
+  if (nc) nc.addEventListener("scroll", setActiveDot, { passive: true });
 
-  if (prevBtn) bindTap(prevBtn, () => scrollByPage(-1));
-  if (nextBtn) bindTap(nextBtn, () => scrollByPage(1));
-
-  if (dots) {
-    dots.querySelectorAll("[data-i]").forEach((el) => {
-      bindTap(el, () => scrollToPage(parseInt(el.dataset.i || "0", 10)));
-    });
+  const homeToast = consumePendingHomeToast();
+  if (homeToast?.message) {
+    setTimeout(() => {
+      try { toast(String(homeToast.message || "✨ Появились новые товары"), "good"); } catch {}
+    }, 220);
   }
 
-  if (nc) {
-    nc.addEventListener("scroll", () => {
-      // троттлинг не нужен — лёгкая логика
-      setActiveDot();
-    }, { passive: true });
-  }
-
-syncNav();
+  syncNav();
   syncBottomSpace();
 }
 
-// =====================
 // Категории -> типы фандомов
 // =====================
 function renderFandomTypes() {
@@ -4603,11 +4720,11 @@ const groupsOrder = [
   const other = rawPHits.filter((p) => !knownKeys.has(typeGroupKey(p)));
   if (other.length) grouped.push({ key: "other", title: "Другое", items: other });
 
-  const sectionHtml = (title, items) => {
+  const sectionHtml = (title, items, groupKey) => {
     const cards = items
       .map(
         (p) => `
-          <div class="pcard" data-id="${p.id}">
+          <div class="pcard" id="p_${p.id}" data-id="${p.id}" data-tgroup="${groupKey}">
             ${cardThumbHTML(p)}
             <div class="pcardTitle">${h(p.name)}</div>
             ${cardMetaText(p) ? `<div class="pcardMeta">${escapeHTML(cardMetaText(p))}</div>` : ``}
@@ -4681,7 +4798,7 @@ const groupsOrder = [
       <div class="small"><b>Товары</b></div>
       ${
         grouped.length
-          ? grouped.map((g) => sectionHtml(g.title, g.items)).join("")
+          ? grouped.map((g) => sectionHtml(g.title, g.items, g.key)).join("")
           : `<div class="small">Ничего не найдено</div>`
       }
     </div>
@@ -4697,7 +4814,19 @@ const groupsOrder = [
     bindTap(el, (e) => {
       const t = e.target;
       if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-      openPage(() => renderProduct(String(el.dataset.id||"")), { anchorId: String(el.id || (`p_${String(el.dataset.id||"")}`)) });
+      const pid = String(el.dataset.id || "");
+      const gk = String(el.dataset.tgroup || "");
+      try {
+        const ids = (grouped.find((x) => x.key === gk)?.items || []).map((pp) => String(pp.id));
+        const idx = Math.max(0, ids.indexOf(pid));
+        thematicDetailNav = { ids, index: idx, groupKey: gk };
+      } catch { thematicDetailNav = null; }
+      try {
+        const pp = getProductById(pid);
+        if (pp && typeGroupKey(pp) === "pin_single") setPinSingleSwipeContext(pinSingleIds, pid, `search:${query}`);
+        else clearPinSingleSwipeContext();
+      } catch { clearPinSingleSwipeContext(); }
+      openPage(() => renderProduct(pid), { anchorId: String(el.id || (`p_${pid}`)) });
     });
   });
 
@@ -4792,6 +4921,7 @@ function renderProduct(productId, prefill) {
   try {
     gaViewItem(p, prefill || {});
   } catch {}
+  try { pushRecentViewed(p.id); } catch {}
 const fandom = getFandomById(p.fandom_id);
   const img = firstImageUrl(p);
 
@@ -4810,6 +4940,8 @@ const fandom = getFandomById(p.fandom_id);
     thematicDetailNav.ids.length > 1 &&
     thematicDetailNav.ids.includes(__pidStr)
   );
+  const shouldShowSwipeHint = hasThematicNav && !loadBool(LS_SWIPE_HINT_SEEN, false);
+  const shouldShowZoomHint = !!(img && !loadBool(LS_ZOOM_HINT_SEEN, false));
   if (hasThematicNav) {
     try { thematicDetailNav.index = Math.max(0, thematicDetailNav.ids.indexOf(__pidStr)); } catch {}
   }
@@ -4964,11 +5096,11 @@ if (isPoster) {
             </div>
           ` : `` }
         </div>
-        ${ (isPinSingle && canSwipePinSingles(p.id) && !loadJSON("lespaw_pin_swipe_hint_v1", false)) ? `<div class=\"swipeHint\" id=\"pinSwipeHint\">Свайпни ← → чтобы листать значки</div>` : `` }
+        ${ shouldShowSwipeHint ? `<div class="swipeHint" id="prodSwipeHint">Свайпни ← → чтобы листать товары этого типа</div>` : `` }
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<img class=\"thumb mt12\" id=\"prodMainImg\" src=\"${safeImgUrl(img)}\" alt=\"${escapeHTML('Фото: ' + (p?.name || 'товар'))}\" loading=\"lazy\" decoding=\"async\" data-hide-onerror=\"1\">` : ''}
+        ${img ? `<div class="prodImgWrap mt12"><img class="thumb" id="prodMainImg" src="${safeImgUrl(img)}" alt="${escapeHTML('Фото: ' + (p?.name || 'товар'))}" loading="lazy" decoding="async" data-hide-onerror="1"><div class="zoomBadge" aria-hidden="true">🔍 Увеличить</div>${shouldShowZoomHint ? `<div class="imgHint" id="prodZoomHint">Нажми на фото, чтобы открыть его крупно</div>` : ``}</div>` : ''}
 
         ${getFullDesc(p) ? `<div class="descBlocks mt10">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -4998,6 +5130,7 @@ if (isPoster) {
             `
             : ""
         }
+
         ${
           isPin
             ? `
@@ -5093,16 +5226,28 @@ if (isPoster) {
 
     const prodImgEl = document.getElementById('prodMainImg');
     if (prodImgEl && img) {
-      bindTap(prodImgEl, () => openImageViewer(productViewerImages(p), 0));
+      bindTap(prodImgEl, () => {
+        try { saveBool(LS_ZOOM_HINT_SEEN, true); } catch {}
+        openImageViewer(productViewerImages(p), 0);
+      });
     }
 
-    // Swipe between PRODUCTS (only for pin_single)
-    if (isPinSingle && canSwipePinSingles(p.id)) {
+    const canSwipeWithinGroup = hasThematicNav || (isPinSingle && canSwipePinSingles(p.id));
+    if (canSwipeWithinGroup) {
       const goNeighbor = (dir) => {
-        const nid = nextPinSingleId(p.id, dir);
+        let nid = "";
+        if (hasThematicNav) {
+          const ids = thematicDetailNav?.ids || [];
+          const idx = Math.max(0, Number(thematicDetailNav?.index || ids.indexOf(String(p.id)) || 0));
+          const ni = (idx + (dir > 0 ? 1 : -1) + ids.length) % ids.length;
+          nid = String(ids[ni] || "");
+          thematicDetailNav.index = ni;
+        } else {
+          nid = nextPinSingleId(p.id, dir);
+        }
         if (!nid || nid === String(p.id)) return;
-        try { localStorage.setItem('lespaw_pin_swipe_hint_v1', JSON.stringify(true)); } catch {}
-        replaceCurrentPage(() => renderProduct(nid), { scrollTop: true });
+        try { saveBool(LS_SWIPE_HINT_SEEN, true); } catch {}
+        replaceCurrentPage(() => renderProduct(nid), { scrollTop: true, route: { page: "product", id: nid } });
       };
 
       const btnPrev = document.getElementById('prodPrev');
@@ -5110,12 +5255,11 @@ if (isPoster) {
       if (btnPrev) bindTap(btnPrev, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(-1); });
       if (btnNext) bindTap(btnNext, (e) => { try { e?.stopPropagation?.(); } catch {} goNeighbor(+1); });
 
-      const hintEl = document.getElementById('pinSwipeHint');
+      const hintEl = document.getElementById('prodSwipeHint');
       if (hintEl) {
         try {
-          setTimeout(() => { try { hintEl.classList.add('is-hide'); } catch {} }, 1600);
-          setTimeout(() => { try { hintEl.remove(); } catch {} }, 2400);
-          try { localStorage.setItem('lespaw_pin_swipe_hint_v1', JSON.stringify(true)); } catch {}
+          setTimeout(() => { try { hintEl.classList.add('is-hide'); } catch {} }, 1700);
+          setTimeout(() => { try { hintEl.remove(); } catch {} }, 2600);
         } catch {}
       }
 
@@ -5139,10 +5283,19 @@ if (isPoster) {
           const dx = p1.clientX - sx;
           const dy = p1.clientY - sy;
           if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+          try { saveBool(LS_SWIPE_HINT_SEEN, true); } catch {}
           if (dx < 0) goNeighbor(+1);
           else goNeighbor(-1);
         }, { passive: true });
       }
+    }
+
+    const zoomHintEl = document.getElementById('prodZoomHint');
+    if (zoomHintEl) {
+      try {
+        setTimeout(() => { try { zoomHintEl.classList.add('is-hide'); } catch {} }, 1800);
+        setTimeout(() => { try { zoomHintEl.remove(); } catch {} }, 2800);
+      } catch {}
     }
 
     syncNav();
