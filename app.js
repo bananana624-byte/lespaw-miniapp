@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "271";
+const APP_BUILD = "272";
 
 // =====================
 // CSV ссылки (твои)
@@ -621,7 +621,7 @@ let __toastEl = null;
 function toast(msg, kind = "") {
   try { __toastEl?.remove?.(); } catch {}
   const el = document.createElement("div");
-  el.className = `toast toastEnter ${kind}`.trim();
+  el.className = `toast ${kind}`.trim();
   el.textContent = msg;
   el.setAttribute("role", "status");
   el.setAttribute("aria-live", "polite");
@@ -648,7 +648,7 @@ function hideUndoBar() {
 function showUndoBar(text, onUndo) {
   try { hideUndoBar(); } catch {}
   const el = document.createElement("div");
-  el.className = "undoBar undoBarEnter";
+  el.className = "undoBar";
   el.innerHTML = `
     <div class="undoText">${escapeHTML(String(text || ""))}</div>
     <button class="undoBtn" type="button" aria-label="Отменить действие">Отменить</button>
@@ -2175,7 +2175,6 @@ function toggleFavVariant(id, opts){
     gaEvent("remove_from_wishlist", { item_id: String(id).trim() });
     gaEvent("remove_from_favorite", { item_id: String(id).trim() });
     toast("Убрано из избранного", "warn");
-    try { pulseFavBadge(); } catch {}
     haptic("light");
   } else {
     const next = [...(fav||[])];
@@ -2191,7 +2190,6 @@ function toggleFavVariant(id, opts){
     gaEvent("add_to_wishlist", { item_id: String(id).trim() });
     gaEvent("add_to_favorite", { item_id: String(id).trim() });
     toast("Добавлено в избранное", "ok");
-    try { pulseFavBadge(); } catch {}
     haptic("success");
   }
   updateBadges();
@@ -2258,7 +2256,6 @@ function toggleFavAny(id, optsForAdd){
   if (isFavId(sid)){
     removeFavAllVariants(sid);
     toast("Убрано из избранного", "warn");
-    try { pulseFavBadge(); } catch {}
     haptic("light");
     updateBadges();
     return false;
@@ -2279,7 +2276,6 @@ function toggleFavAny(id, optsForAdd){
   gaEvent("add_to_wishlist", { item_id: sid });
   gaEvent("add_to_favorite", { item_id: sid });
   toast("Добавлено в избранное", "ok");
-  try { pulseFavBadge(); } catch {}
   haptic("success");
   updateBadges();
   return true;
@@ -2351,20 +2347,6 @@ function pulseBadge(el) {
     el.classList.add("is-pulse");
     setTimeout(() => { try { el.classList.remove("is-pulse"); } catch {} }, 650);
   } catch {}
-}
-
-function pulseElement(el, cls = "is-pop", ms = 260) {
-  try {
-    if (!el) return;
-    el.classList.remove(cls);
-    void el.offsetWidth;
-    el.classList.add(cls);
-    setTimeout(() => { try { el.classList.remove(cls); } catch {} }, ms);
-  } catch {}
-}
-
-function pulseFavBadge() {
-  try { pulseBadge(favCount); } catch {}
 }
 
 let __pruningState = false;
@@ -3435,7 +3417,7 @@ function renderHome() {
   view.innerHTML = `
     <div class="tile" id="tCat">
       <div class="tileTitle">Каталог</div>
-      <div class="tileSub">Фандомы и товары</div>
+      <div class="tileSub">Выбор фандома по типу</div>
     </div>
 
     <div class="tile" id="tEx">
@@ -3591,7 +3573,7 @@ function renderFandomTypes() {
   view.innerHTML = `
     <div class="card">
       <div class="h2">Каталог</div>
-      <div class="small">Выбери раздел каталога</div>
+      <div class="small">Выбери категорию</div>
       <hr>
 
       <div class="catGrid">
@@ -3777,7 +3759,6 @@ function renderTypeBrowsePage() {
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
       addToCartById(id);
-      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
     });
   });
@@ -3901,7 +3882,6 @@ function renderThematicPage() {
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
       addToCartById(id);
-      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
       // лёгкое обновление бейджей
       syncNav();
@@ -4039,7 +4019,6 @@ const groupsOrder = [
       try { e?.stopPropagation?.(); } catch {}
       const id = String(b.dataset.add || "");
       addToCartById(id);
-      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
     });
   });
@@ -4658,8 +4637,8 @@ const groupsOrder = [
     <div class="card">
       <div class="h2">Поиск: “${h(q)}”</div>
       ${shortQuery ? `
-        <div class="emptyState emptyStateRich">
-          <div class="emptyTitle">Введите хотя бы 3 символа</div>
+        <div class="emptyState">
+          <div class="emptyTitle">Введи минимум 3 символа</div>
           <div class="emptyText small">Так поиск будет точнее и не будет лагать на больших списках.</div>
           <div class="chips mt12">
             <button class="chip" data-type="sticker" type="button">Наклейки</button>
@@ -4672,11 +4651,10 @@ const groupsOrder = [
       ` : ``}
       ${(!fHits.length && !rawPHits.length) ? `
         <div class="emptyState emptyStateRich">
-          <div class="emptyTitle">Ничего не нашлось</div>
+          <div class="emptyTitle">Ничего не найдено</div>
           <div class="emptyText small">Попробуй другое слово или проверь раскладку. Можно искать по фандому, названию товара или ключевым словам.</div>
-          <div class="row mt12">
-            <button class="btn is-active" id="searchGoCatalog" type="button">Открыть каталог</button>
-          </div>
+          <div class="sp10"></div>
+          <button class="btn is-active" id="searchGoCatalog" type="button">Перейти в каталог</button>
         </div>
       ` : ``}
 
@@ -4694,7 +4672,7 @@ const groupsOrder = [
         `
                 )
                 .join("")
-            : `<div class="small opacity85">Пока ничего не найдено</div>`
+            : `<div class="small">Ничего не найдено</div>`
         }
       </div>
 
@@ -4704,7 +4682,7 @@ const groupsOrder = [
       ${
         grouped.length
           ? grouped.map((g) => sectionHtml(g.title, g.items)).join("")
-          : `<div class="small opacity85">Пока ничего не найдено</div>`
+          : `<div class="small">Ничего не найдено</div>`
       }
     </div>
   `;
@@ -4731,7 +4709,6 @@ const groupsOrder = [
       toggleFav(id);
       view.querySelectorAll(`[data-fav="${id}"]`).forEach((x) => {
         x.classList.toggle("is-active", isFavId(id));
-        pulseElement(x, "is-pop", 240);
         const g = x.querySelector(".heartGlyph");
         if (g) g.textContent = isFavId(id) ? "♥" : "♡";
       });
@@ -4760,7 +4737,6 @@ const groupsOrder = [
       e.stopPropagation();
       const id = String(b.dataset.add || "");
       addToCartById(id);
-      pulseElement(b, "is-pop", 220);
       toast("Добавлено в корзину", "good");
     });
   });
@@ -5022,7 +4998,6 @@ if (isPoster) {
             `
             : ""
         }
-
         ${
           isPin
             ? `
@@ -5234,9 +5209,9 @@ function renderFavorites() {
                 })
                 .join("")
             : `
-              <div class="emptyBox">
-                <div class="small">Избранное пока пустое ✨</div>
-                <div class="small mt6">Выбери что-то, что тебе понравится — и нажми сердечко.</div>
+              <div class="emptyBox emptyBoxHero">
+                <div class="emptyTitle">Избранное пока пустое ✨</div>
+                <div class="emptyText small mt6">Выбери что-то, что тебе понравится — и нажми на сердечко, чтобы не потерять.</div>
                 <div class="sp10"></div>
                 <button class="btn is-active" id="goCatsFromEmptyFav" type="button">Перейти в каталог</button>
               </div>
@@ -5266,6 +5241,7 @@ if (btnClearFav) {
     try { e?.stopPropagation?.(); } catch {}
     const prev = [...(fav || [])];
     if (!prev.length) return;
+    if (!window.confirm("Очистить избранное? Это действие можно будет отменить.")) return;
     setFav([]);
     toast("Избранное очищено", "warn");
     haptic("light");
@@ -5429,41 +5405,36 @@ function renderCart() {
                   const img = firstImageUrl(p);
                   const unit = calcItemUnitPrice(p, ci);
                   const pairs = optionPairsFor(ci, p);
+                  const qty = Number(ci.qty) || 1;
                   return `
                     <div class="item" data-idx="${idx}" data-open="${p.id}">
-                      <div class="miniRow">
+                      <div class="miniRow miniRowCart">
                         ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
-                          <div class="title">${h(p.name)}</div>
-                          <div class="miniPrice">${money(unit)}${(Number(ci.qty)||1) > 1 ? ` <span class="miniQty">× ${Number(ci.qty)||1}</span>` : ``}</div>
+                          <div class="miniTopRow">
+                            <div class="title">${h(p.name)}</div>
+                            <button class="miniRemove" data-remove-row="${idx}" type="button" aria-label="Удалить товар">✕</button>
+                          </div>
+                          <div class="miniPrice">${money(unit)}${qty > 1 ? ` <span class="miniQty">× ${qty}</span>` : ``}</div>
                           ${optionPairsHTML(pairs)}
-                        </div>
-                      </div>
 
-                      <div class="row miniIndentRow row miniIndentRow mt12 aiCenter">
-                        <button class="btn" data-dec="${idx}">−</button>
-                        <div class="small small minw34 taCenter"><b>${Number(ci.qty) || 1}</b></div>
-                        <button class="btn" data-inc="${idx}">+</button>
+                          <div class="miniQtyBar mt12 aiCenter">
+                            <button class="qtyBtn" data-dec="${idx}" type="button" aria-label="Уменьшить количество">−</button>
+                            <div class="qtyPill"><b>${qty}</b></div>
+                            <button class="qtyBtn" data-inc="${idx}" type="button" aria-label="Увеличить количество">+</button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   `;
                 })
                 .join("")
             : `
-              <div class="emptyBox">
-                <div class="small">Корзина пока пустая ✨</div>
-                <div class="sp10"></div>
-
-                <div class="chips flexWrap">
-                  <button class="chip" data-etype="Наклейки" type="button">Наклейки</button>
-                  <button class="chip" data-etype="Значки" type="button">Значки</button>
-                  <button class="chip" data-etype="Постеры" type="button">Постеры</button>
-                  <button class="chip" data-etype="Боксы" type="button">Боксы</button>
-                </div>
-
+              <div class="emptyBox emptyBoxHero">
+                <div class="emptyTitle">Корзина пока пустая ✨</div>
+                <div class="emptyText small mt6">Посмотри каталог и выбери то, что тебе понравится.</div>
                 <div class="sp10"></div>
                 <button class="btn is-active" id="goCatsFromEmptyCart" type="button">Перейти в каталог</button>
-                <button class="btn" id="focusSearchFromEmptyCart" type="button">Открыть поиск</button>
               </div>
             `
         }
@@ -5472,7 +5443,7 @@ function renderCart() {
         <hr>
         <div class="cartSummary">
           <div class="cartSummaryLeft">
-            <div class="cartSummaryLabel">Итого</div>
+            <div class="cartSummaryLabel">Итог</div>
             <div class="cartSummarySum"><b>${money(calcCartTotal())}</b></div>
             <div class="cartSummaryNote small">Без учёта доставки — она рассчитывается менеджеркой индивидуально.</div>
           </div>
@@ -5486,8 +5457,32 @@ function renderCart() {
     </div>
   `;
 
+  const removeCartRow = (i, message = "Позиция удалена из корзины") => {
+    const prev = [...cart];
+    const removed = prev[i] ? { ...prev[i] } : null;
+    if (!removed) return;
+    const next = [...prev];
+    next.splice(i, 1);
+    setCart(next);
+    try {
+      const rp = getProductById(String(removed?.id || ""));
+      gaRemoveFromCart(rp, removed || {}, Number(removed?.qty || 1));
+    } catch {}
+    haptic("light");
+    renderCart();
+    showUndoBar(message, () => {
+      const restored = [...cart];
+      const idx = Math.min(Math.max(i, 0), restored.length);
+      restored.splice(idx, 0, removed);
+      setCart(restored);
+      toast("Возвращено в корзину", "good");
+      renderCart();
+    });
+  };
+
   view.querySelectorAll("[data-inc]").forEach((b) => {
-    bindTap(b, () => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
       const i = Number(b.dataset.inc);
       const next = [...cart];
       next[i].qty = (Number(next[i].qty) || 0) + 1;
@@ -5499,56 +5494,48 @@ function renderCart() {
   });
 
   view.querySelectorAll("[data-dec]").forEach((b) => {
-    bindTap(b, () => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
       const i = Number(b.dataset.dec);
       const next = [...cart];
       const removed = next[i] ? { ...next[i] } : null;
-
       const q = (Number(next[i]?.qty) || 1) - 1;
       if (q <= 0) {
-        next.splice(i, 1);
-        setCart(next);
-
-        if (removed) {
-          showUndoBar("Позиция удалена из корзины", () => {
-            const restored = [...cart];
-            const idx = Math.min(Math.max(i, 0), restored.length);
-            restored.splice(idx, 0, removed);
-            setCart(restored);
-            toast("Возвращено в корзину", "good");
-            renderCart();
-          });
-        }
-      } else {
-        next[i].qty = q;
-        setCart(next);
+        removeCartRow(i, "Позиция удалена из корзины");
+        return;
       }
-
+      next[i].qty = q;
+      setCart(next);
       try {
         const rp = getProductById(String(removed?.id || ""));
         gaRemoveFromCart(rp, removed || {}, 1);
       } catch {}
-
       haptic("select");
       renderCart();
     });
   });
 
-  
-// Открытие карточки товара по тапу на позицию (кроме кнопок)
-view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
-  bindTap(el, (e) => {
-    const t = e.target;
-    if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
-    const idx = Number(el.dataset.idx || 0);
-    const ci = items[idx];
-    if (!ci) return;
-    try { clearPinSingleSwipeContext(); } catch {}
-    openPage(() => renderProduct(ci.id, ci));
+  view.querySelectorAll("[data-remove-row]").forEach((b) => {
+    bindTap(b, (e) => {
+      try { e?.stopPropagation?.(); } catch {}
+      removeCartRow(Number(b.dataset.removeRow));
+    });
   });
-});
 
-const goCats = document.getElementById("goCatsFromEmptyCart");
+  // Открытие карточки товара по тапу на позицию (кроме кнопок)
+  view.querySelectorAll("#cartList .item[data-idx]").forEach((el) => {
+    bindTap(el, (e) => {
+      const t = e.target;
+      if (t && (t.closest("button") || t.tagName === "BUTTON")) return;
+      const idx = Number(el.dataset.idx || 0);
+      const ci = items[idx];
+      if (!ci) return;
+      try { clearPinSingleSwipeContext(); } catch {}
+      openPage(() => renderProduct(ci.id, ci));
+    });
+  });
+
+  const goCats = document.getElementById("goCatsFromEmptyCart");
   if (goCats) bindTap(goCats, () => openPage(renderFandomTypes));
 
   const btnClear = document.getElementById("btnClear");
@@ -5556,13 +5543,15 @@ const goCats = document.getElementById("goCatsFromEmptyCart");
     bindTap(btnClear, () => {
       const prev = [...(cart || [])];
       if (!prev.length) return;
+      if (!window.confirm("Очистить корзину? Это действие можно будет отменить.")) return;
       setCart([]);
       toast("Корзина очищена", "warn");
+      haptic("light");
       renderCart();
       showUndoBar("Корзина очищена", () => {
         setCart(prev);
         renderCart();
-        toast("Возвращено в корзину", "ok");
+        toast("Возвращено", "ok");
         haptic("success");
       });
     });
@@ -5880,15 +5869,15 @@ function renderCheckout() {
     view.innerHTML = `
       <div class="card">
         <div class="h2">Оформление</div>
-        <div class="emptyBox emptyBoxHero mt10">
-          <div class="emptyTitle">Пока нечего оформлять ✨</div>
-          <div class="emptyText small">Сначала добавь товары в корзину, а потом возвращайся к оформлению заказа.</div>
-          <div class="sp12"></div>
-          <button class="btn is-active" id="goHome" type="button">Перейти в каталог</button>
+        <div class="emptyState emptyStateRich">
+          <div class="emptyTitle">Корзина пока пустая ✨</div>
+          <div class="emptyText small">Добавь товары в каталоге, и здесь появится оформление заказа.</div>
+          <div class="sp10"></div>
+          <button class="btn is-active" id="goHome">Перейти в каталог</button>
         </div>
       </div>
     `;
-    bindTap(document.getElementById("goHome"), () => resetToHome());
+    bindTap(document.getElementById("goHome"), () => openPage(renderFandomTypes));
     syncNav();
     syncBottomSpace();
     return;
