@@ -1855,3 +1855,10 @@ hr{ border:0; border-top:1px solid rgba(0,0,0,.14); margin:12px 0; }
 .zoomBadge{ position:absolute; right:10px; bottom:10px; padding:7px 10px; border-radius:999px; font-size:12px; font-weight:900; color:#fff; background:rgba(11,11,18,.7); backdrop-filter:blur(8px); box-shadow:0 10px 24px rgba(0,0,0,.22); pointer-events:none; }
 .imgHint,.swipeHint{ margin-top:10px; padding:11px 12px; border-radius:14px; background:rgba(125,60,255,.1); border:1px solid rgba(125,60,255,.18); color:#51208f; font-size:13px; font-weight:800; line-height:1.35; transition:opacity .24s ease, transform .24s ease; }
 .imgHint.is-hide,.swipeHint.is-hide{ opacity:0; transform:translateY(-4px); }
+
+
+/* v276 image loading */
+.js-lazy-img{opacity:1;transition:opacity .18s ease, filter .18s ease;will-change:opacity;}
+.js-lazy-img.is-img-loading{opacity:.72;filter:blur(3px);}
+.js-lazy-img.is-img-ready{opacity:1;filter:none;}
+.pcardImg,.thumb,.miniThumb,.reviewPhoto,.exImg,.exBigImg{content-visibility:auto;}
