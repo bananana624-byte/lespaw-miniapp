@@ -14,7 +14,7 @@
 // =====================
 // Build
 // =====================
-const APP_BUILD = "273";
+const APP_BUILD = "276";
 
 // =====================
 // CSV ссылки (твои)
@@ -354,6 +354,21 @@ const cartCount = document.getElementById("cartCount");
 
 const wrapEl = document.querySelector(".wrap");
 const navBarEl = document.querySelector(".navBar");
+
+if (view && !view.__lazyHydrationBound) {
+  view.__lazyHydrationBound = true;
+  try {
+    const mo = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        m.addedNodes.forEach((node) => {
+          if (node?.nodeType === 1) hydrateLazyImages(node);
+        });
+      });
+    });
+    mo.observe(view, { childList: true, subtree: true });
+  } catch {}
+  requestAnimationFrame(() => hydrateLazyImages(view));
+}
 
 // =====================
 // Storage (локально + синхронизация между устройствами через Telegram CloudStorage)
@@ -1112,7 +1127,9 @@ function openImageViewer(urls, startIndex = 0) {
       try { __imgViewerEl && __imgViewerEl.__zoomReset && __imgViewerEl.__zoomReset(); } catch {}
       if (imgEl) {
         imgEl.removeAttribute("srcset");
-        imgEl.src = safeImgUrl(list[idx]);
+        imgEl.src = optimizeImageUrl(list[idx], "viewer") || safeImgUrl(list[idx]);
+        preloadImage(list[idx + 1], "viewer");
+        preloadImage(list[idx - 1], "viewer");
       }
       if (prevBtn) prevBtn.style.display = (list.length > 1 ? "flex" : "none");
       if (nextBtn) nextBtn.style.display = (list.length > 1 ? "flex" : "none");
@@ -2540,7 +2557,7 @@ function firstImageUrl(p) {
 function cardThumbHTML(p) {
   const u = firstImageUrl(p);
   if (!u) return "";
-  return `<img class="pcardImg" src="${safeImgUrl(u)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">`;
+  return lazyImageHTML({ cls: "pcardImg", url: u, alt: "Фото: " + (p?.name || "товар"), preset: "card" });
 }
 
 function safeText(s) {
@@ -2766,6 +2783,117 @@ function safeImgUrl(u) {
   } catch {
     return "";
   }
+}
+
+const IMG_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+function isGoogleResizableHost(hostname) {
+  const h = String(hostname || "").toLowerCase();
+  return (
+    h.includes("googleusercontent.com") ||
+    h.includes("ggpht.com") ||
+    h.includes("googleapis.com")
+  );
+}
+
+function optimizeImageUrl(u, preset = "card") {
+  const raw = safeImgUrl(u);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (!isGoogleResizableHost(url.hostname)) return raw;
+
+    const suffixMap = {
+      mini: "=w160-h160-p-k-no-nu",
+      card: "=w420-h420-p-k-no-nu",
+      review: "=w360-h360-p-k-no-nu",
+      example: "=w520-h520-p-k-no-nu",
+      product: "=w1400-h1400-p-k-no-nu",
+      viewer: "=w1800-h1800-p-k-no-nu",
+    };
+    const suffix = suffixMap[preset] || suffixMap.card;
+
+    let href = url.href;
+    href = href.replace(/=(?:[whs]\d[\w-]*)$/i, "");
+    href = href.replace(/=(?:w\d[\w-]*|s\d[\w-]*|rw)$/i, "");
+    return href + suffix;
+  } catch {
+    return raw;
+  }
+}
+
+function lazyImageHTML({ cls = "", url = "", alt = "", preset = "card", eager = false, attrs = "" } = {}) {
+  const finalUrl = optimizeImageUrl(url, preset) || safeImgUrl(url);
+  if (!finalUrl) return "";
+  const common = `class="${escapeHTML(cls)} js-lazy-img" alt="${escapeHTML(alt)}" decoding="async" data-hide-onerror="1" ${attrs || ""}`.trim();
+  if (eager) {
+    const fp = preset === "product" ? "high" : "auto";
+    return `<img ${common} src="${finalUrl}" fetchpriority="${fp}">`;
+  }
+  return `<img ${common} src="${IMG_PLACEHOLDER}" data-src="${finalUrl}" loading="lazy" fetchpriority="low">`;
+}
+
+let __lazyImageObserver = null;
+
+function revealLazyImage(img) {
+  try {
+    if (!img || img.dataset.loaded === "1") return;
+    const src = String(img.dataset.src || "").trim();
+    if (!src) return;
+    img.dataset.loaded = "1";
+    img.classList.add("is-img-loading");
+    img.addEventListener("load", () => {
+      try {
+        img.classList.remove("is-img-loading");
+        img.classList.add("is-img-ready");
+      } catch {}
+    }, { once: true });
+    img.addEventListener("error", () => {
+      try { img.classList.remove("is-img-loading"); } catch {}
+    }, { once: true });
+    img.src = src;
+    img.removeAttribute("data-src");
+  } catch {}
+}
+
+function ensureLazyImageObserver() {
+  try {
+    if (__lazyImageObserver || !("IntersectionObserver" in window)) return __lazyImageObserver;
+    __lazyImageObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const img = entry.target;
+        try { __lazyImageObserver.unobserve(img); } catch {}
+        revealLazyImage(img);
+      });
+    }, { rootMargin: "280px 0px", threshold: 0.01 });
+    return __lazyImageObserver;
+  } catch {
+    return null;
+  }
+}
+
+function hydrateLazyImages(root = document) {
+  try {
+    const scope = root && root.querySelectorAll ? root : document;
+    const imgs = scope.querySelectorAll("img[data-src]");
+    if (!imgs.length) return;
+    const io = ensureLazyImageObserver();
+    imgs.forEach((img) => {
+      if (io) io.observe(img);
+      else revealLazyImage(img);
+    });
+  } catch {}
+}
+
+function preloadImage(url, preset = "viewer") {
+  try {
+    const src = optimizeImageUrl(url, preset) || safeImgUrl(url);
+    if (!src) return;
+    const img = new Image();
+    img.decoding = "async";
+    img.src = src;
+  } catch {}
 }
 
 
@@ -4387,7 +4515,7 @@ function renderReviews() {
 
               const photoHtml = r.photo_url
                 ? `<div class="reviewPhotoWrap">
-                     <img class="reviewPhoto" src="${safeImgUrl(r.photo_url)}" alt="Фото отзыва" loading="lazy" decoding="async" data-hide-onerror="1">
+                     ${lazyImageHTML({ cls: "reviewPhoto", url: r.photo_url, alt: "Фото отзыва", preset: "review" })}
                    </div>`
                 : ``;
 
@@ -4564,7 +4692,7 @@ function renderLaminationExamples(kinds, title) {
         .map((ex) => {
           const img = ex.images?.[0] || "";
           const imgHTML = img
-            ? `<img class="exImg" src="${safeImgUrl(img)}" alt="${h(ex.title)}" loading="lazy" decoding="async" data-hide-onerror="1">`
+            ? `${lazyImageHTML({ cls: "exImg", url: img, alt: ex.title, preset: "example" })}`
             : `<div class="exStub"><div class="exStubText">Нет фото</div></div>`;
 
           return `
@@ -4647,7 +4775,7 @@ function renderLaminationExampleDetail(exId) {
                 .map(
                   (u) => `
                 <div class="exBigBtn cursorDefault">
-                  <img class="exBigImg" src="${safeImgUrl(u)}" alt="${h(ex.title)}" loading="lazy" decoding="async" data-hide-onerror="1">
+                  ${lazyImageHTML({ cls: "exBigImg", url: u, alt: ex.title, preset: "example" })}
                 </div>
               `
                 )
@@ -5100,7 +5228,7 @@ if (isPoster) {
 
         <div class="prodPrice" id="prodPriceVal">${money(priceNow)}</div>
 
-        ${img ? `<div class="prodImgWrap mt12"><img class="thumb" id="prodMainImg" src="${safeImgUrl(img)}" alt="${escapeHTML('Фото: ' + (p?.name || 'товар'))}" loading="lazy" decoding="async" data-hide-onerror="1"><div class="zoomBadge" aria-hidden="true">🔍 Увеличить</div>${shouldShowZoomHint ? `<div class="imgHint" id="prodZoomHint">Нажми на фото, чтобы открыть его крупно</div>` : ``}</div>` : ''}
+        ${img ? `<div class="prodImgWrap mt12">${lazyImageHTML({ cls: "thumb", url: img, alt: 'Фото: ' + (p?.name || 'товар'), preset: "product", eager: true, attrs: 'id="prodMainImg"' })}<div class="zoomBadge" aria-hidden="true">🔍 Увеличить</div>${shouldShowZoomHint ? `<div class="imgHint" id="prodZoomHint">Нажми на фото, чтобы открыть его крупно</div>` : ``}</div>` : ''}
 
         ${getFullDesc(p) ? `<div class="descBlocks mt10">${renderTextBlocks(isPoster ? stripPosterStaticChoiceBlocks(getFullDesc(p)) : getFullDesc(p))}</div>` : ""}
 
@@ -5345,7 +5473,7 @@ function renderFavorites() {
                   return `
                     <div class="item" data-open="${p.id}" data-idx="${idx}">
                       <div class="miniRow">
-                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `${lazyImageHTML({ cls: "miniThumb", url: img, alt: "Фото: " + (p?.name || "товар"), preset: "mini" })}` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="title">${h(p.name)}</div>
                           <div class="miniPrice">${money(unit)}</div>
@@ -5562,7 +5690,7 @@ function renderCart() {
                   return `
                     <div class="item" data-idx="${idx}" data-open="${p.id}">
                       <div class="miniRow miniRowCart">
-                        ${img ? `<img class="miniThumb" src="${safeImgUrl(img)}" alt="${escapeHTML("Фото: " + (p?.name || "товар"))}" loading="lazy" decoding="async" data-hide-onerror="1">` : `<div class="miniThumbStub"></div>`}
+                        ${img ? `${lazyImageHTML({ cls: "miniThumb", url: img, alt: "Фото: " + (p?.name || "товар"), preset: "mini" })}` : `<div class="miniThumbStub"></div>`}
                         <div class="miniBody">
                           <div class="miniTopRow">
                             <div class="title">${h(p.name)}</div>
